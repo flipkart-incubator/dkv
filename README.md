@@ -1,5 +1,5 @@
 # dkv
-Distributed KV data store with tunable consistency, replication
+Distributed KV data store with tunable consistency and replication
 
 # Supported APIs
 * createVBucket(replicationFactor)
