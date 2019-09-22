@@ -53,6 +53,60 @@ func TestPutAndGet(t *testing.T) {
 	}
 }
 
+func TestMissingGet(t *testing.T) {
+	key, expectedValue := "MissingKey", ""
+	if val, err := dkvCli.Get([]byte(key)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+	} else if string(val) != "" {
+		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, val)
+	}
+}
+
+func BenchmarkPutNewKeys(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		key, value := fmt.Sprintf("BK%d", i), fmt.Sprintf("BV%d", i)
+		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+			b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+}
+
+func BenchmarkPutExistingKey(b *testing.B) {
+	key := "BKey"
+	if err := dkvCli.Put([]byte(key), []byte("BVal")); err != nil {
+		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
+	}
+	for i := 0; i < b.N; i++ {
+		value := fmt.Sprintf("BVal%d", i)
+		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+			b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+}
+
+func BenchmarkGetKey(b *testing.B) {
+	key, val := "BGetKey", "BGetVal"
+	if err := dkvCli.Put([]byte(key), []byte(val)); err != nil {
+		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
+	}
+	for i := 0; i < b.N; i++ {
+		if value, err := dkvCli.Get([]byte(key)); err != nil {
+			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if string(value) != val {
+			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, value)
+		}
+	}
+}
+
+func BenchmarkGetMissingKey(b *testing.B) {
+	key := "BMissingKey"
+	for i := 0; i < b.N; i++ {
+		if _, err := dkvCli.Get([]byte(key)); err != nil {
+			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		}
+	}
+}
+
 func serveDKV() {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
