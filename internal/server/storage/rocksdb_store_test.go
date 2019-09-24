@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -10,9 +11,14 @@ import (
 
 var store storage.KVStore
 
+const (
+	createDBFolderIfMissing = true
+	dbFolder                = "/tmp/dkv_storage_test"
+	cacheSize               = 3 << 30
+)
+
 func TestMain(m *testing.M) {
-	opts := storage.NewDefaultOptions().DBFolder("/tmp/dkv_storage_test").CreateDBFolderIfMissing(true).CacheSize(3 << 30)
-	if kvs, err := storage.OpenKVStore(opts); err != nil {
+	if kvs, err := openRocksDB(); err != nil {
 		panic(err)
 	} else {
 		store = kvs
@@ -91,4 +97,12 @@ func BenchmarkGetMissingKey(b *testing.B) {
 			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		}
 	}
+}
+
+func openRocksDB() (storage.KVStore, error) {
+	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
+		return nil, err
+	}
+	opts := storage.NewDefaultRocksDBOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
+	return storage.OpenRocksDBStore(opts)
 }

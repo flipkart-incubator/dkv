@@ -111,9 +111,9 @@ func serveDKV() {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	opts := storage.NewDefaultOptions()
+	opts := storage.NewDefaultRocksDBOptions()
 	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := storage.OpenKVStore(opts); err != nil {
+	if kvs, err := storage.OpenRocksDBStore(opts); err != nil {
 		panic(err)
 	} else {
 		svc := api.NewDKVService(dkvSvcPort, kvs)

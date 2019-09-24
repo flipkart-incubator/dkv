@@ -8,35 +8,35 @@ type RocksDBStore struct {
 	db *gorocksdb.DB
 }
 
-type Options struct {
+type RocksDBOptions struct {
 	blockTableOpts *gorocksdb.BlockBasedTableOptions
 	rocksDBOpts    *gorocksdb.Options
 	folderName     string
 }
 
-func NewDefaultOptions() *Options {
+func NewDefaultRocksDBOptions() *RocksDBOptions {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(bbto)
-	return &Options{blockTableOpts: bbto, rocksDBOpts: opts}
+	return &RocksDBOptions{blockTableOpts: bbto, rocksDBOpts: opts}
 }
 
-func (this *Options) CacheSize(size uint64) *Options {
+func (this *RocksDBOptions) CacheSize(size uint64) *RocksDBOptions {
 	this.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
 	return this
 }
 
-func (this *Options) CreateDBFolderIfMissing(flag bool) *Options {
+func (this *RocksDBOptions) CreateDBFolderIfMissing(flag bool) *RocksDBOptions {
 	this.rocksDBOpts.SetCreateIfMissing(flag)
 	return this
 }
 
-func (this *Options) DBFolder(name string) *Options {
+func (this *RocksDBOptions) DBFolder(name string) *RocksDBOptions {
 	this.folderName = name
 	return this
 }
 
-func OpenKVStore(opts *Options) (*RocksDBStore, error) {
+func OpenRocksDBStore(opts *RocksDBOptions) (*RocksDBStore, error) {
 	if db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName); err != nil {
 		return nil, err
 	} else {

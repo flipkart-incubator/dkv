@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-	opts := storage.NewDefaultOptions()
+	opts := storage.NewDefaultRocksDBOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder("/tmp/dkv/").CacheSize(3 << 30)
-	if kvs, err := storage.OpenKVStore(opts); err != nil {
+	if kvs, err := storage.OpenRocksDBStore(opts); err != nil {
 		panic(err)
 	} else {
 		port := 8080
