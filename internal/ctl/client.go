@@ -14,8 +14,14 @@ type DKVClient struct {
 	dkvCli  serverpb.DKVClient
 }
 
+// TODO: Should these be paramterised ?
+const (
+	ReadBufSize  = 10 << 30
+	WriteBufSize = 10 << 30
+)
+
 func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
-	if conn, err := grpc.Dial(svcAddr, grpc.WithInsecure()); err != nil {
+	if conn, err := grpc.Dial(svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize)); err != nil {
 		return nil, err
 	} else {
 		dkvCli := serverpb.NewDKVClient(conn)
