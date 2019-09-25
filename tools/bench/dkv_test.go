@@ -3,6 +3,7 @@ package bench
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"testing"
@@ -13,6 +14,8 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 )
 
+// go test ./tools/bench -bench . -parallelism 20 -valueSizeInBytes 16384 -totalNumKeys 10000 -numHotKeys 5000 -count 3
+
 const (
 	createDBFolderIfMissing = true
 	dbFolder                = "/tmp/dkv_test"
@@ -22,12 +25,18 @@ const (
 )
 
 var (
-	dkvCli      *ctl.DKVClient
-	parallelism int
+	dkvCli           *ctl.DKVClient
+	parallelism      int
+	valueSizeInBytes int
+	totalNumKeys     int
+	numHotKeys       int
 )
 
 func init() {
 	flag.IntVar(&parallelism, "parallelism", 2, "Number of parallel entities per core")
+	flag.IntVar(&valueSizeInBytes, "valueSizeInBytes", 10, "Size of every value in bytes")
+	flag.IntVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
+	flag.IntVar(&numHotKeys, "numHotKeys", 100, "Number of keys that are repeatedly read")
 }
 
 func TestMain(m *testing.M) {
@@ -43,61 +52,28 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func BenchmarkPutNewKeys(b *testing.B) {
-	b.SetParallelism(parallelism)
-	b.RunParallel(func(pb *testing.PB) {
-		for i := 0; pb.Next(); i++ {
-			key, value := fmt.Sprintf("BK%d", i), fmt.Sprintf("BV%d", i)
-			if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
-				b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
-			}
-		}
-	})
-}
-
-func BenchmarkPutExistingKey(b *testing.B) {
-	key := "BKey"
-	if err := dkvCli.Put([]byte(key), []byte("BVal")); err != nil {
-		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
+func randomBytes(size int) []byte {
+	res := make([]byte, size)
+	for i := 0; i < size; i++ {
+		res[i] = byte(rand.Intn(129))
 	}
-	b.SetParallelism(parallelism)
-	b.RunParallel(func(pb *testing.PB) {
-		for i := 0; pb.Next(); i++ {
-			value := fmt.Sprintf("BVal%d", i)
-			if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
-				b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
-			}
-		}
-	})
+	return res
 }
 
-func BenchmarkGetKey(b *testing.B) {
-	key, val := "BGetKey", "BGetVal"
-	if err := dkvCli.Put([]byte(key), []byte(val)); err != nil {
-		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
+func loadAndGetHotKeys(b *testing.B) (hotKeys [][]byte) {
+	defer b.ResetTimer()
+	hotKeys = make([][]byte, numHotKeys)
+	for i, j := 0, 0; i < totalNumKeys; i++ {
+		key, val := []byte(fmt.Sprintf("BGetKey%d", i)), randomBytes(valueSizeInBytes)
+		if err := dkvCli.Put(key, val); err != nil {
+			b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
+		}
+		if j < numHotKeys && 1 == rand.Intn(2) {
+			hotKeys[j] = key
+			j++
+		}
 	}
-	b.SetParallelism(parallelism)
-	b.RunParallel(func(pb *testing.PB) {
-		for i := 0; pb.Next(); i++ {
-			if value, err := dkvCli.Get([]byte(key)); err != nil {
-				b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-			} else if string(value) != val {
-				b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, value)
-			}
-		}
-	})
-}
-
-func BenchmarkGetMissingKey(b *testing.B) {
-	key := "BMissingKey"
-	b.SetParallelism(parallelism)
-	b.RunParallel(func(pb *testing.PB) {
-		for i := 0; pb.Next(); i++ {
-			if _, err := dkvCli.Get([]byte(key)); err != nil {
-				b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-			}
-		}
-	})
+	return
 }
 
 func serveDKV() {
