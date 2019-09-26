@@ -39,8 +39,17 @@ func init() {
 	flag.IntVar(&numHotKeys, "numHotKeys", 100, "Number of keys that are repeatedly read")
 }
 
+func printFlags() {
+	fmt.Println("Starting benchmarks with following flags:")
+	flag.VisitAll(func(f *flag.Flag) {
+		fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+	})
+	fmt.Println()
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
+	printFlags()
 	go serveDKV()
 	sleepInSecs(5)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
