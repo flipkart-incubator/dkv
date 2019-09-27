@@ -1,4 +1,4 @@
-package storage
+package badger
 
 import (
 	"github.com/dgraph-io/badger"
@@ -12,7 +12,7 @@ type BadgerDBOptions struct {
 	opts badger.Options
 }
 
-func NewDefaultBadgerDBOptions(dbFolder string) *BadgerDBOptions {
+func NewDefaultOptions(dbFolder string) *BadgerDBOptions {
 	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true)
 	return &BadgerDBOptions{opts: opts}
 }
@@ -22,7 +22,7 @@ func (this *BadgerDBOptions) ValueFolder(folder string) *BadgerDBOptions {
 	return this
 }
 
-func OpenBadgerDBStore(badgerDBOpts *BadgerDBOptions) (*BadgerDBStore, error) {
+func OpenStore(badgerDBOpts *BadgerDBOptions) (*BadgerDBStore, error) {
 	if db, err := badger.Open(badgerDBOpts.opts); err != nil {
 		return nil, err
 	} else {

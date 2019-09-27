@@ -1,4 +1,4 @@
-package storage
+package rocksdb
 
 import (
 	"github.com/tecbot/gorocksdb"
@@ -14,7 +14,7 @@ type RocksDBOptions struct {
 	folderName     string
 }
 
-func NewDefaultRocksDBOptions() *RocksDBOptions {
+func NewDefaultOptions() *RocksDBOptions {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(bbto)
@@ -36,7 +36,7 @@ func (this *RocksDBOptions) DBFolder(name string) *RocksDBOptions {
 	return this
 }
 
-func OpenRocksDBStore(opts *RocksDBOptions) (*RocksDBStore, error) {
+func OpenStore(opts *RocksDBOptions) (*RocksDBStore, error) {
 	if db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName); err != nil {
 		return nil, err
 	} else {

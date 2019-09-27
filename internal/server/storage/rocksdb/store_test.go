@@ -1,4 +1,4 @@
-package storage
+package rocksdb
 
 import (
 	"fmt"
@@ -7,16 +7,19 @@ import (
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 )
 
 var store storage.KVStore
 
 const (
-	dbFolder = "/tmp/badger_storage_test"
+	createDBFolderIfMissing = true
+	dbFolder                = "/tmp/rocksdb_storage_test"
+	cacheSize               = 3 << 30
 )
 
 func TestMain(m *testing.M) {
-	if kvs, err := openBadgerDB(); err != nil {
+	if kvs, err := openRocksDB(); err != nil {
 		panic(err)
 	} else {
 		store = kvs
@@ -97,10 +100,10 @@ func BenchmarkGetMissingKey(b *testing.B) {
 	}
 }
 
-func openBadgerDB() (storage.KVStore, error) {
+func openRocksDB() (storage.KVStore, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := storage.NewDefaultBadgerDBOptions(dbFolder)
-	return storage.OpenBadgerDBStore(opts)
+	opts := rocksdb.NewDefaultOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
+	return rocksdb.OpenStore(opts)
 }
