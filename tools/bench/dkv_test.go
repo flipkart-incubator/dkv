@@ -6,12 +6,15 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/api"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 )
 
 // go test ./tools/bench -bench . -parallelism 20 -valueSizeInBytes 16384 -totalNumKeys 10000 -numHotKeys 5000 -count 3
@@ -30,9 +33,11 @@ var (
 	valueSizeInBytes int
 	totalNumKeys     int
 	numHotKeys       int
+	engine           string
 )
 
 func init() {
+	flag.StringVar(&engine, "storage", "rocksdb", "Storage engine to use")
 	flag.IntVar(&parallelism, "parallelism", 2, "Number of parallel entities per core")
 	flag.IntVar(&valueSizeInBytes, "valueSizeInBytes", 10, "Size of every value in bytes")
 	flag.IntVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
@@ -42,7 +47,9 @@ func init() {
 func printFlags() {
 	fmt.Println("Starting benchmarks with following flags:")
 	flag.VisitAll(func(f *flag.Flag) {
-		fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+		if !strings.HasPrefix(f.Name, "test.") {
+			fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+		}
 	})
 	fmt.Println()
 }
@@ -89,13 +96,35 @@ func serveDKV() {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	opts := storage.NewDefaultRocksDBOptions()
-	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := storage.OpenRocksDBStore(opts); err != nil {
+	var kvs storage.KVStore
+	switch engine {
+	case "rocksdb":
+		kvs = serveRocksDBDKV()
+	case "badger":
+		kvs = serverBadgerDKV()
+	default:
+		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
+	}
+	svc := api.NewDKVService(dkvSvcPort, kvs)
+	svc.Serve()
+}
+
+func serverBadgerDKV() storage.KVStore {
+	opts := badger.NewDefaultOptions(dbFolder)
+	if kvs, err := badger.OpenStore(opts); err != nil {
 		panic(err)
 	} else {
-		svc := api.NewDKVService(dkvSvcPort, kvs)
-		svc.Serve()
+		return kvs
+	}
+}
+
+func serveRocksDBDKV() storage.KVStore {
+	opts := rocksdb.NewDefaultOptions()
+	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
+	if kvs, err := rocksdb.OpenStore(opts); err != nil {
+		panic(err)
+	} else {
+		return kvs
 	}
 }
 

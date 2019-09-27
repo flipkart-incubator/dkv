@@ -4,13 +4,13 @@ import (
 	"log"
 
 	"github.com/flipkart-incubator/dkv/internal/server/api"
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 )
 
 func main() {
-	opts := storage.NewDefaultRocksDBOptions()
+	opts := rocksdb.NewDefaultOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder("/tmp/dkv/").CacheSize(3 << 30)
-	if kvs, err := storage.OpenRocksDBStore(opts); err != nil {
+	if kvs, err := rocksdb.OpenStore(opts); err != nil {
 		panic(err)
 	} else {
 		port := 8080

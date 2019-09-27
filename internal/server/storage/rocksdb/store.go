@@ -46,6 +46,7 @@ func OpenStore(opts *RocksDBOptions) (*RocksDBStore, error) {
 
 func (rdb *RocksDBStore) Put(key []byte, value []byte) error {
 	wo := gorocksdb.NewDefaultWriteOptions()
+	wo.SetSync(true)
 	defer wo.Destroy()
 	return rdb.db.Put(wo, key, value)
 }

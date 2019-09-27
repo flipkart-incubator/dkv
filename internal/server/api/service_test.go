@@ -10,6 +10,8 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/api"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 )
 
 const (
@@ -18,6 +20,7 @@ const (
 	cacheSize               = 3 << 30
 	dkvSvcPort              = 8080
 	dkvSvcHost              = "localhost"
+	engine                  = "rocksdb" // or "badger"
 )
 
 var dkvCli *ctl.DKVClient
@@ -66,13 +69,35 @@ func serveDKV() {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	opts := storage.NewDefaultRocksDBOptions()
-	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := storage.OpenRocksDBStore(opts); err != nil {
+	var kvs storage.KVStore
+	switch engine {
+	case "rocksdb":
+		kvs = serveRocksDBDKV()
+	case "badger":
+		kvs = serverBadgerDKV()
+	default:
+		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
+	}
+	svc := api.NewDKVService(dkvSvcPort, kvs)
+	svc.Serve()
+}
+
+func serverBadgerDKV() storage.KVStore {
+	opts := badger.NewDefaultOptions(dbFolder)
+	if kvs, err := badger.OpenStore(opts); err != nil {
 		panic(err)
 	} else {
-		svc := api.NewDKVService(dkvSvcPort, kvs)
-		svc.Serve()
+		return kvs
+	}
+}
+
+func serveRocksDBDKV() storage.KVStore {
+	opts := rocksdb.NewDefaultOptions()
+	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
+	if kvs, err := rocksdb.OpenStore(opts); err != nil {
+		panic(err)
+	} else {
+		return kvs
 	}
 }
 
