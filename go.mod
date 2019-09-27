@@ -3,6 +3,7 @@ module github.com/flipkart-incubator/dkv
 go 1.13
 
 require (
+	github.com/dgraph-io/badger v1.6.0
 	github.com/golang/protobuf v1.3.2
 	github.com/tecbot/gorocksdb v0.0.0-20190705090504-162552197222
 	golang.org/x/net v0.0.0-20190918130420-a8b05e9114ab
