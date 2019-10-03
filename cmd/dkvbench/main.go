@@ -15,7 +15,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
-	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/flipkart-incubator/dkv/tools/bench"
 )
 
 const (
@@ -24,26 +24,58 @@ const (
 )
 
 var (
-	dkvCli           *ctl.DKVClient
-	parallelism      int
-	valueSizeInBytes int
-	totalNumKeys     int
-	numHotKeys       int
-	engine           string
-	dbFolder         string
-	dkvSvcPort       int
-	dkvSvcHost       string
+	dkvCli       *ctl.DKVClient
+	parallelism  uint
+	totalNumKeys uint
+	engine       string
+	dbFolder     string
+	dkvSvcPort   uint
+	dkvSvcHost   string
 )
 
 func init() {
 	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvbench", "DB folder path")
 	flag.StringVar(&dkvSvcHost, "dkvSvcHost", "localhost", "DKV service host")
-	flag.IntVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
+	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
 	flag.StringVar(&engine, "storage", "rocksdb", "Storage engine to use")
-	flag.IntVar(&parallelism, "parallelism", 2, "Number of parallel entities per core")
-	flag.IntVar(&valueSizeInBytes, "valueSizeInBytes", 10, "Size of every value in bytes")
-	flag.IntVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
-	flag.IntVar(&numHotKeys, "numHotKeys", 100, "Number of keys that are repeatedly read")
+	flag.UintVar(&parallelism, "parallelism", 2, "Number of parallel entities per core")
+	flag.UintVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
+}
+
+func launchBenchmark(bm bench.Benchmark) {
+	report, err := runner.Run(
+		bm.ApiName(),
+		fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort),
+		runner.WithProtoFile("./pkg/serverpb/api.proto", []string{}),
+		runner.WithData(bm.CreateRequests(totalNumKeys)),
+		runner.WithInsecure(true),
+		runner.WithCPUs(8),
+		runner.WithConcurrency(parallelism),
+		runner.WithConnections(1),
+		runner.WithTotalRequests(totalNumKeys),
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	printer := printer.ReportPrinter{
+		Out:    os.Stdout,
+		Report: report,
+	}
+
+	printer.Print("summary")
+}
+
+func main() {
+	flag.Parse()
+	printFlags()
+	go serveDKV()
+	sleepInSecs(3)
+
+	launchBenchmark(&bench.PutNewKeysBenchmark{})
+	launchBenchmark(&bench.PutModifyKeysBenchmark{})
+	launchBenchmark(&bench.GetHotKeysBenchmark{})
 }
 
 func printFlags() {
@@ -94,37 +126,4 @@ func serveRocksDBDKV() storage.KVStore {
 
 func sleepInSecs(duration int) {
 	<-time.After(time.Duration(duration) * time.Second)
-}
-
-func main() {
-	flag.Parse()
-	printFlags()
-	go serveDKV()
-	sleepInSecs(3)
-	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr); err != nil {
-		panic(err)
-	} else {
-		dkvCli = client
-	}
-	putReq := serverpb.PutRequest{[]byte("aKey"), []byte("aValue")}
-	report, err := runner.Run(
-		"dkv.serverpb.DKV.Put",
-		dkvSvcAddr,
-		runner.WithProtoFile("./pkg/serverpb/api.proto", []string{}),
-		runner.WithData(putReq),
-		runner.WithInsecure(true),
-	)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	printer := printer.ReportPrinter{
-		Out:    os.Stdout,
-		Report: report,
-	}
-
-	printer.Print("summary")
 }

@@ -12,11 +12,11 @@ import (
 )
 
 type DKVService struct {
-	port  int
+	port  uint
 	store storage.KVStore
 }
 
-func NewDKVService(port int, store storage.KVStore) *DKVService {
+func NewDKVService(port uint, store storage.KVStore) *DKVService {
 	return &DKVService{port, store}
 }
 
