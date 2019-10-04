@@ -73,9 +73,9 @@ func main() {
 	go serveDKV()
 	sleepInSecs(3)
 
-	launchBenchmark(&bench.PutNewKeysBenchmark{})
-	launchBenchmark(&bench.PutModifyKeysBenchmark{})
-	launchBenchmark(&bench.GetHotKeysBenchmark{})
+	launchBenchmark(bench.DefaultPutNewKeysBenchmark())
+	launchBenchmark(bench.DefaultPutModifyKeysBenchmark())
+	launchBenchmark(bench.DefaultGetHotKeysBenchmark())
 }
 
 func printFlags() {
