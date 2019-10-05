@@ -13,7 +13,7 @@ type BadgerDBOptions struct {
 }
 
 func NewDefaultOptions(dbFolder string) *BadgerDBOptions {
-	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(false).WithLogger(nil)
+	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true).WithLogger(nil)
 	return &BadgerDBOptions{opts: opts}
 }
 
