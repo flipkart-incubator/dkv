@@ -14,6 +14,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/api"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/tools/bench"
 )
@@ -21,6 +22,8 @@ import (
 const (
 	createDBFolderIfMissing = true
 	cacheSize               = 3 << 30
+	redisPort               = 6379
+	redisDBIndex            = 3
 )
 
 var (
@@ -38,7 +41,7 @@ func init() {
 	flag.StringVar(&dkvSvcHost, "dkvSvcHost", "localhost", "DKV service host")
 	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
 	flag.StringVar(&engine, "storage", "rocksdb", "Storage engine to use")
-	flag.UintVar(&parallelism, "parallelism", 2, "Number of parallel entities per core")
+	flag.UintVar(&parallelism, "parallelism", 2, "Number of requests to run concurrently")
 	flag.UintVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
 }
 
@@ -98,11 +101,21 @@ func serveDKV() {
 		kvs = serveRocksDBDKV()
 	case "badger":
 		kvs = serverBadgerDKV()
+	case "redis":
+		kvs = serveRedisDKV()
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
 	svc := api.NewDKVService(dkvSvcPort, kvs)
 	svc.Serve()
+}
+
+func serveRedisDKV() storage.KVStore {
+	if kvs, err := redis.OpenStore(redisPort, redisDBIndex); err != nil {
+		panic(err)
+	} else {
+		return kvs
+	}
 }
 
 func serverBadgerDKV() storage.KVStore {
