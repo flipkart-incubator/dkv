@@ -50,7 +50,35 @@ If you want to build for other platform, set `GOOS`, `GOARCH` environment variab
 $ make GOOS=linux build
 ```
 
-## Testing DKV
+## Running
+
+Once DKV is built, the `<PROJECT_ROOT>/bin` folder should contain the following binaries:
+- `dkvsrv` - DKV server program
+- `dkvctl` - DKV client program
+- `dkvbench` - DKV benchmarking program
+
+### Launching the DKV server
+
+```bash
+$ ./bin/dkvsrv -dbFolder <folder_name> -dkvSvcPort <port_number> -storage <rocksdb|badger>
+```
+
+```bash
+$ ./bin/dkvctl -dkvAddr <host:port> -set <key:value> -get <key>
+```
+
+Example session:
+```bash
+$ ./bin/dkvsrv -dbFolder /tmp/db -dkvSvcPort 8080 -storage rocksdb
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo:bar
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
+bar
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set hello:world
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
+world
+```
+
+## Testing
 
 If you want to test your changes, run command like following:
 
@@ -58,7 +86,7 @@ If you want to test your changes, run command like following:
 $ make test
 ```
 
-## Packaging DKV
+## Packaging
 
 ###  Linux
 

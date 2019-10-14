@@ -1,27 +1,50 @@
 package main
 
 import (
-	"log"
+	"flag"
+	"fmt"
+	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 )
 
-const dkvAddr = "localhost:8080"
+const sep = ":"
+
+var (
+	dkvAddr string
+	setKV   string
+	getK    string
+)
+
+func init() {
+	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "DKV server address - host:port")
+	flag.StringVar(&setKV, "set", "", fmt.Sprintf("Set key%svalue", sep))
+	flag.StringVar(&getK, "get", "", "Get key")
+}
 
 func main() {
+	flag.Parse()
 	client, err := ctl.NewInSecureDKVClient(dkvAddr)
 	if err != nil {
-		log.Fatalf("Unable to create DKV client. Error: %v", err)
+		fmt.Printf("Unable to create DKV client. Error: %v\n", err)
 	}
 	defer client.Close()
 
-	if err := client.Put([]byte("aKey"), []byte("aValue")); err != nil {
-		log.Fatalf("Unable to perform PUT. Error: %v", err)
+	if setKV != "" {
+		if kv := strings.Split(setKV, sep); len(kv) != 2 {
+			fmt.Printf("Expected in key:value format for set. Given: %s\n", setKV)
+		} else {
+			if err := client.Put([]byte(kv[0]), []byte(kv[1])); err != nil {
+				fmt.Printf("Unable to perform PUT. Error: %v\n", err)
+			}
+		}
 	}
 
-	if res, err := client.Get([]byte("aKey")); err != nil {
-		log.Fatalf("Unable to perform GET. Error: %v", err)
-	} else {
-		log.Println(string(res))
+	if getK != "" {
+		if res, err := client.Get([]byte(getK)); err != nil {
+			fmt.Printf("Unable to perform GET. Error: %v\n", err)
+		} else {
+			fmt.Println(string(res))
+		}
 	}
 }
