@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 )
 
 var store storage.KVStore
@@ -102,6 +101,6 @@ func openBadgerDB() (storage.KVStore, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := badger.NewDefaultOptions(dbFolder)
-	return badger.OpenStore(opts)
+	opts := NewDefaultOptions(dbFolder)
+	return OpenStore(opts)
 }

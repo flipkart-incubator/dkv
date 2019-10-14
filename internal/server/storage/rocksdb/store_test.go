@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 )
 
 var store storage.KVStore
@@ -104,6 +103,6 @@ func openRocksDB() (storage.KVStore, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := rocksdb.NewDefaultOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
-	return rocksdb.OpenStore(opts)
+	opts := NewDefaultOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
+	return OpenStore(opts)
 }

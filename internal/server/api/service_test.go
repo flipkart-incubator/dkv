@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
-	"github.com/flipkart-incubator/dkv/internal/server/api"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
@@ -78,7 +77,7 @@ func serveDKV() {
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
-	svc := api.NewDKVService(dkvSvcPort, kvs)
+	svc := NewDKVService(dkvSvcPort, kvs)
 	svc.Serve()
 }
 

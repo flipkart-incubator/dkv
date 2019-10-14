@@ -3,7 +3,7 @@ module github.com/flipkart-incubator/dkv
 go 1.13
 
 require (
-	github.com/bojand/ghz v0.41.0 // indirect
+	github.com/bojand/ghz v0.41.0
 	github.com/dgraph-io/badger v1.6.0
 	github.com/go-redis/redis v6.15.6+incompatible
 	github.com/golang/protobuf v1.3.2

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 )
 
 var store storage.KVStore
@@ -99,5 +98,5 @@ func BenchmarkGetMissingKey(b *testing.B) {
 }
 
 func openRedisDB() (storage.KVStore, error) {
-	return redis.OpenStore(dbPort, dbIndex)
+	return OpenStore(dbPort, dbIndex)
 }

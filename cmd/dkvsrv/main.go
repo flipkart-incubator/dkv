@@ -13,7 +13,7 @@ func main() {
 	if kvs, err := rocksdb.OpenStore(opts); err != nil {
 		panic(err)
 	} else {
-		port := 8080
+		port := uint(8080)
 		svc := api.NewDKVService(port, kvs)
 		log.Printf("Listening on port %d...", port)
 		svc.Serve()
