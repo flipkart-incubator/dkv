@@ -100,3 +100,5 @@ $ make GOOS=linux dist
 $ make GOOS=darwin dist
 ```
 
+## Support
+dkv is undergoing active development. Consider joining the [dkv-interest](https://groups.google.com/forum/#!forum/dkv-interest) Google group for updates, design discussions, roadmap etc. in the initial stages of this project.
