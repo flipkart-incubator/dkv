@@ -31,15 +31,16 @@ func (this *DKVService) Serve() {
 }
 
 func (this *DKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	if err := this.store.Put(putReq.Key, putReq.Value); err != nil {
-		return &serverpb.PutResponse{&serverpb.Status{-1, err.Error()}}, err
+	if res := this.store.Put(putReq.Key, putReq.Value); res.Error != nil {
+		return &serverpb.PutResponse{&serverpb.Status{-1, res.Error.Error()}}, res.Error
 	} else {
 		return &serverpb.PutResponse{&serverpb.Status{0, ""}}, nil
 	}
 }
 
 func (this *DKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	if value, err := this.store.Get(getReq.Key); err != nil {
+	readResult := this.store.Get(getReq.Key)[0]
+	if value, err := readResult.Value, readResult.Error; err != nil {
 		return &serverpb.GetResponse{&serverpb.Status{-1, err.Error()}, nil}, err
 	} else {
 		return &serverpb.GetResponse{&serverpb.Status{0, ""}, value}, nil

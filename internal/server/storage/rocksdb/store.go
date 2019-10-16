@@ -1,6 +1,7 @@
 package rocksdb
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/tecbot/gorocksdb"
 )
 
@@ -44,25 +45,57 @@ func OpenStore(opts *RocksDBOptions) (*RocksDBStore, error) {
 	}
 }
 
-func (rdb *RocksDBStore) Put(key []byte, value []byte) error {
+func (rdb *RocksDBStore) Put(key []byte, value []byte) *storage.Result {
 	wo := gorocksdb.NewDefaultWriteOptions()
 	wo.SetSync(true)
 	defer wo.Destroy()
-	return rdb.db.Put(wo, key, value)
+	err := rdb.db.Put(wo, key, value)
+	return &storage.Result{err}
 }
 
-func (rdb *RocksDBStore) Get(key []byte) ([]byte, error) {
+func toReadResult(value *gorocksdb.Slice) *storage.ReadResult {
+	src := value.Data()
+	var res []byte
+	for i := 0; i < value.Size(); i++ {
+		res = append(res, src[i])
+	}
+	return storage.NewReadResultWithValue(res)
+}
+
+func (rdb *RocksDBStore) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) *storage.ReadResult {
+	if value, err := rdb.db.Get(ro, key); err != nil {
+		return storage.NewReadResultWithError(err)
+	} else {
+		return toReadResult(value)
+	}
+}
+
+func (rdb *RocksDBStore) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) []*storage.ReadResult {
+	var results []*storage.ReadResult
+	if values, err := rdb.db.MultiGet(ro, keys...); err != nil {
+		results = append(results, storage.NewReadResultWithError(err))
+	} else {
+		for _, value := range values {
+			results = append(results, toReadResult(value))
+			value.Free()
+		}
+	}
+	return results
+}
+
+func (rdb *RocksDBStore) Get(keys ...[]byte) []*storage.ReadResult {
 	ro := gorocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
-	if value, err := rdb.db.Get(ro, key); err != nil {
-		return nil, err
-	} else {
-		src := value.Data()
-		var res []byte
-		for i := 0; i < value.Size(); i++ {
-			res = append(res, src[i])
-		}
-		value.Free()
-		return res, nil
+
+	numKeys := len(keys)
+	var results []*storage.ReadResult
+	switch {
+	case numKeys == 1:
+		results = append(results, rdb.getSingleKey(ro, keys[0]))
+	case numKeys > 1:
+		results = rdb.getMultipleKeys(ro, keys)
+	default:
+		results = nil
 	}
+	return results
 }
