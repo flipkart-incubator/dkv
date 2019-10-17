@@ -31,7 +31,9 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - Execute this command:
 
 ```bash
-CGO_CFLAGS="-I/usr/local/Cellar/rocksdb/6.1.2/include" CGO_LDFLAGS="-L/usr/local/Cellar/rocksdb/6.1.2 -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" go get github.com/tecbot/gorocksdb
+CGO_CFLAGS="-I/usr/local/Cellar/rocksdb/6.1.2/include" 
+CGO_LDFLAGS="-L/usr/local/Cellar/rocksdb/6.1.2 -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" 
+go get github.com/tecbot/gorocksdb
 ```
 
 ### Building DKV
