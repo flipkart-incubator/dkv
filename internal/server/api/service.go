@@ -38,11 +38,29 @@ func (this *DKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*
 	}
 }
 
-func (this *DKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	readResult := this.store.Get(getReq.Key)[0]
+func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
 	if value, err := readResult.Value, readResult.Error; err != nil {
 		return &serverpb.GetResponse{&serverpb.Status{-1, err.Error()}, nil}, err
 	} else {
 		return &serverpb.GetResponse{&serverpb.Status{0, ""}, value}, nil
 	}
+}
+
+func (this *DKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	readResult := this.store.Get(getReq.Key)[0]
+	return toGetResponse(readResult)
+}
+
+func (this *DKVService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	numReqs := len(multiGetReq.GetRequests)
+	keys := make([][]byte, numReqs)
+	for i, getReq := range multiGetReq.GetRequests {
+		keys[i] = getReq.Key
+	}
+	readResults := this.store.Get(keys...)
+	responses := make([]*serverpb.GetResponse, len(readResults))
+	for i, readResult := range readResults {
+		responses[i], _ = toGetResponse(readResult)
+	}
+	return &serverpb.MultiGetResponse{responses}, nil
 }

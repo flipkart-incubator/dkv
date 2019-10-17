@@ -49,8 +49,32 @@ func TestPutAndGet(t *testing.T) {
 		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
 		if actualValue, err := dkvCli.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-		} else if string(actualValue) != expectedValue {
+		} else if string(actualValue.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
+		}
+	}
+}
+
+func TestMultiGet(t *testing.T) {
+	numKeys := 10
+	keys, vals := make([][]byte, numKeys), make([]string, numKeys)
+	for i := 1; i <= numKeys; i++ {
+		key, value := fmt.Sprintf("MK%d", i), fmt.Sprintf("MV%d", i)
+		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		} else {
+			keys[i-1] = []byte(key)
+			vals[i-1] = value
+		}
+	}
+
+	if results, err := dkvCli.MultiGet(keys...); err != nil {
+		t.Fatalf("Unable to MultiGet. Error: %v", err)
+	} else {
+		for i, result := range results {
+			if string(result.Value) != vals[i] {
+				t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], result.Value)
+			}
 		}
 	}
 }
@@ -59,7 +83,7 @@ func TestMissingGet(t *testing.T) {
 	key, expectedValue := "MissingKey", ""
 	if val, err := dkvCli.Get([]byte(key)); err != nil {
 		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-	} else if string(val) != "" {
+	} else if string(val.Value) != "" {
 		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, val)
 	}
 }
@@ -73,7 +97,7 @@ func serveDKV() {
 	case "rocksdb":
 		kvs = serveRocksDBDKV()
 	case "badger":
-		kvs = serverBadgerDKV()
+		kvs = serveBadgerDKV()
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
@@ -81,7 +105,7 @@ func serveDKV() {
 	svc.Serve()
 }
 
-func serverBadgerDKV() storage.KVStore {
+func serveBadgerDKV() storage.KVStore {
 	opts := badger.NewDefaultOptions(dbFolder)
 	if kvs, err := badger.OpenStore(opts); err != nil {
 		panic(err)

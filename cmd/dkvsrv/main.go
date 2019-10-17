@@ -50,7 +50,7 @@ func serveDKV() {
 	case "rocksdb":
 		kvs = serveRocksDBDKV()
 	case "badger":
-		kvs = serverBadgerDKV()
+		kvs = serveBadgerDKV()
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
@@ -58,7 +58,7 @@ func serveDKV() {
 	svc.Serve()
 }
 
-func serverBadgerDKV() storage.KVStore {
+func serveBadgerDKV() storage.KVStore {
 	opts := badger.NewDefaultOptions(dbFolder)
 	if kvs, err := badger.OpenStore(opts); err != nil {
 		panic(err)

@@ -100,7 +100,7 @@ func serveDKV() {
 	case "rocksdb":
 		kvs = serveRocksDBDKV()
 	case "badger":
-		kvs = serverBadgerDKV()
+		kvs = serveBadgerDKV()
 	case "redis":
 		kvs = serveRedisDKV()
 	default:
@@ -118,7 +118,7 @@ func serveRedisDKV() storage.KVStore {
 	}
 }
 
-func serverBadgerDKV() storage.KVStore {
+func serveBadgerDKV() storage.KVStore {
 	opts := badger.NewDefaultOptions(dbFolder)
 	if kvs, err := badger.OpenStore(opts); err != nil {
 		panic(err)

@@ -29,8 +29,8 @@ endif
 
 .PHONY: protoc
 protoc:
-	@echo ">> generating proto3 code"
-	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=. --proto_path=$$proto_dir --go_out=plugins=grpc:$(GOPATH)/src $$proto_dir/*.proto || exit 1; done
+	@echo ">> generating proto code"
+	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=$$proto_dir --go_out=plugins=grpc:$$proto_dir $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
 format:

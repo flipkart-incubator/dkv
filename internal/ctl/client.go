@@ -18,6 +18,7 @@ type DKVClient struct {
 const (
 	ReadBufSize  = 10 << 30
 	WriteBufSize = 10 << 30
+	Timeout      = 1 * time.Second
 )
 
 func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
@@ -30,7 +31,7 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 }
 
 func (this *DKVClient) Put(key []byte, value []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	putReq := &serverpb.PutRequest{key, value}
 	res, err := this.dkvCli.Put(ctx, putReq)
@@ -43,18 +44,23 @@ func (this *DKVClient) Put(key []byte, value []byte) error {
 	return nil
 }
 
-func (this *DKVClient) Get(key []byte) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+func (this *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	getReq := &serverpb.GetRequest{key}
-	res, err := this.dkvCli.Get(ctx, getReq)
-	if err != nil {
-		return nil, err
+	return this.dkvCli.Get(ctx, getReq)
+}
+
+func (this *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	getReqs := make([]*serverpb.GetRequest, len(keys))
+	for i, key := range keys {
+		getReqs[i] = &serverpb.GetRequest{key}
 	}
-	if res.Status.Code != 0 {
-		return nil, errors.New(res.Status.Message)
-	}
-	return res.Value, nil
+	multiGetReq := &serverpb.MultiGetRequest{getReqs}
+	res, err := this.dkvCli.MultiGet(ctx, multiGetReq)
+	return res.GetResponses, err
 }
 
 func (this *DKVClient) Close() {

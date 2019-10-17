@@ -44,7 +44,7 @@ func main() {
 		if res, err := client.Get([]byte(getK)); err != nil {
 			fmt.Printf("Unable to perform GET. Error: %v\n", err)
 		} else {
-			fmt.Println(string(res))
+			fmt.Println(string(res.Value))
 		}
 	}
 }
