@@ -79,6 +79,7 @@ func main() {
 	launchBenchmark(bench.DefaultPutNewKeysBenchmark())
 	launchBenchmark(bench.DefaultPutModifyKeysBenchmark())
 	launchBenchmark(bench.DefaultGetHotKeysBenchmark())
+	launchBenchmark(bench.DefaultMultiGetHotKeysBenchmark())
 }
 
 func printFlags() {

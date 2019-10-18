@@ -25,8 +25,41 @@ func (this *GetHotKeysBenchmark) ApiName() string {
 func (this *GetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
 	var getReqs []*serverpb.GetRequest
 	for i, j := 0, 0; i < int(numRequests); i, j = i+1, (j+1)%int(this.numHotKeys) {
-		key := []byte(fmt.Sprintf("ExistingKey%d", j))
+		key := []byte(fmt.Sprintf("%s%d", ExistingKeyPrefix, j))
 		getReqs = append(getReqs, &serverpb.GetRequest{key})
 	}
 	return getReqs
+}
+
+type MultiGetHotKeysBenchmark struct {
+	*GetHotKeysBenchmark
+	batchSize uint
+}
+
+func DefaultMultiGetHotKeysBenchmark() *MultiGetHotKeysBenchmark {
+	return CreateMultiGetHotKeysBenchmark(numHotKeys, batchSize)
+}
+
+func CreateMultiGetHotKeysBenchmark(numHotKeys, batchSize uint) *MultiGetHotKeysBenchmark {
+	if batchSize > numHotKeys {
+		panic(fmt.Sprintf("Batch size must be less than or equal to the number of hot keys. Given batchSize: %d, numHotKeys: %d", batchSize, numHotKeys))
+	}
+	return &MultiGetHotKeysBenchmark{CreateGetHotKeysBenchmark(numHotKeys), batchSize}
+}
+
+func (this *MultiGetHotKeysBenchmark) ApiName() string {
+	return "dkv.serverpb.DKV.MultiGet"
+}
+
+func (this *MultiGetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
+	var multiGetReqs []*serverpb.MultiGetRequest
+	for i, j := 0, 0; i < int(numRequests); i++ {
+		var getReqs []*serverpb.GetRequest
+		for k := 0; k < int(this.batchSize); k, j = k+1, (j+1)%int(this.numHotKeys) {
+			key := []byte(fmt.Sprintf("%s%d", ExistingKeyPrefix, j))
+			getReqs = append(getReqs, &serverpb.GetRequest{key})
+		}
+		multiGetReqs = append(multiGetReqs, &serverpb.MultiGetRequest{getReqs})
+	}
+	return multiGetReqs
 }
