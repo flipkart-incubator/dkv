@@ -4,18 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/bojand/ghz/printer"
 	"github.com/bojand/ghz/runner"
 	"github.com/flipkart-incubator/dkv/internal/ctl"
-	"github.com/flipkart-incubator/dkv/internal/server/api"
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/tools/bench"
 )
 
@@ -30,17 +23,13 @@ var (
 	dkvCli       *ctl.DKVClient
 	parallelism  uint
 	totalNumKeys uint
-	engine       string
-	dbFolder     string
 	dkvSvcPort   uint
 	dkvSvcHost   string
 )
 
 func init() {
-	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvbench", "DB folder path")
 	flag.StringVar(&dkvSvcHost, "dkvSvcHost", "localhost", "DKV service host")
 	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
-	flag.StringVar(&engine, "storage", "rocksdb", "Storage engine to use")
 	flag.UintVar(&parallelism, "parallelism", 2, "Number of requests to run concurrently")
 	flag.UintVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
 }
@@ -73,8 +62,6 @@ func launchBenchmark(bm bench.Benchmark) {
 func main() {
 	flag.Parse()
 	printFlags()
-	go serveDKV()
-	sleepInSecs(3)
 
 	launchBenchmark(bench.DefaultPutNewKeysBenchmark())
 	launchBenchmark(bench.DefaultPutModifyKeysBenchmark())
@@ -90,54 +77,4 @@ func printFlags() {
 		}
 	})
 	fmt.Println()
-}
-
-func serveDKV() {
-	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
-		panic(err)
-	}
-	var kvs storage.KVStore
-	switch engine {
-	case "rocksdb":
-		kvs = serveRocksDBDKV()
-	case "badger":
-		kvs = serveBadgerDKV()
-	case "redis":
-		kvs = serveRedisDKV()
-	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
-	}
-	svc := api.NewDKVService(dkvSvcPort, kvs)
-	svc.Serve()
-}
-
-func serveRedisDKV() storage.KVStore {
-	if kvs, err := redis.OpenStore(redisPort, redisDBIndex); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
-}
-
-func serveBadgerDKV() storage.KVStore {
-	opts := badger.NewDefaultOptions(dbFolder)
-	if kvs, err := badger.OpenStore(opts); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
-}
-
-func serveRocksDBDKV() storage.KVStore {
-	opts := rocksdb.NewDefaultOptions()
-	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := rocksdb.OpenStore(opts); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
-}
-
-func sleepInSecs(duration int) {
-	<-time.After(time.Duration(duration) * time.Second)
 }

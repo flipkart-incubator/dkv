@@ -13,6 +13,15 @@ type BadgerDBOptions struct {
 	opts badger.Options
 }
 
+func OpenDB(dbFolder string) storage.KVStore {
+	opts := NewDefaultOptions(dbFolder)
+	if kvs, err := OpenStore(opts); err != nil {
+		panic(err)
+	} else {
+		return kvs
+	}
+}
+
 func NewDefaultOptions(dbFolder string) *BadgerDBOptions {
 	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true).WithLogger(nil)
 	return &BadgerDBOptions{opts: opts}

@@ -8,24 +8,28 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/api"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 )
 
 const (
-	createDBFolderIfMissing = true
-	cacheSize               = 3 << 30
+	cacheSize = 3 << 30
 )
 
 var (
-	engine     string
-	dbFolder   string
-	dkvSvcPort uint
+	engine       string
+	dbFolder     string
+	dkvSvcPort   uint
+	redisPort    int
+	redisDBIndex int
 )
 
 func init() {
 	flag.StringVar(&engine, "storage", "rocksdb", "Storage engine to use - badger|rocksdb")
 	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path")
 	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
+	flag.IntVar(&redisPort, "redisPort", 6379, "Redis port")
+	flag.IntVar(&redisDBIndex, "redisDBIndex", 0, "Redis DB Index")
 }
 
 func main() {
@@ -48,31 +52,14 @@ func serveDKV() {
 	var kvs storage.KVStore
 	switch engine {
 	case "rocksdb":
-		kvs = serveRocksDBDKV()
+		kvs = rocksdb.OpenDB(dbFolder, cacheSize)
 	case "badger":
-		kvs = serveBadgerDKV()
+		kvs = badger.OpenDB(dbFolder)
+	case "redis":
+		kvs = redis.OpenDB(redisPort, redisDBIndex)
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
 	svc := api.NewDKVService(dkvSvcPort, kvs)
 	svc.Serve()
-}
-
-func serveBadgerDKV() storage.KVStore {
-	opts := badger.NewDefaultOptions(dbFolder)
-	if kvs, err := badger.OpenStore(opts); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
-}
-
-func serveRocksDBDKV() storage.KVStore {
-	opts := rocksdb.NewDefaultOptions()
-	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := rocksdb.OpenStore(opts); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
 }

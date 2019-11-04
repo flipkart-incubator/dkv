@@ -14,12 +14,11 @@ import (
 )
 
 const (
-	createDBFolderIfMissing = true
-	dbFolder                = "/tmp/dkv_test"
-	cacheSize               = 3 << 30
-	dkvSvcPort              = 8080
-	dkvSvcHost              = "localhost"
-	engine                  = "rocksdb" // or "badger"
+	dbFolder   = "/tmp/dkv_test"
+	cacheSize  = 3 << 30
+	dkvSvcPort = 8080
+	dkvSvcHost = "localhost"
+	engine     = "rocksdb" // or "badger"
 )
 
 var dkvCli *ctl.DKVClient
@@ -95,33 +94,14 @@ func serveDKV() {
 	var kvs storage.KVStore
 	switch engine {
 	case "rocksdb":
-		kvs = serveRocksDBDKV()
+		kvs = rocksdb.OpenDB(dbFolder, cacheSize)
 	case "badger":
-		kvs = serveBadgerDKV()
+		kvs = badger.OpenDB(dbFolder)
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
 	svc := NewDKVService(dkvSvcPort, kvs)
 	svc.Serve()
-}
-
-func serveBadgerDKV() storage.KVStore {
-	opts := badger.NewDefaultOptions(dbFolder)
-	if kvs, err := badger.OpenStore(opts); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
-}
-
-func serveRocksDBDKV() storage.KVStore {
-	opts := rocksdb.NewDefaultOptions()
-	opts.CreateDBFolderIfMissing(createDBFolderIfMissing).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := rocksdb.OpenStore(opts); err != nil {
-		panic(err)
-	} else {
-		return kvs
-	}
 }
 
 func sleepInSecs(duration int) {

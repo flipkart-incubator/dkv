@@ -15,6 +15,16 @@ type RocksDBOptions struct {
 	folderName     string
 }
 
+func OpenDB(dbFolder string, cacheSize uint64) storage.KVStore {
+	opts := NewDefaultOptions()
+	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
+	if kvs, err := OpenStore(opts); err != nil {
+		panic(err)
+	} else {
+		return kvs
+	}
+}
+
 func NewDefaultOptions() *RocksDBOptions {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()

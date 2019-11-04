@@ -12,11 +12,19 @@ type RedisDBStore struct {
 	db *redis.Client
 }
 
-func OpenStore(db_port, db_index int) (*RedisDBStore, error) {
+func OpenDB(dbPort, dbIndex int) storage.KVStore {
+	if kvs, err := OpenStore(dbPort, dbIndex); err != nil {
+		panic(err)
+	} else {
+		return kvs
+	}
+}
+
+func OpenStore(dbPort, dbIndex int) (*RedisDBStore, error) {
 	client := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("127.0.0.1:%d", db_port),
+		Addr:     fmt.Sprintf("127.0.0.1:%d", dbPort),
 		Password: "",
-		DB:       db_index,
+		DB:       dbIndex,
 	})
 	if _, err := client.Ping().Result(); err != nil {
 		return nil, err
