@@ -31,6 +31,10 @@ func (this *GetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
 	return getReqs
 }
 
+func (this *GetHotKeysBenchmark) String() string {
+	return fmt.Sprintf("API: %s, Hot Keys: %d", this.ApiName(), this.numHotKeys)
+}
+
 type MultiGetHotKeysBenchmark struct {
 	*GetHotKeysBenchmark
 	batchSize uint
@@ -62,4 +66,8 @@ func (this *MultiGetHotKeysBenchmark) CreateRequests(numRequests uint) interface
 		multiGetReqs = append(multiGetReqs, &serverpb.MultiGetRequest{getReqs})
 	}
 	return multiGetReqs
+}
+
+func (this *MultiGetHotKeysBenchmark) String() string {
+	return fmt.Sprintf("API: %s, Hot Keys: %d, Batch Size: %d", this.ApiName(), this.numHotKeys, this.batchSize)
 }

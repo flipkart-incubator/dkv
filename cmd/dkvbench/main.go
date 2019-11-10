@@ -56,6 +56,7 @@ func launchBenchmark(bm bench.Benchmark) {
 		Report: report,
 	}
 
+	fmt.Println(bm)
 	printer.Print("summary")
 }
 

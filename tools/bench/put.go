@@ -31,6 +31,10 @@ func (this *PutNewKeysBenchmark) CreateRequests(numRequests uint) interface{} {
 	return putReqs
 }
 
+func (this *PutNewKeysBenchmark) String() string {
+	return fmt.Sprintf("API: %s, Value Size: %d bytes", this.ApiName(), this.numBytesInValue)
+}
+
 type PutModifyKeysBenchmark struct {
 	numBytesInValue, numHotKeys uint
 }
@@ -54,4 +58,8 @@ func (this *PutModifyKeysBenchmark) CreateRequests(numRequests uint) interface{}
 		putReqs = append(putReqs, &serverpb.PutRequest{key, value})
 	}
 	return putReqs
+}
+
+func (this *PutModifyKeysBenchmark) String() string {
+	return fmt.Sprintf("API: %s, Value Size: %d bytes, Hot Keys: %d", this.ApiName(), this.numBytesInValue, this.numHotKeys)
 }

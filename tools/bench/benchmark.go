@@ -8,6 +8,7 @@ import (
 type Benchmark interface {
 	CreateRequests(numRequests uint) interface{}
 	ApiName() string
+	String() string
 }
 
 const (
