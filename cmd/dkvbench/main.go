@@ -25,9 +25,11 @@ var (
 	totalNumKeys uint
 	dkvSvcPort   uint
 	dkvSvcHost   string
+	benchmark    string
 )
 
 func init() {
+	flag.StringVar(&benchmark, "name", "", "Benchmark to run [Insert|Update|Get|GetAll]")
 	flag.StringVar(&dkvSvcHost, "dkvSvcHost", "localhost", "DKV service host")
 	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
 	flag.UintVar(&parallelism, "parallelism", 2, "Number of requests to run concurrently")
@@ -64,10 +66,18 @@ func main() {
 	flag.Parse()
 	printFlags()
 
-	launchBenchmark(bench.DefaultPutNewKeysBenchmark())
-	launchBenchmark(bench.DefaultPutModifyKeysBenchmark())
-	launchBenchmark(bench.DefaultGetHotKeysBenchmark())
-	launchBenchmark(bench.DefaultMultiGetHotKeysBenchmark())
+	switch strings.ToLower(strings.TrimSpace(benchmark)) {
+	case "insert":
+		launchBenchmark(bench.DefaultPutNewKeysBenchmark())
+	case "update":
+		launchBenchmark(bench.DefaultPutModifyKeysBenchmark())
+	case "get":
+		launchBenchmark(bench.DefaultGetHotKeysBenchmark())
+	case "getall":
+		launchBenchmark(bench.DefaultMultiGetHotKeysBenchmark())
+	default:
+		panic(fmt.Sprintf("Unknown or invalid benchmark name given: '%s'", benchmark))
+	}
 }
 
 func printFlags() {

@@ -24,8 +24,8 @@ var (
 
 func init() {
 	flag.UintVar(&valueSizeInBytes, "valueSizeInBytes", 10, "Size of every value in bytes")
-	flag.UintVar(&numHotKeys, "numHotKeys", 100, "Number of keys that are repeatedly read")
-	flag.UintVar(&batchSize, "batchSize", 10, "Batch size for multi get requests")
+	flag.UintVar(&numHotKeys, "numHotKeys", 100, "Number of keys that are repeatedly read or updated")
+	flag.UintVar(&batchSize, "batchSize", 10, "Batch size for GetAll requests")
 }
 
 func randomBytes(size uint) []byte {
