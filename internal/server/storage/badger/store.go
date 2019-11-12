@@ -40,6 +40,10 @@ func OpenStore(badgerDBOpts *BadgerDBOptions) (*BadgerDBStore, error) {
 	}
 }
 
+func (this *BadgerDBStore) Close() error {
+	return this.db.Close()
+}
+
 func (this *BadgerDBStore) Put(key []byte, value []byte) *storage.Result {
 	err := this.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)

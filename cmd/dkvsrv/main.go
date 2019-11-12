@@ -3,13 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/flipkart-incubator/dkv/internal/server/api"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -35,7 +39,21 @@ func init() {
 func main() {
 	flag.Parse()
 	printFlags()
-	serveDKV()
+
+	dkvSvc := newDKVService()
+	grpcSrvr, lstnr := dkvSvc.NewGRPCServer(), dkvSvc.NewListener()
+	go func() { grpcSrvr.Serve(lstnr) }()
+	sig := <-setupSignalHandler(dkvSvc, grpcSrvr)
+	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+	dkvSvc.Close()
+	grpcSrvr.GracefulStop()
+}
+
+func setupSignalHandler(dkvSvc *api.DKVService, grpcSrvr *grpc.Server) <-chan os.Signal {
+	signals := []os.Signal{syscall.SIGINT, syscall.SIGQUIT, syscall.SIGSTOP, syscall.SIGTERM}
+	stopChan := make(chan os.Signal, len(signals))
+	signal.Notify(stopChan, signals...)
+	return stopChan
 }
 
 func printFlags() {
@@ -48,7 +66,7 @@ func printFlags() {
 	fmt.Println()
 }
 
-func serveDKV() {
+func newDKVService() *api.DKVService {
 	var kvs storage.KVStore
 	switch engine {
 	case "rocksdb":
@@ -60,6 +78,5 @@ func serveDKV() {
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
-	svc := api.NewDKVService(dkvSvcPort, kvs)
-	svc.Serve()
+	return api.NewDKVService(dkvSvcPort, kvs)
 }

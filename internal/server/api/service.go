@@ -20,14 +20,27 @@ func NewDKVService(port uint, store storage.KVStore) *DKVService {
 	return &DKVService{port, store}
 }
 
-func (this *DKVService) Serve() {
+func (this *DKVService) ListenAndServe() {
+	this.NewGRPCServer().Serve(this.NewListener())
+}
+
+func (this *DKVService) NewGRPCServer() *grpc.Server {
+	grpcServer := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcServer, this)
+	return grpcServer
+}
+
+func (this *DKVService) NewListener() net.Listener {
 	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", this.port)); err != nil {
 		log.Fatalf("failed to listen: %v", err)
+		return nil
 	} else {
-		grpcServer := grpc.NewServer()
-		serverpb.RegisterDKVServer(grpcServer, this)
-		grpcServer.Serve(lis)
+		return lis
 	}
+}
+
+func (this *DKVService) Close() error {
+	return this.store.Close()
 }
 
 func (this *DKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {

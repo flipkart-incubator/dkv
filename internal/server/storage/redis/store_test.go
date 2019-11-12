@@ -20,7 +20,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	} else {
 		store = kvs
-		os.Exit(m.Run())
+		res := m.Run()
+		store.Close()
+		os.Exit(res)
 	}
 }
 

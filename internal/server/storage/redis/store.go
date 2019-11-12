@@ -32,6 +32,10 @@ func OpenStore(dbPort, dbIndex int) (*RedisDBStore, error) {
 	return &RedisDBStore{client}, nil
 }
 
+func (rdb *RedisDBStore) Close() error {
+	return rdb.db.Close()
+}
+
 func (rdb *RedisDBStore) Put(key []byte, value []byte) *storage.Result {
 	err := rdb.db.Set(string(key), value, 0).Err()
 	return &storage.Result{err}

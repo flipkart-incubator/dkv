@@ -1,5 +1,7 @@
 package storage
 
+import "io"
+
 type Result struct {
 	Error error
 }
@@ -18,6 +20,7 @@ func NewReadResultWithError(err error) *ReadResult {
 }
 
 type KVStore interface {
+	io.Closer
 	Put(key []byte, value []byte) *Result
 	Get(keys ...[]byte) []*ReadResult
 }

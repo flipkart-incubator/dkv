@@ -63,6 +63,6 @@ func (this *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, error)
 	return res.GetResponses, err
 }
 
-func (this *DKVClient) Close() {
-	this.cliConn.Close()
+func (this *DKVClient) Close() error {
+	return this.cliConn.Close()
 }

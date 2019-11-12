@@ -21,17 +21,23 @@ const (
 	engine     = "rocksdb" // or "badger"
 )
 
-var dkvCli *ctl.DKVClient
+var (
+	dkvCli *ctl.DKVClient
+	dkvSvc *DKVService
+)
 
 func TestMain(m *testing.M) {
 	go serveDKV()
-	sleepInSecs(5)
+	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr); err != nil {
 		panic(err)
 	} else {
 		dkvCli = client
-		os.Exit(m.Run())
+		res := m.Run()
+		dkvCli.Close()
+		dkvSvc.Close()
+		os.Exit(res)
 	}
 }
 
@@ -100,8 +106,8 @@ func serveDKV() {
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
-	svc := NewDKVService(dkvSvcPort, kvs)
-	svc.Serve()
+	dkvSvc = NewDKVService(dkvSvcPort, kvs)
+	dkvSvc.ListenAndServe()
 }
 
 func sleepInSecs(duration int) {

@@ -55,6 +55,11 @@ func OpenStore(opts *RocksDBOptions) (*RocksDBStore, error) {
 	}
 }
 
+func (rdb *RocksDBStore) Close() error {
+	rdb.db.Close()
+	return nil
+}
+
 func (rdb *RocksDBStore) Put(key []byte, value []byte) *storage.Result {
 	wo := gorocksdb.NewDefaultWriteOptions()
 	wo.SetSync(true)
