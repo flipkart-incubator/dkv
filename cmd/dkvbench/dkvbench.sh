@@ -9,14 +9,15 @@ parallelism=50
 batchSizes=( 5 10 25 )
 valueSizes=( 10 256 1024 4096 8192 16384 )
 protoDir="./pkg/serverpb"
+dkvBench="./bin/dkvBench"
 
 for valueSize in "${valueSizes[@]}"
 do
-  ./bin/dkvbench -name Insert -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize
-  ./bin/dkvbench -name Update -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize
-  ./bin/dkvbench -name Get -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize
+  $dkvBench -name Insert -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize
+  $dkvBench -name Update -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize
+  $dkvBench -name Get -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize
   for batchSize in "${batchSizes[@]}"
   do
-    ./bin/dkvbench -name GetAll -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize -batchSize $batchSize
+    $dkvBench -name GetAll -protoDir $protoDir -dkvSvcHost $dkvSvcHost -dkvSvcPort $dkvSvcPort -parallelism $parallelism -totalNumKeys $totalNumKeys -numHotKeys $numHotKeys -valueSizeInBytes $valueSize -batchSize $batchSize
   done
 done
