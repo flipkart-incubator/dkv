@@ -25,7 +25,7 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 Follow these instructions to launch a DKV container using the Dockerfile included.
 
 ```bash
-$ docker build --no-cache -t dkv/dkv-deb9-amd64 -f <project_dir>/Dockerfile
+$ curl -fsSL https://raw.githubusercontent.com/flipkart-incubator/dkv/master/Dockerfile | docker build -t dkv/dkv-deb9-amd64 -f - .
 $ docker run -it dkv/dkv-deb9-amd64:latest bash
 ```
 
