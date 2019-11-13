@@ -21,6 +21,14 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - [GoRocksDB](https://github.com/tecbot/gorocksdb) provides the CGo bindings with RocksDB
 - [Raft consensus algorithm](https://raft.github.io/) by [etcd/raft](https://github.com/etcd-io/etcd/tree/master/raft)
 
+## DKV on Docker
+Follow these instructions to launch a DKV container using the Dockerfile included.
+
+```bash
+$ docker build --no-cache -t dkv/dkv-deb9-amd64 -f <project_dir>/Dockerfile
+$ docker run -it dkv/dkv-deb9-amd64:latest bash
+```
+
 ## Building DKV on Mac OSX
 
 ### Building RocksDB
