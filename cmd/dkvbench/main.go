@@ -17,6 +17,7 @@ const (
 	cacheSize               = 3 << 30
 	redisPort               = 6379
 	redisDBIndex            = 3
+	protoFile               = "api.proto"
 )
 
 var (
@@ -26,6 +27,7 @@ var (
 	dkvSvcPort   uint
 	dkvSvcHost   string
 	benchmark    string
+	protoDir     string
 )
 
 func init() {
@@ -34,13 +36,14 @@ func init() {
 	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
 	flag.UintVar(&parallelism, "parallelism", 2, "Number of requests to run concurrently")
 	flag.UintVar(&totalNumKeys, "totalNumKeys", 1000, "Total number of keys")
+	flag.StringVar(&protoDir, "protoDir", "./pkg/serverpb", "Folder path that contains the DKV's api.proto file")
 }
 
 func launchBenchmark(bm bench.Benchmark) {
 	report, err := runner.Run(
 		bm.ApiName(),
 		fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort),
-		runner.WithProtoFile("./pkg/serverpb/api.proto", []string{}),
+		runner.WithProtoFile(protoFile, []string{protoDir}),
 		runner.WithData(bm.CreateRequests(totalNumKeys)),
 		runner.WithInsecure(true),
 		runner.WithCPUs(8),
