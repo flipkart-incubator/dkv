@@ -13,6 +13,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
+	"github.com/flipkart-incubator/dkv/internal/server/sync"
 	"google.golang.org/grpc"
 )
 
@@ -78,5 +79,6 @@ func newDKVService() *api.DKVService {
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
+	sync.NewDKVReplicator()
 	return api.NewDKVService(dkvSvcPort, kvs)
 }
