@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,6 +15,9 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/internal/server/sync"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
+	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
 	"google.golang.org/grpc"
 )
 
@@ -37,20 +41,34 @@ func init() {
 	flag.IntVar(&redisDBIndex, "redisDBIndex", 0, "Redis DB Index")
 }
 
+func newGRPCServer(dkvSvc api.DKVService) *grpc.Server {
+	grpc_srvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
+	return grpc_srvr
+}
+
+func newListener(port uint) net.Listener {
+	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
+		panic(fmt.Sprintf("failed to listen: %v", err))
+	} else {
+		return lis
+	}
+}
+
 func main() {
 	flag.Parse()
 	printFlags()
 
-	dkvSvc := newDKVService()
-	grpcSrvr, lstnr := dkvSvc.NewGRPCServer(), dkvSvc.NewListener()
-	go func() { grpcSrvr.Serve(lstnr) }()
-	sig := <-setupSignalHandler(dkvSvc, grpcSrvr)
+	dkv_svc := api.NewDistributedDKVService(newReplicator(newKVStore()))
+	grpc_srvr, lstnr := newGRPCServer(dkv_svc), newListener(dkvSvcPort)
+	go func() { grpc_srvr.Serve(lstnr) }()
+	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-	dkvSvc.Close()
-	grpcSrvr.GracefulStop()
+	dkv_svc.Close()
+	grpc_srvr.GracefulStop()
 }
 
-func setupSignalHandler(dkvSvc *api.DKVService, grpcSrvr *grpc.Server) <-chan os.Signal {
+func setupSignalHandler() <-chan os.Signal {
 	signals := []os.Signal{syscall.SIGINT, syscall.SIGQUIT, syscall.SIGSTOP, syscall.SIGTERM}
 	stopChan := make(chan os.Signal, len(signals))
 	signal.Notify(stopChan, signals...)
@@ -67,18 +85,27 @@ func printFlags() {
 	fmt.Println()
 }
 
-func newDKVService() *api.DKVService {
-	var kvs storage.KVStore
+func newKVStore() storage.KVStore {
 	switch engine {
 	case "rocksdb":
-		kvs = rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocksdb.OpenDB(dbFolder, cacheSize)
 	case "badger":
-		kvs = badger.OpenDB(dbFolder)
+		return badger.OpenDB(dbFolder)
 	case "redis":
-		kvs = redis.OpenDB(redisPort, redisDBIndex)
+		return redis.OpenDB(redisPort, redisDBIndex)
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
-	sync.NewDKVReplicator()
-	return api.NewDKVService(dkvSvcPort, kvs)
+}
+
+func newReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
+	if repl_store, err := sync.NewDKVReplStore(kvs); err != nil {
+		panic(err)
+	} else {
+		if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, nexus.OptionsFromFlags()...); err != nil {
+			panic(err)
+		} else {
+			return nexus_repl
+		}
+	}
 }

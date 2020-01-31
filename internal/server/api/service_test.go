@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"testing"
@@ -11,6 +12,8 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -23,7 +26,7 @@ const (
 
 var (
 	dkvCli *ctl.DKVClient
-	dkvSvc *DKVService
+	dkvSvc DKVService
 )
 
 func TestMain(m *testing.M) {
@@ -106,8 +109,18 @@ func serveDKV() {
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
-	dkvSvc = NewDKVService(dkvSvcPort, kvs)
-	dkvSvc.ListenAndServe()
+	dkvSvc = NewStandaloneDKVService(kvs)
+	grpc_srvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
+	listenAndServe(grpc_srvr, dkvSvcPort)
+}
+
+func listenAndServe(grpcSrvr *grpc.Server, port int) {
+	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
+		panic(fmt.Sprintf("failed to listen: %v", err))
+	} else {
+		grpcSrvr.Serve(lis)
+	}
 }
 
 func sleepInSecs(duration int) {

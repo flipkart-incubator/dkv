@@ -2,48 +2,32 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"net"
+	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"google.golang.org/grpc"
+	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 )
 
-type DKVService struct {
-	port  uint
+// TODO: Check if this needs to be moved to 'pkg' root instead of 'internal'
+type DKVService interface {
+	io.Closer
+	serverpb.DKVServer
+}
+
+type standaloneDKVService struct {
 	store storage.KVStore
 }
 
-func NewDKVService(port uint, store storage.KVStore) *DKVService {
-	return &DKVService{port, store}
+func NewStandaloneDKVService(store storage.KVStore) *standaloneDKVService {
+	return &standaloneDKVService{store}
 }
 
-func (this *DKVService) ListenAndServe() {
-	this.NewGRPCServer().Serve(this.NewListener())
-}
-
-func (this *DKVService) NewGRPCServer() *grpc.Server {
-	grpcServer := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpcServer, this)
-	return grpcServer
-}
-
-func (this *DKVService) NewListener() net.Listener {
-	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", this.port)); err != nil {
-		log.Fatalf("failed to listen: %v", err)
-		return nil
-	} else {
-		return lis
-	}
-}
-
-func (this *DKVService) Close() error {
+func (this *standaloneDKVService) Close() error {
 	return this.store.Close()
 }
 
-func (this *DKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+func (this *standaloneDKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	if res := this.store.Put(putReq.Key, putReq.Value); res.Error != nil {
 		return &serverpb.PutResponse{&serverpb.Status{-1, res.Error.Error()}}, res.Error
 	} else {
@@ -59,12 +43,12 @@ func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error
 	}
 }
 
-func (this *DKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+func (this *standaloneDKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
 	readResult := this.store.Get(getReq.Key)[0]
 	return toGetResponse(readResult)
 }
 
-func (this *DKVService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+func (this *standaloneDKVService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	numReqs := len(multiGetReq.GetRequests)
 	keys := make([][]byte, numReqs)
 	for i, getReq := range multiGetReq.GetRequests {
@@ -76,4 +60,28 @@ func (this *DKVService) MultiGet(ctx context.Context, multiGetReq *serverpb.Mult
 		responses[i], _ = toGetResponse(readResult)
 	}
 	return &serverpb.MultiGetResponse{responses}, nil
+}
+
+type distributedDKVService struct {
+	raftRepl nexus_api.RaftReplicator
+}
+
+func NewDistributedDKVService(raftRepl nexus_api.RaftReplicator) *distributedDKVService {
+	return &distributedDKVService{raftRepl}
+}
+
+func (this *distributedDKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	return nil, nil
+}
+
+func (this *distributedDKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	return nil, nil
+}
+
+func (this *distributedDKVService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	return nil, nil
+}
+
+func (this *distributedDKVService) Close() error {
+	return nil
 }

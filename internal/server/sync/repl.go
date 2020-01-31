@@ -1,21 +1,22 @@
 package sync
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/nexus/pkg/db"
 )
 
-type dkvReplicator struct {
+type dkvReplStore struct {
 }
 
-func NewDKVReplicator() (db.Store, error) {
+func NewDKVReplStore(kvs storage.KVStore) (db.Store, error) {
 	return nil, nil
 }
 
-func (dr *dkvReplicator) Save(req []byte) error {
+func (dr *dkvReplStore) Save(req []byte) error {
 	return nil
 }
 
-func (dr *dkvReplicator) Close() error {
+func (dr *dkvReplStore) Close() error {
 	return nil
 }
 
