@@ -26,7 +26,7 @@ const (
 
 var (
 	dkvCli *ctl.DKVClient
-	dkvSvc DKVService
+	kvs    storage.KVStore
 )
 
 func TestMain(m *testing.M) {
@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 		dkvCli = client
 		res := m.Run()
 		dkvCli.Close()
-		dkvSvc.Close()
+		kvs.Close()
 		os.Exit(res)
 	}
 }
@@ -100,7 +100,6 @@ func serveDKV() {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	var kvs storage.KVStore
 	switch engine {
 	case "rocksdb":
 		kvs = rocksdb.OpenDB(dbFolder, cacheSize)
@@ -109,9 +108,9 @@ func serveDKV() {
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
-	dkvSvc = NewStandaloneDKVService(kvs)
+	dkv_svc := NewStandaloneService(kvs)
 	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
+	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
 	listenAndServe(grpc_srvr, dkvSvcPort)
 }
 

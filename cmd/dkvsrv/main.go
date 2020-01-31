@@ -41,12 +41,6 @@ func init() {
 	flag.IntVar(&redisDBIndex, "redisDBIndex", 0, "Redis DB Index")
 }
 
-func newGRPCServer(dkvSvc api.DKVService) *grpc.Server {
-	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
-	return grpc_srvr
-}
-
 func newListener(port uint) net.Listener {
 	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
 		panic(fmt.Sprintf("failed to listen: %v", err))
@@ -59,12 +53,17 @@ func main() {
 	flag.Parse()
 	printFlags()
 
-	dkv_svc := api.NewDistributedDKVService(newReplicator(newKVStore()))
-	grpc_srvr, lstnr := newGRPCServer(dkv_svc), newListener(dkvSvcPort)
-	go func() { grpc_srvr.Serve(lstnr) }()
+	dkv_repl := newReplicator(newKVStore())
+	grpc_srvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpc_srvr, api.NewDistributedService(dkv_repl))
+	lstnr := newListener(dkvSvcPort)
+	go func() {
+		dkv_repl.Start()
+		grpc_srvr.Serve(lstnr)
+	}()
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-	dkv_svc.Close()
+	dkv_repl.Stop()
 	grpc_srvr.GracefulStop()
 }
 
