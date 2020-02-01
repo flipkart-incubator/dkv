@@ -6,6 +6,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
+	"github.com/gogo/protobuf/proto"
 )
 
 type standaloneService struct {
@@ -16,8 +17,8 @@ func NewStandaloneService(store storage.KVStore) *standaloneService {
 	return &standaloneService{store}
 }
 
-func (this *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	if res := this.store.Put(putReq.Key, putReq.Value); res.Error != nil {
+func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	if res := ss.store.Put(putReq.Key, putReq.Value); res.Error != nil {
 		return &serverpb.PutResponse{&serverpb.Status{-1, res.Error.Error()}}, res.Error
 	} else {
 		return &serverpb.PutResponse{&serverpb.Status{0, ""}}, nil
@@ -32,18 +33,18 @@ func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error
 	}
 }
 
-func (this *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	readResult := this.store.Get(getReq.Key)[0]
+func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	readResult := ss.store.Get(getReq.Key)[0]
 	return toGetResponse(readResult)
 }
 
-func (this *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	numReqs := len(multiGetReq.GetRequests)
 	keys := make([][]byte, numReqs)
 	for i, getReq := range multiGetReq.GetRequests {
 		keys[i] = getReq.Key
 	}
-	readResults := this.store.Get(keys...)
+	readResults := ss.store.Get(keys...)
 	responses := make([]*serverpb.GetResponse, len(readResults))
 	for i, readResult := range readResults {
 		responses[i], _ = toGetResponse(readResult)
@@ -52,21 +53,33 @@ func (this *standaloneService) MultiGet(ctx context.Context, multiGetReq *server
 }
 
 type distributedService struct {
+	*standaloneService
 	raftRepl nexus_api.RaftReplicator
 }
 
-func NewDistributedService(raftRepl nexus_api.RaftReplicator) *distributedService {
-	return &distributedService{raftRepl}
+func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicator) *distributedService {
+	return &distributedService{NewStandaloneService(kvs), raftRepl}
 }
 
-func (this *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	return nil, nil
+func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	// TODO: Needs to be marshalled as a union message type
+	if req_bts, err := proto.Marshal(putReq); err != nil {
+		return &serverpb.PutResponse{&serverpb.Status{-1, err.Error()}}, err
+	} else {
+		if _, err := ds.raftRepl.Replicate(ctx, req_bts); err != nil {
+			return &serverpb.PutResponse{&serverpb.Status{-1, err.Error()}}, err
+		} else {
+			return &serverpb.PutResponse{&serverpb.Status{0, ""}}, nil
+		}
+	}
 }
 
-func (this *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	return nil, nil
+func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	// TODO: Check for consistency level of GetRequest and process this either via local state or RAFT
+	return ds.standaloneService.Get(ctx, getReq)
 }
 
-func (this *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	return nil, nil
+func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
+	return ds.standaloneService.MultiGet(ctx, multiGetReq)
 }

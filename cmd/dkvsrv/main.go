@@ -53,9 +53,11 @@ func main() {
 	flag.Parse()
 	printFlags()
 
-	dkv_repl := newReplicator(newKVStore())
+	kvs := newKVStore()
+	dkv_repl := newReplicator(kvs)
 	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, api.NewDistributedService(dkv_repl))
+	dkv_svc := api.NewDistributedService(kvs, dkv_repl)
+	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
 	lstnr := newListener(dkvSvcPort)
 	go func() {
 		dkv_repl.Start()
@@ -98,13 +100,10 @@ func newKVStore() storage.KVStore {
 }
 
 func newReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
-	if repl_store, err := sync.NewDKVReplStore(kvs); err != nil {
+	repl_store := sync.NewDKVReplStore(kvs)
+	if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, nexus.OptionsFromFlags()...); err != nil {
 		panic(err)
 	} else {
-		if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, nexus.OptionsFromFlags()...); err != nil {
-			panic(err)
-		} else {
-			return nexus_repl
-		}
+		return nexus_repl
 	}
 }

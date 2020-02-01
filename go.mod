@@ -10,6 +10,7 @@ require (
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
 	github.com/flipkart-incubator/nexus v0.0.0-20200131091313-d846fd39981f
 	github.com/go-redis/redis v6.15.6+incompatible
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.2
 	github.com/tecbot/gorocksdb v0.0.0-20190705090504-162552197222
 	golang.org/x/net v0.0.0-20190918130420-a8b05e9114ab
