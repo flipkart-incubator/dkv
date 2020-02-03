@@ -13,7 +13,7 @@ func TestDKVReplStoreSave(t *testing.T) {
 	kvs := newMemStore()
 	dkv_repl := NewDKVReplStore(kvs)
 	key, val := []byte("foo"), []byte("bar")
-	put_req := &serverpb.PutRequest{key, val}
+	put_req := &serverpb.PutRequest{Key: key, Value: val}
 	if req_bts, err := proto.Marshal(put_req); err != nil {
 		t.Error(err)
 	} else {

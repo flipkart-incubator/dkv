@@ -17,19 +17,27 @@ func NewStandaloneService(store storage.KVStore) *standaloneService {
 	return &standaloneService{store}
 }
 
+func newErrorStatus(err error) *serverpb.Status {
+	return &serverpb.Status{Code: -1, Message: err.Error()}
+}
+
+func newEmptyStatus() *serverpb.Status {
+	return &serverpb.Status{Code: 0, Message: ""}
+}
+
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	if res := ss.store.Put(putReq.Key, putReq.Value); res.Error != nil {
-		return &serverpb.PutResponse{&serverpb.Status{-1, res.Error.Error()}}, res.Error
+		return &serverpb.PutResponse{Status: newErrorStatus(res.Error)}, res.Error
 	} else {
-		return &serverpb.PutResponse{&serverpb.Status{0, ""}}, nil
+		return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 	}
 }
 
 func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
 	if value, err := readResult.Value, readResult.Error; err != nil {
-		return &serverpb.GetResponse{&serverpb.Status{-1, err.Error()}, nil}, err
+		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
 	} else {
-		return &serverpb.GetResponse{&serverpb.Status{0, ""}, value}, nil
+		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: value}, nil
 	}
 }
 
@@ -49,7 +57,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 	for i, readResult := range readResults {
 		responses[i], _ = toGetResponse(readResult)
 	}
-	return &serverpb.MultiGetResponse{responses}, nil
+	return &serverpb.MultiGetResponse{GetResponses: responses}, nil
 }
 
 type distributedService struct {
@@ -64,12 +72,12 @@ func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicato
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	// TODO: Needs to be marshalled as a union message type
 	if req_bts, err := proto.Marshal(putReq); err != nil {
-		return &serverpb.PutResponse{&serverpb.Status{-1, err.Error()}}, err
+		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	} else {
 		if _, err := ds.raftRepl.Replicate(ctx, req_bts); err != nil {
-			return &serverpb.PutResponse{&serverpb.Status{-1, err.Error()}}, err
+			return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 		} else {
-			return &serverpb.PutResponse{&serverpb.Status{0, ""}}, nil
+			return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 		}
 	}
 }

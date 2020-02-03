@@ -33,7 +33,7 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 func (this *DKVClient) Put(key []byte, value []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	putReq := &serverpb.PutRequest{key, value}
+	putReq := &serverpb.PutRequest{Key: key, Value: value}
 	res, err := this.dkvCli.Put(ctx, putReq)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func (this *DKVClient) Put(key []byte, value []byte) error {
 func (this *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	getReq := &serverpb.GetRequest{key}
+	getReq := &serverpb.GetRequest{Key: key}
 	return this.dkvCli.Get(ctx, getReq)
 }
 
@@ -56,9 +56,9 @@ func (this *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, error)
 	defer cancel()
 	getReqs := make([]*serverpb.GetRequest, len(keys))
 	for i, key := range keys {
-		getReqs[i] = &serverpb.GetRequest{key}
+		getReqs[i] = &serverpb.GetRequest{Key: key}
 	}
-	multiGetReq := &serverpb.MultiGetRequest{getReqs}
+	multiGetReq := &serverpb.MultiGetRequest{GetRequests: getReqs}
 	res, err := this.dkvCli.MultiGet(ctx, multiGetReq)
 	return res.GetResponses, err
 }
