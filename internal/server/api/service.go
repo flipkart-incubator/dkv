@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	"github.com/gogo/protobuf/proto"
@@ -70,8 +71,9 @@ func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicato
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	// TODO: Needs to be marshalled as a union message type
-	if req_bts, err := proto.Marshal(putReq); err != nil {
+	int_req := new(raftpb.InternalRaftRequest)
+	int_req.Put = putReq
+	if req_bts, err := proto.Marshal(int_req); err != nil {
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	} else {
 		if _, err := ds.raftRepl.Replicate(ctx, req_bts); err != nil {
