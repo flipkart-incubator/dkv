@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -17,7 +16,7 @@ import (
 )
 
 const (
-	dbFolder   = "/tmp/dkv_test"
+	dbFolder   = "/tmp/dkv_test_db"
 	cacheSize  = 3 << 30
 	dkvSvcPort = 8080
 	dkvSvcHost = "localhost"
@@ -29,22 +28,23 @@ var (
 	kvs    storage.KVStore
 )
 
-func TestMain(m *testing.M) {
-	go serveDKV()
+func TestStandaloneService(t *testing.T) {
+	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr); err != nil {
 		panic(err)
 	} else {
 		dkvCli = client
-		res := m.Run()
-		dkvCli.Close()
-		kvs.Close()
-		os.Exit(res)
+		defer dkvCli.Close()
+		defer kvs.Close()
+		t.Run("testPutAndGet", testPutAndGet)
+		t.Run("testMultiGet", testMultiGet)
+		t.Run("testMissingGet", testMissingGet)
 	}
 }
 
-func TestPutAndGet(t *testing.T) {
+func testPutAndGet(t *testing.T) {
 	numKeys := 10
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
@@ -63,7 +63,7 @@ func TestPutAndGet(t *testing.T) {
 	}
 }
 
-func TestMultiGet(t *testing.T) {
+func testMultiGet(t *testing.T) {
 	numKeys := 10
 	keys, vals := make([][]byte, numKeys), make([]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
@@ -87,7 +87,7 @@ func TestMultiGet(t *testing.T) {
 	}
 }
 
-func TestMissingGet(t *testing.T) {
+func testMissingGet(t *testing.T) {
 	key, expectedValue := "MissingKey", ""
 	if val, err := dkvCli.Get([]byte(key)); err != nil {
 		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
@@ -96,18 +96,22 @@ func TestMissingGet(t *testing.T) {
 	}
 }
 
-func serveDKV() {
+func newKVStore() storage.KVStore {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
-		kvs = rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocksdb.OpenDB(dbFolder, cacheSize)
 	case "badger":
-		kvs = badger.OpenDB(dbFolder)
+		return badger.OpenDB(dbFolder)
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
+}
+
+func serveStandaloneDKV() {
+	kvs = newKVStore()
 	dkv_svc := NewStandaloneService(kvs)
 	grpc_srvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
