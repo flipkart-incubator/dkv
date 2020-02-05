@@ -21,13 +21,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-type LaunchMode bool
-
-const (
-	Standalone  LaunchMode = false
-	Distributed            = true
-)
-
 var (
 	engine       string
 	dbFolder     string
@@ -48,17 +41,13 @@ func main() {
 	flag.Parse()
 	nexus_mode := haveFlagsWithPrefix("nexus")
 	printFlags(nexus_mode)
-	LaunchMode(nexus_mode).launch()
-}
 
-func (lm LaunchMode) launch() {
 	kvs := newKVStore()
 	var dkv_svc api.DKVService
-	switch lm {
-	case Standalone:
-		dkv_svc = api.NewStandaloneService(kvs)
-	case Distributed:
+	if nexus_mode {
 		dkv_svc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
+	} else {
+		dkv_svc = api.NewStandaloneService(kvs)
 	}
 	grpc_srvr := newDKVGrpcServer(dkv_svc)
 	sig := <-setupSignalHandler()
