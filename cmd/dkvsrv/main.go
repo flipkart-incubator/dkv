@@ -42,18 +42,30 @@ func main() {
 	nexus_mode := haveFlagsWithPrefix("nexus")
 	printFlags(nexus_mode)
 
-	kvs := newKVStore()
-	var dkv_svc api.DKVService
-	if nexus_mode {
-		dkv_svc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
-	} else {
-		dkv_svc = api.NewStandaloneService(kvs)
-	}
+	dkv_svc := newDKVService(nexus_mode, newKVStore())
 	grpc_srvr := newDKVGrpcServer(dkv_svc)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
 	dkv_svc.Close()
 	grpc_srvr.GracefulStop()
+}
+
+type serviceMode bool
+
+const (
+	standalone  serviceMode = false
+	distributed             = true
+)
+
+func newDKVService(svcMode bool, kvs storage.KVStore) api.DKVService {
+	var dkv_svc api.DKVService
+	switch serviceMode(svcMode) {
+	case standalone:
+		dkv_svc = api.NewStandaloneService(kvs)
+	case distributed:
+		dkv_svc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
+	}
+	return dkv_svc
 }
 
 func newDKVGrpcServer(dkvSvc serverpb.DKVServer) *grpc.Server {
