@@ -18,14 +18,6 @@ func NewStandaloneService(store storage.KVStore) *standaloneService {
 	return &standaloneService{store}
 }
 
-func newErrorStatus(err error) *serverpb.Status {
-	return &serverpb.Status{Code: -1, Message: err.Error()}
-}
-
-func newEmptyStatus() *serverpb.Status {
-	return &serverpb.Status{Code: 0, Message: ""}
-}
-
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	if res := ss.store.Put(putReq.Key, putReq.Value); res.Error != nil {
 		return &serverpb.PutResponse{Status: newErrorStatus(res.Error)}, res.Error
@@ -92,4 +84,12 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
 	return ds.standaloneService.MultiGet(ctx, multiGetReq)
+}
+
+func newErrorStatus(err error) *serverpb.Status {
+	return &serverpb.Status{Code: -1, Message: err.Error()}
+}
+
+func newEmptyStatus() *serverpb.Status {
+	return &serverpb.Status{Code: 0, Message: ""}
 }

@@ -41,34 +41,34 @@ func init() {
 	flag.IntVar(&redisDBIndex, "redisDBIndex", 0, "Redis DB Index")
 }
 
+func main() {
+	flag.Parse()
+	printFlags()
+
+	kvs := newKVStore()
+	dkv_repl := newDKVReplicator(kvs)
+	grpc_srvr := newDKVGrpcServer(kvs, dkv_repl)
+	sig := <-setupSignalHandler()
+	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+	dkv_repl.Stop()
+	grpc_srvr.GracefulStop()
+}
+
+func newDKVGrpcServer(kvs storage.KVStore, dkvRepl nexus_api.RaftReplicator) *grpc.Server {
+	grpc_srvr := grpc.NewServer()
+	dkv_svc := api.NewDistributedService(kvs, dkvRepl)
+	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
+	lstnr := newListener(dkvSvcPort)
+	go grpc_srvr.Serve(lstnr)
+	return grpc_srvr
+}
+
 func newListener(port uint) net.Listener {
 	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
 		panic(fmt.Sprintf("failed to listen: %v", err))
 	} else {
 		return lis
 	}
-}
-
-func newDKVGrpcServer(dkvSvc serverpb.DKVServer) *grpc.Server {
-	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
-	lstnr := newListener(dkvSvcPort)
-	go grpc_srvr.Serve(lstnr)
-	return grpc_srvr
-}
-
-func main() {
-	flag.Parse()
-	printFlags()
-
-	kvs := newKVStore()
-	dkv_repl := newReplicator(kvs)
-	dkv_svc := api.NewDistributedService(kvs, dkv_repl)
-	grpc_srvr := newDKVGrpcServer(dkv_svc)
-	sig := <-setupSignalHandler()
-	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-	dkv_repl.Stop()
-	grpc_srvr.GracefulStop()
 }
 
 func setupSignalHandler() <-chan os.Signal {
@@ -101,7 +101,7 @@ func newKVStore() storage.KVStore {
 	}
 }
 
-func newReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
+func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	repl_store := sync.NewDKVReplStore(kvs)
 	if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, nexus.OptionsFromFlags()...); err != nil {
 		panic(err)
