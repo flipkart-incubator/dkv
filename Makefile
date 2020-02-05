@@ -46,7 +46,7 @@ test:
 	@echo "   CGO_CFLAGS  = $(CGO_CFLAGS)"
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
-	@$(GO) test -v -tags="$(BUILD_TAGS)" $(PACKAGES)
+	@$(GO) test -v --count=1 -tags="$(BUILD_TAGS)" $(PACKAGES)
 
 .PHONY: build
 build:
