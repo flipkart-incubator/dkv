@@ -49,20 +49,22 @@ func newListener(port uint) net.Listener {
 	}
 }
 
+func newDKVGrpcServer(dkvSvc serverpb.DKVServer) *grpc.Server {
+	grpc_srvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
+	lstnr := newListener(dkvSvcPort)
+	go grpc_srvr.Serve(lstnr)
+	return grpc_srvr
+}
+
 func main() {
 	flag.Parse()
 	printFlags()
 
 	kvs := newKVStore()
 	dkv_repl := newReplicator(kvs)
-	grpc_srvr := grpc.NewServer()
 	dkv_svc := api.NewDistributedService(kvs, dkv_repl)
-	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
-	lstnr := newListener(dkvSvcPort)
-	go func() {
-		dkv_repl.Start()
-		grpc_srvr.Serve(lstnr)
-	}()
+	grpc_srvr := newDKVGrpcServer(dkv_svc)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
 	dkv_repl.Stop()
@@ -104,6 +106,7 @@ func newReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, nexus.OptionsFromFlags()...); err != nil {
 		panic(err)
 	} else {
+		nexus_repl.Start()
 		return nexus_repl
 	}
 }
