@@ -24,24 +24,21 @@ const (
 	logDir      = "/tmp/dkv_test/logs"
 	snapDir     = "/tmp/dkv_test/snap"
 	clusterUrl  = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
-	peer4Id     = 4
-	peer4Url    = "http://127.0.0.1:9324"
 	replTimeout = 3 * time.Second
 )
 
 var (
-	dkvRepls = make(map[int]nexus_api.RaftReplicator)
-	kvStores = make(map[int]storage.KVStore)
 	grpcSrvs = make(map[int]*grpc.Server)
-	dkvClnts = make(map[int]*ctl.DKVClient)
 	dkvPorts = map[int]int{1: 9081, 2: 9082, 3: 9083}
+	dkvClis  = make(map[int]*ctl.DKVClient)
+	dkvSvcs  = make(map[int]DKVService)
 	mutex    = sync.Mutex{}
 )
 
 func TestDistributedService(t *testing.T) {
-	initDKVServers(1, 2, 3)
+	initDKVServers()
 	sleepInSecs(3)
-	initDKVClients(1, 2, 3)
+	initDKVClients()
 	defer stopClients()
 	defer stopServers()
 
@@ -49,16 +46,16 @@ func TestDistributedService(t *testing.T) {
 }
 
 func testDistributedPut(t *testing.T) {
-	for i, dkv_cli := range dkvClnts {
+	for i := 1; i <= clusterSize; i++ {
 		key, value := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
-		if err := dkv_cli.Put([]byte(key), []byte(value)); err != nil {
+		if err := dkvClis[i].Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 	sleepInSecs(3)
-	for i := range dkvClnts {
+	for i := 1; i <= clusterSize; i++ {
 		key, expectedValue := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
-		for _, dkv_cli := range dkvClnts {
+		for _, dkv_cli := range dkvClis {
 			if actualValue, err := dkv_cli.Get([]byte(key)); err != nil {
 				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
 			} else if string(actualValue.Value) != expectedValue {
@@ -69,18 +66,18 @@ func testDistributedPut(t *testing.T) {
 }
 
 func initDKVClients(ids ...int) {
-	for _, id := range ids {
+	for id := 1; id <= clusterSize; id++ {
 		svc_addr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
 		if client, err := ctl.NewInSecureDKVClient(svc_addr); err != nil {
 			panic(err)
 		} else {
-			dkvClnts[id] = client
+			dkvClis[id] = client
 		}
 	}
 }
 
 func initDKVServers(ids ...int) {
-	for _, id := range ids {
+	for id := 1; id <= clusterSize; id++ {
 		go serveDistributedDKV(id)
 	}
 }
@@ -125,27 +122,26 @@ func newKVStoreWithId(id int) storage.KVStore {
 }
 
 func serveDistributedDKV(id int) {
+	kvs := newKVStoreWithId(id)
+	dkv_repl := newReplicator(id, kvs)
+	dkv_repl.Start()
 	mutex.Lock()
-	kvStores[id] = newKVStoreWithId(id)
-	dkvRepls[id] = newReplicator(id, kvStores[id])
+	dkvSvcs[id] = NewDistributedService(kvs, dkv_repl)
 	grpcSrvs[id] = grpc.NewServer()
 	mutex.Unlock()
-	dkv_svc := NewDistributedService(kvStores[id], dkvRepls[id])
-	serverpb.RegisterDKVServer(grpcSrvs[id], dkv_svc)
-	lstnr := newListener(dkvPorts[id])
-	dkvRepls[id].Start()
-	grpcSrvs[id].Serve(lstnr)
+	serverpb.RegisterDKVServer(grpcSrvs[id], dkvSvcs[id])
+	grpcSrvs[id].Serve(newListener(dkvPorts[id]))
 }
 
 func stopClients() {
-	for id := range dkvClnts {
-		dkvClnts[id].Close()
+	for id := 1; id <= clusterSize; id++ {
+		dkvClis[id].Close()
 	}
 }
 
 func stopServers() {
-	for id := range kvStores {
-		dkvRepls[id].Stop()
+	for id := 1; id <= clusterSize; id++ {
+		dkvSvcs[id].Close()
 		grpcSrvs[id].GracefulStop()
 	}
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
@@ -9,6 +10,11 @@ import (
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	"github.com/gogo/protobuf/proto"
 )
+
+type DKVService interface {
+	io.Closer
+	serverpb.DKVServer
+}
 
 type standaloneService struct {
 	store storage.KVStore
@@ -53,6 +59,10 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 	return &serverpb.MultiGetResponse{GetResponses: responses}, nil
 }
 
+func (ss *standaloneService) Close() error {
+	return ss.store.Close()
+}
+
 type distributedService struct {
 	*standaloneService
 	raftRepl nexus_api.RaftReplicator
@@ -84,6 +94,11 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
 	return ds.standaloneService.MultiGet(ctx, multiGetReq)
+}
+
+func (ds *distributedService) Close() error {
+	ds.raftRepl.Stop()
+	return nil
 }
 
 func newErrorStatus(err error) *serverpb.Status {

@@ -25,7 +25,7 @@ const (
 
 var (
 	dkvCli *ctl.DKVClient
-	kvs    storage.KVStore
+	dkvSvc DKVService
 )
 
 func TestStandaloneService(t *testing.T) {
@@ -37,7 +37,7 @@ func TestStandaloneService(t *testing.T) {
 	} else {
 		dkvCli = client
 		defer dkvCli.Close()
-		defer kvs.Close()
+		defer dkvSvc.Close()
 		t.Run("testPutAndGet", testPutAndGet)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testMissingGet", testMissingGet)
@@ -111,10 +111,9 @@ func newKVStore() storage.KVStore {
 }
 
 func serveStandaloneDKV() {
-	kvs = newKVStore()
-	dkv_svc := NewStandaloneService(kvs)
+	dkvSvc = NewStandaloneService(newKVStore())
 	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
+	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
 	listenAndServe(grpc_srvr, dkvSvcPort)
 }
 

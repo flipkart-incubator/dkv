@@ -21,8 +21,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+type LaunchMode bool
+
 const (
-	cacheSize = 3 << 30
+	Standalone  LaunchMode = false
+	Distributed            = true
 )
 
 var (
@@ -43,21 +46,30 @@ func init() {
 
 func main() {
 	flag.Parse()
-	printFlags()
+	nexus_mode := haveFlagsWithPrefix("nexus")
+	printFlags(nexus_mode)
+	LaunchMode(nexus_mode).launch()
+}
 
+func (lm LaunchMode) launch() {
 	kvs := newKVStore()
-	dkv_repl := newDKVReplicator(kvs)
-	grpc_srvr := newDKVGrpcServer(kvs, dkv_repl)
+	var dkv_svc api.DKVService
+	switch lm {
+	case Standalone:
+		dkv_svc = api.NewStandaloneService(kvs)
+	case Distributed:
+		dkv_svc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
+	}
+	grpc_srvr := newDKVGrpcServer(dkv_svc)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-	dkv_repl.Stop()
+	dkv_svc.Close()
 	grpc_srvr.GracefulStop()
 }
 
-func newDKVGrpcServer(kvs storage.KVStore, dkvRepl nexus_api.RaftReplicator) *grpc.Server {
+func newDKVGrpcServer(dkvSvc serverpb.DKVServer) *grpc.Server {
 	grpc_srvr := grpc.NewServer()
-	dkv_svc := api.NewDistributedService(kvs, dkvRepl)
-	serverpb.RegisterDKVServer(grpc_srvr, dkv_svc)
+	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
 	lstnr := newListener(dkvSvcPort)
 	go grpc_srvr.Serve(lstnr)
 	return grpc_srvr
@@ -78,15 +90,29 @@ func setupSignalHandler() <-chan os.Signal {
 	return stopChan
 }
 
-func printFlags() {
+func haveFlagsWithPrefix(prefix string) bool {
+	res := false
+	flag.Visit(func(f *flag.Flag) {
+		if strings.HasPrefix(f.Name, prefix) {
+			res = true
+		}
+	})
+	return res
+}
+
+func printFlags(nexusMode bool) {
 	fmt.Println("Launching DKV server with following flags:")
 	flag.VisitAll(func(f *flag.Flag) {
-		if !strings.HasPrefix(f.Name, "test.") {
+		if strings.HasPrefix(f.Name, "test.") || (!nexusMode && strings.HasPrefix(f.Name, "nexus")) {
+			return
+		} else {
 			fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
 		}
 	})
 	fmt.Println()
 }
+
+const cacheSize = 3 << 30
 
 func newKVStore() storage.KVStore {
 	switch engine {
