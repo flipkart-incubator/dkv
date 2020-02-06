@@ -129,11 +129,11 @@ func newKVStore() storage.KVStore {
 }
 
 func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
-	repl_store := sync.NewDKVReplStore(kvs)
-	if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, nexus.OptionsFromFlags()...); err != nil {
+	replStore := sync.NewDKVReplStore(kvs)
+	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, nexus.OptionsFromFlags()...); err != nil {
 		panic(err)
 	} else {
-		nexus_repl.Start()
-		return nexus_repl
+		nexusRepl.Start()
+		return nexusRepl
 	}
 }

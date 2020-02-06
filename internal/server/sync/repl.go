@@ -15,7 +15,7 @@ type dkvReplStore struct {
 	kvs storage.KVStore
 }
 
-// Creates a wrapper around the given KVStore instance
+// NewDKVReplStore creates a wrapper out of the given KVStore
 // that performs synchronous replication of all operations
 // over Nexus onto multiple replicas.
 func NewDKVReplStore(kvs storage.KVStore) *dkvReplStore {

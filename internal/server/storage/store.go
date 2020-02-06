@@ -2,24 +2,24 @@ package storage
 
 import "io"
 
-// Generic result that holds the error if available
-// from the storage implementation.
+// A Result instance holds the error if available from the
+// storage implementation.
 type Result struct {
 	Error error
 }
 
-// Result of a read from the storage implementation.
+// A ReadResult instance of a read from the storage implementation.
 type ReadResult struct {
 	*Result
 	Value []byte
 }
 
-// Creates a ReadResult with the given value.
+// NewReadResultWithValue creates a ReadResult with the given value.
 func NewReadResultWithValue(val []byte) *ReadResult {
 	return &ReadResult{&Result{Error: nil}, val}
 }
 
-// Creates a ReadResult with the given error.
+// NewReadResultWithError creates a ReadResult with the given error.
 func NewReadResultWithError(err error) *ReadResult {
 	return &ReadResult{&Result{Error: err}, nil}
 }

@@ -9,6 +9,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+// A DKVClient instance used to communicate with DKV service
+// over GRPC.
 type DKVClient struct {
 	cliConn *grpc.ClientConn
 	dkvCli  serverpb.DKVClient
@@ -21,6 +23,8 @@ const (
 	Timeout      = 1 * time.Second
 )
 
+// NewInSecureDKVClient creates an insecure GRPC client against the
+// given DKV service address.
 func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 	if conn, err := grpc.Dial(svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize)); err != nil {
 		return nil, err
@@ -30,6 +34,8 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 	}
 }
 
+// Put takes the key and value as byte arrays and invokes the
+// GRPC Put method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
@@ -44,6 +50,8 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// Get takes the key as byte array and invokes the
+// GRPC Get method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
@@ -51,6 +59,8 @@ func (dkvClnt *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
 	return dkvClnt.dkvCli.Get(ctx, getReq)
 }
 
+// MultiGet takes the keys as byte arrays and invokes the
+// GRPC MultiGet method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
@@ -63,6 +73,7 @@ func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, err
 	return res.GetResponses, err
 }
 
+// Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
 	return dkvClnt.cliConn.Close()
 }

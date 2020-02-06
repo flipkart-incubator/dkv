@@ -22,8 +22,8 @@ type standaloneService struct {
 	store storage.KVStore
 }
 
-// Creates a standalone variant of the DKVService that works only with
-// the local storage.
+// NewStandaloneService creates a standalone variant of the DKVService
+// that works only with the local storage.
 func NewStandaloneService(store storage.KVStore) *standaloneService {
 	return &standaloneService{store}
 }
@@ -71,8 +71,8 @@ type distributedService struct {
 	raftRepl nexus_api.RaftReplicator
 }
 
-// Creates a distributed variant of the DKV service that attempts to
-// replicate data across multiple replicas over Nexus.
+// NewDistributedService creates a distributed variant of the DKV service
+// that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicator) *distributedService {
 	return &distributedService{NewStandaloneService(kvs), raftRepl}
 }
