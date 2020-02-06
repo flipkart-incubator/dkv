@@ -30,7 +30,7 @@ endif
 .PHONY: protoc
 protoc:
 	@echo ">> generating proto code"
-	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=$$proto_dir --go_out=plugins=grpc:$$proto_dir $$proto_dir/*.proto || exit 1; done
+	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ --go_out=Mpkg/serverpb/api.proto=github.com/flipkart-incubator/dkv/pkg/serverpb,plugins=grpc,paths=source_relative:. $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
 format:
@@ -46,7 +46,7 @@ test:
 	@echo "   CGO_CFLAGS  = $(CGO_CFLAGS)"
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
-	@$(GO) test -v -tags="$(BUILD_TAGS)" $(PACKAGES)
+	@$(GO) test -v --count=1 -tags="$(BUILD_TAGS)" $(PACKAGES)
 
 .PHONY: build
 build:

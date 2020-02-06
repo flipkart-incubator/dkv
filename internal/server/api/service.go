@@ -2,78 +2,109 @@ package api
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"net"
+	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"google.golang.org/grpc"
+	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
+	"github.com/gogo/protobuf/proto"
 )
 
-type DKVService struct {
-	port  uint
+type DKVService interface {
+	io.Closer
+	serverpb.DKVServer
+}
+
+type standaloneService struct {
 	store storage.KVStore
 }
 
-func NewDKVService(port uint, store storage.KVStore) *DKVService {
-	return &DKVService{port, store}
+func NewStandaloneService(store storage.KVStore) *standaloneService {
+	return &standaloneService{store}
 }
 
-func (this *DKVService) ListenAndServe() {
-	this.NewGRPCServer().Serve(this.NewListener())
-}
-
-func (this *DKVService) NewGRPCServer() *grpc.Server {
-	grpcServer := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpcServer, this)
-	return grpcServer
-}
-
-func (this *DKVService) NewListener() net.Listener {
-	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", this.port)); err != nil {
-		log.Fatalf("failed to listen: %v", err)
-		return nil
+func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	if res := ss.store.Put(putReq.Key, putReq.Value); res.Error != nil {
+		return &serverpb.PutResponse{Status: newErrorStatus(res.Error)}, res.Error
 	} else {
-		return lis
-	}
-}
-
-func (this *DKVService) Close() error {
-	return this.store.Close()
-}
-
-func (this *DKVService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	if res := this.store.Put(putReq.Key, putReq.Value); res.Error != nil {
-		return &serverpb.PutResponse{&serverpb.Status{-1, res.Error.Error()}}, res.Error
-	} else {
-		return &serverpb.PutResponse{&serverpb.Status{0, ""}}, nil
+		return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 	}
 }
 
 func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
 	if value, err := readResult.Value, readResult.Error; err != nil {
-		return &serverpb.GetResponse{&serverpb.Status{-1, err.Error()}, nil}, err
+		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
 	} else {
-		return &serverpb.GetResponse{&serverpb.Status{0, ""}, value}, nil
+		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: value}, nil
 	}
 }
 
-func (this *DKVService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	readResult := this.store.Get(getReq.Key)[0]
+func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	readResult := ss.store.Get(getReq.Key)[0]
 	return toGetResponse(readResult)
 }
 
-func (this *DKVService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	numReqs := len(multiGetReq.GetRequests)
 	keys := make([][]byte, numReqs)
 	for i, getReq := range multiGetReq.GetRequests {
 		keys[i] = getReq.Key
 	}
-	readResults := this.store.Get(keys...)
+	readResults := ss.store.Get(keys...)
 	responses := make([]*serverpb.GetResponse, len(readResults))
 	for i, readResult := range readResults {
 		responses[i], _ = toGetResponse(readResult)
 	}
-	return &serverpb.MultiGetResponse{responses}, nil
+	return &serverpb.MultiGetResponse{GetResponses: responses}, nil
+}
+
+func (ss *standaloneService) Close() error {
+	return ss.store.Close()
+}
+
+type distributedService struct {
+	*standaloneService
+	raftRepl nexus_api.RaftReplicator
+}
+
+func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicator) *distributedService {
+	return &distributedService{NewStandaloneService(kvs), raftRepl}
+}
+
+func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	int_req := new(raftpb.InternalRaftRequest)
+	int_req.Put = putReq
+	if req_bts, err := proto.Marshal(int_req); err != nil {
+		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
+	} else {
+		if _, err := ds.raftRepl.Replicate(ctx, req_bts); err != nil {
+			return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
+		} else {
+			return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
+		}
+	}
+}
+
+func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	// TODO: Check for consistency level of GetRequest and process this either via local state or RAFT
+	return ds.standaloneService.Get(ctx, getReq)
+}
+
+func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
+	return ds.standaloneService.MultiGet(ctx, multiGetReq)
+}
+
+func (ds *distributedService) Close() error {
+	ds.raftRepl.Stop()
+	return nil
+}
+
+func newErrorStatus(err error) *serverpb.Status {
+	return &serverpb.Status{Code: -1, Message: err.Error()}
+}
+
+func newEmptyStatus() *serverpb.Status {
+	return &serverpb.Status{Code: 0, Message: ""}
 }
