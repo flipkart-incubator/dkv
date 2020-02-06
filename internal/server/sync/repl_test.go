@@ -14,23 +14,23 @@ import (
 
 func TestDKVReplStoreSave(t *testing.T) {
 	kvs := newMemStore()
-	dkv_repl := NewDKVReplStore(kvs)
+	dkvRepl := NewDKVReplStore(kvs)
 
-	testPut(t, kvs, dkv_repl, []byte("foo"), []byte("bar"))
-	testPut(t, kvs, dkv_repl, []byte("hello"), []byte("world"))
-	testPut(t, kvs, dkv_repl, []byte("kit"), []byte("kat"))
+	testPut(t, kvs, dkvRepl, []byte("foo"), []byte("bar"))
+	testPut(t, kvs, dkvRepl, []byte("hello"), []byte("world"))
+	testPut(t, kvs, dkvRepl, []byte("kit"), []byte("kat"))
 
-	testGet(t, kvs, dkv_repl, []byte("foo"))
-	testGet(t, kvs, dkv_repl, []byte("hello"))
-	testGet(t, kvs, dkv_repl, []byte("kit"))
+	testGet(t, kvs, dkvRepl, []byte("foo"))
+	testGet(t, kvs, dkvRepl, []byte("hello"))
+	testGet(t, kvs, dkvRepl, []byte("kit"))
 
-	testMultiGet(t, kvs, dkv_repl, []byte("foo"), []byte("hello"), []byte("kit"))
+	testMultiGet(t, kvs, dkvRepl, []byte("foo"), []byte("hello"), []byte("kit"))
 }
 
 func TestDKVReplStoreClose(t *testing.T) {
 	kvs := newMemStore()
-	dkv_repl := NewDKVReplStore(kvs)
-	if err := dkv_repl.Close(); err != nil {
+	dkvRepl := NewDKVReplStore(kvs)
+	if err := dkvRepl.Close(); err != nil {
 		t.Error(err)
 	} else if kvs.store != nil {
 		t.Errorf("Underlying store is expected to be closed but is open")
@@ -38,12 +38,12 @@ func TestDKVReplStoreClose(t *testing.T) {
 }
 
 func testPut(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key, val []byte) {
-	int_req := new(raftpb.InternalRaftRequest)
-	int_req.Put = &serverpb.PutRequest{Key: key, Value: val}
-	if req_bts, err := proto.Marshal(int_req); err != nil {
+	intReq := new(raftpb.InternalRaftRequest)
+	intReq.Put = &serverpb.PutRequest{Key: key, Value: val}
+	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(req_bts); err != nil {
+		if _, err := dkvRepl.Save(reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if res := kvs.Get(key)[0]; res.Error != nil {
@@ -56,43 +56,43 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key, val []byte
 }
 
 func testGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key []byte) {
-	int_req := new(raftpb.InternalRaftRequest)
-	int_req.Get = &serverpb.GetRequest{Key: key}
-	if req_bts, err := proto.Marshal(int_req); err != nil {
+	intReq := new(raftpb.InternalRaftRequest)
+	intReq.Get = &serverpb.GetRequest{Key: key}
+	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if val, err := dkvRepl.Save(req_bts); err != nil {
+		if val, err := dkvRepl.Save(reqBts); err != nil {
 			t.Error(err)
-		} else if kvs_val := kvs.Get(key)[0].Value; string(val) != string(kvs_val) {
-			t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvs_val, val)
+		} else if kvsVal := kvs.Get(key)[0].Value; string(val) != string(kvsVal) {
+			t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVal, val)
 		}
 	}
 }
 
 func testMultiGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, keys ...[]byte) {
-	get_reqs := make([]*serverpb.GetRequest, len(keys))
+	getReqs := make([]*serverpb.GetRequest, len(keys))
 	for i, key := range keys {
-		get_reqs[i] = &serverpb.GetRequest{Key: key}
+		getReqs[i] = &serverpb.GetRequest{Key: key}
 	}
-	int_req := new(raftpb.InternalRaftRequest)
-	int_req.MultiGet = &serverpb.MultiGetRequest{GetRequests: get_reqs}
-	if req_bts, err := proto.Marshal(int_req); err != nil {
+	intReq := new(raftpb.InternalRaftRequest)
+	intReq.MultiGet = &serverpb.MultiGetRequest{GetRequests: getReqs}
+	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if vals, err := dkvRepl.Save(req_bts); err != nil {
+		if vals, err := dkvRepl.Save(reqBts); err != nil {
 			t.Error(err)
 		} else {
-			read_results := make([]*storage.ReadResult, len(keys))
+			readResults := make([]*storage.ReadResult, len(keys))
 			buf := bytes.NewBuffer(vals)
-			if err := gob.NewDecoder(buf).Decode(&read_results); err != nil {
+			if err := gob.NewDecoder(buf).Decode(&readResults); err != nil {
 				t.Error(err)
 			} else {
-				kvs_vals := kvs.Get(keys...)
-				for i, read_result := range read_results {
-					read_val := read_result.Value
-					kvs_val := kvs_vals[i].Value
-					if string(read_val) != string(kvs_val) {
-						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvs_val, read_val)
+				kvsVals := kvs.Get(keys...)
+				for i, readResult := range readResults {
+					readVal := readResult.Value
+					kvsVal := kvsVals[i].Value
+					if string(readVal) != string(kvsVal) {
+						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVal, readVal)
 					}
 				}
 			}
@@ -109,12 +109,12 @@ func newMemStore() *memStore {
 }
 
 func (ms *memStore) Put(key []byte, value []byte) *storage.Result {
-	store_key := string(key)
+	storeKey := string(key)
 	res := storage.Result{}
-	if _, present := ms.store[store_key]; present {
+	if _, present := ms.store[storeKey]; present {
 		res.Error = errors.New("Given key already exists")
 	} else {
-		ms.store[store_key] = value
+		ms.store[storeKey] = value
 	}
 	return &res
 }
@@ -122,9 +122,9 @@ func (ms *memStore) Put(key []byte, value []byte) *storage.Result {
 func (ms *memStore) Get(keys ...[]byte) []*storage.ReadResult {
 	rss := make([]*storage.ReadResult, len(keys))
 	for i, key := range keys {
-		store_key := string(key)
+		storeKey := string(key)
 		rss[i] = &storage.ReadResult{&storage.Result{Error: nil}, nil}
-		if val, present := ms.store[store_key]; present {
+		if val, present := ms.store[storeKey]; present {
 			rss[i].Value = val
 		} else {
 			rss[i].Error = errors.New("Given key not found")

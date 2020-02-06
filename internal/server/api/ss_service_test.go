@@ -112,9 +112,9 @@ func newKVStore() storage.KVStore {
 
 func serveStandaloneDKV() {
 	dkvSvc = NewStandaloneService(newKVStore())
-	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
-	listenAndServe(grpc_srvr, dkvSvcPort)
+	grpcSrvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+	listenAndServe(grpcSrvr, dkvSvcPort)
 }
 
 func listenAndServe(grpcSrvr *grpc.Server, port int) {

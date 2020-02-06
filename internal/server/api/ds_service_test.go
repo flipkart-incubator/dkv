@@ -55,8 +55,8 @@ func testDistributedPut(t *testing.T) {
 	sleepInSecs(3)
 	for i := 1; i <= clusterSize; i++ {
 		key, expectedValue := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
-		for _, dkv_cli := range dkvClis {
-			if actualValue, err := dkv_cli.Get([]byte(key)); err != nil {
+		for _, dkvCli := range dkvClis {
+			if actualValue, err := dkvCli.Get([]byte(key)); err != nil {
 				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
 			} else if string(actualValue.Value) != expectedValue {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
@@ -67,8 +67,8 @@ func testDistributedPut(t *testing.T) {
 
 func initDKVClients(ids ...int) {
 	for id := 1; id <= clusterSize; id++ {
-		svc_addr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-		if client, err := ctl.NewInSecureDKVClient(svc_addr); err != nil {
+		svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
+		if client, err := ctl.NewInSecureDKVClient(svcAddr); err != nil {
 			panic(err)
 		} else {
 			dkvClis[id] = client
@@ -83,7 +83,7 @@ func initDKVServers(ids ...int) {
 }
 
 func newReplicator(id int, kvs storage.KVStore) nexus_api.RaftReplicator {
-	repl_store := dkv_sync.NewDKVReplStore(kvs)
+	replStore := dkv_sync.NewDKVReplStore(kvs)
 	opts := []nexus.Option{
 		nexus.NodeId(id),
 		nexus.LogDir(logDir),
@@ -91,10 +91,10 @@ func newReplicator(id int, kvs storage.KVStore) nexus_api.RaftReplicator {
 		nexus.ClusterUrl(clusterUrl),
 		nexus.ReplicationTimeout(replTimeout),
 	}
-	if nexus_repl, err := nexus_api.NewRaftReplicator(repl_store, opts...); err != nil {
+	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, opts...); err != nil {
 		panic(err)
 	} else {
-		return nexus_repl
+		return nexusRepl
 	}
 }
 
@@ -107,15 +107,15 @@ func newListener(port int) net.Listener {
 }
 
 func newKVStoreWithId(id int) storage.KVStore {
-	db_folder := fmt.Sprintf("%s_%d", dbFolder, id)
-	if err := exec.Command("rm", "-rf", db_folder).Run(); err != nil {
+	dbFolder := fmt.Sprintf("%s_%d", dbFolder, id)
+	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
-		return rocksdb.OpenDB(db_folder, cacheSize)
+		return rocksdb.OpenDB(dbFolder, cacheSize)
 	case "badger":
-		return badger.OpenDB(db_folder)
+		return badger.OpenDB(dbFolder)
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
@@ -123,10 +123,10 @@ func newKVStoreWithId(id int) storage.KVStore {
 
 func serveDistributedDKV(id int) {
 	kvs := newKVStoreWithId(id)
-	dkv_repl := newReplicator(id, kvs)
-	dkv_repl.Start()
+	dkvRepl := newReplicator(id, kvs)
+	dkvRepl.Start()
 	mutex.Lock()
-	dkvSvcs[id] = NewDistributedService(kvs, dkv_repl)
+	dkvSvcs[id] = NewDistributedService(kvs, dkvRepl)
 	grpcSrvs[id] = grpc.NewServer()
 	mutex.Unlock()
 	serverpb.RegisterDKVServer(grpcSrvs[id], dkvSvcs[id])

@@ -21,10 +21,10 @@ func checkKeys(t *testing.T, getReqs []*serverpb.GetRequest) {
 		} else {
 			j++
 		}
-		exp_key := fmt.Sprintf("%s%d", ExistingKeyPrefix, j)
-		act_key := string(getReq.Key)
-		if exp_key != act_key {
-			t.Errorf("Key mismatch. Expected key: %s, Actual key: %s", exp_key, act_key)
+		expKey := fmt.Sprintf("%s%d", ExistingKeyPrefix, j)
+		actKey := string(getReq.Key)
+		if expKey != actKey {
+			t.Errorf("Key mismatch. Expected key: %s, Actual key: %s", expKey, actKey)
 		}
 	}
 }
