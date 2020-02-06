@@ -11,6 +11,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
+// A DKVService captures the publicly visible behaviors
+// of the key value store.
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
@@ -20,6 +22,8 @@ type standaloneService struct {
 	store storage.KVStore
 }
 
+// Creates a standalone variant of the DKVService that works only with
+// the local storage.
 func NewStandaloneService(store storage.KVStore) *standaloneService {
 	return &standaloneService{store}
 }
@@ -27,9 +31,8 @@ func NewStandaloneService(store storage.KVStore) *standaloneService {
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	if res := ss.store.Put(putReq.Key, putReq.Value); res.Error != nil {
 		return &serverpb.PutResponse{Status: newErrorStatus(res.Error)}, res.Error
-	} else {
-		return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 	}
+	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 }
 
 func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
@@ -68,21 +71,22 @@ type distributedService struct {
 	raftRepl nexus_api.RaftReplicator
 }
 
+// Creates a distributed variant of the DKV service that attempts to
+// replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicator) *distributedService {
 	return &distributedService{NewStandaloneService(kvs), raftRepl}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	int_req := new(raftpb.InternalRaftRequest)
-	int_req.Put = putReq
-	if req_bts, err := proto.Marshal(int_req); err != nil {
+	intReq := new(raftpb.InternalRaftRequest)
+	intReq.Put = putReq
+	if reqBts, err := proto.Marshal(intReq); err != nil {
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	} else {
-		if _, err := ds.raftRepl.Replicate(ctx, req_bts); err != nil {
+		if _, err := ds.raftRepl.Replicate(ctx, reqBts); err != nil {
 			return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
-		} else {
-			return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 		}
+		return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 	}
 }
 

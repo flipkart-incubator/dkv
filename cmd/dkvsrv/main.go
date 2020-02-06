@@ -39,15 +39,15 @@ func init() {
 
 func main() {
 	flag.Parse()
-	nexus_mode := haveFlagsWithPrefix("nexus")
-	printFlags(nexus_mode)
+	nexusMode := haveFlagsWithPrefix("nexus")
+	printFlags(nexusMode)
 
-	dkv_svc := newDKVService(nexus_mode, newKVStore())
-	grpc_srvr := newDKVGrpcServer(dkv_svc)
+	dkvSvc := newDKVService(nexusMode, newKVStore())
+	grpcSrvr := newDKVGrpcServer(dkvSvc)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-	dkv_svc.Close()
-	grpc_srvr.GracefulStop()
+	dkvSvc.Close()
+	grpcSrvr.GracefulStop()
 }
 
 type serviceMode bool
@@ -58,22 +58,22 @@ const (
 )
 
 func newDKVService(svcMode bool, kvs storage.KVStore) api.DKVService {
-	var dkv_svc api.DKVService
+	var dkvSvc api.DKVService
 	switch serviceMode(svcMode) {
 	case standalone:
-		dkv_svc = api.NewStandaloneService(kvs)
+		dkvSvc = api.NewStandaloneService(kvs)
 	case distributed:
-		dkv_svc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
+		dkvSvc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
 	}
-	return dkv_svc
+	return dkvSvc
 }
 
 func newDKVGrpcServer(dkvSvc serverpb.DKVServer) *grpc.Server {
-	grpc_srvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpc_srvr, dkvSvc)
+	grpcSrvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	lstnr := newListener(dkvSvcPort)
-	go grpc_srvr.Serve(lstnr)
-	return grpc_srvr
+	go grpcSrvr.Serve(lstnr)
+	return grpcSrvr
 }
 
 func newListener(port uint) net.Listener {
