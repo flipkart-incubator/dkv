@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/tecbot/gorocksdb"
 )
 
 var store storage.KVStore
@@ -44,6 +45,43 @@ func TestPutAndGet(t *testing.T) {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(actualValue) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
+		}
+	}
+}
+
+func TestGetUpdatesFromSeqNum(t *testing.T) {
+	rdb := store.(*RocksDBStore)
+	before_seq := rdb.db.GetLatestSequenceNumber()
+
+	exp_num_trxns := 3
+	for i := 1; i <= exp_num_trxns; i++ {
+		k, v := fmt.Sprintf("aKey_%d", i), fmt.Sprintf("aVal_%d", i)
+		if err := store.Put([]byte(k), []byte(v)).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	after_seq := rdb.db.GetLatestSequenceNumber()
+	num_trxns := int(after_seq - before_seq)
+	if num_trxns != exp_num_trxns {
+		t.Errorf("Incorrect number of transactions reported. Expected: %d, Actual: %d", exp_num_trxns, num_trxns)
+	}
+
+	if trxn_iter, err := rdb.db.GetUpdatesSince(before_seq); err != nil {
+		t.Fatal(err)
+	} else {
+		defer trxn_iter.Destroy()
+		for trxn_iter.Valid() {
+			wb, _ := trxn_iter.GetBatch()
+			exp_bts := wb.Data()
+			wb.Destroy()
+			wb = gorocksdb.WriteBatchFrom(exp_bts)
+			act_bts := wb.Data()
+			if string(exp_bts) != string(act_bts) {
+				t.Errorf("WriteBatch mismatch. Expected: %s, Actual: %s", exp_bts, act_bts)
+			}
+			wb.Destroy()
+			trxn_iter.Next()
 		}
 	}
 }
