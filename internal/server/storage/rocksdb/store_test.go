@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -58,6 +59,13 @@ func TestGetUpdatesFromSeqNum(t *testing.T) {
 		k, v := fmt.Sprintf("aKey_%d", i), fmt.Sprintf("aVal_%d", i)
 		if err := store.Put([]byte(k), []byte(v)).Error; err != nil {
 			t.Fatal(err)
+		} else {
+			read_result := store.Get([]byte(k))[0]
+			if act_val, err := read_result.Value, read_result.Error; err != nil {
+				t.Fatal(err)
+			} else if string(act_val) != string(v) {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, act_val)
+			}
 		}
 	}
 
@@ -67,7 +75,8 @@ func TestGetUpdatesFromSeqNum(t *testing.T) {
 		t.Errorf("Incorrect number of transactions reported. Expected: %d, Actual: %d", exp_num_trxns, num_trxns)
 	}
 
-	if trxn_iter, err := rdb.db.GetUpdatesSince(before_seq); err != nil {
+	start_seq := 1 + before_seq // This is done to remove previous transaction if any
+	if trxn_iter, err := rdb.db.GetUpdatesSince(start_seq); err != nil {
 		t.Fatal(err)
 	} else {
 		defer trxn_iter.Destroy()
@@ -79,6 +88,72 @@ func TestGetUpdatesFromSeqNum(t *testing.T) {
 			act_bts := wb.Data()
 			if string(exp_bts) != string(act_bts) {
 				t.Errorf("WriteBatch mismatch. Expected: %s, Actual: %s", exp_bts, act_bts)
+			} else {
+				t.Log(string(act_bts))
+			}
+			wb.Destroy()
+			trxn_iter.Next()
+		}
+	}
+}
+
+func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
+	rdb := store.(*RocksDBStore)
+	before_seq := rdb.db.GetLatestSequenceNumber()
+
+	exp_num_batch_trxns := 3
+	num_trxns_per_batch := 2
+	exp_num_trxns := exp_num_batch_trxns * num_trxns_per_batch
+	for i := 1; i <= exp_num_batch_trxns; i++ {
+		k, v := fmt.Sprintf("bKey_%d", i), fmt.Sprintf("bVal_%d", i)
+		wb := gorocksdb.NewWriteBatch()
+		wb.Put([]byte(k), []byte(v))
+		wb.Delete([]byte(k))
+		wo := gorocksdb.NewDefaultWriteOptions()
+		wo.SetSync(true)
+		if err := rdb.db.Write(wo, wb); err != nil {
+			t.Fatal(err)
+		}
+		wb.Destroy()
+		wo.Destroy()
+	}
+
+	after_seq := rdb.db.GetLatestSequenceNumber()
+	num_trxns := int(after_seq - before_seq)
+	if num_trxns != exp_num_trxns {
+		t.Errorf("Incorrect number of transactions reported. Expected: %d, Actual: %d", exp_num_trxns, num_trxns)
+	}
+
+	start_seq := 1 + before_seq // This is done to remove previous transaction if any
+	if trxn_iter, err := rdb.db.GetUpdatesSince(start_seq); err != nil {
+		t.Fatal(err)
+	} else {
+		defer trxn_iter.Destroy()
+		for trxn_iter.Valid() {
+			wb, _ := trxn_iter.GetBatch()
+			num_trxns_per_wb := wb.Count()
+			if num_trxns_per_wb != num_trxns_per_batch {
+				t.Errorf("Incorrect number of transactions per batch. Expected: %d, Actual: %d", num_trxns_per_batch, num_trxns_per_wb)
+			}
+			wb_iter := wb.NewIterator()
+			for wb_iter.Next() {
+				wbr := wb_iter.Record()
+				t.Logf("Type: %v, Key: %s, Val: %s", wbr.Type, wbr.Key, wbr.Value)
+				switch wbr.Type {
+				case 1: // Put
+					if !strings.HasPrefix(string(wbr.Key), "bKey_") {
+						t.Errorf("Invalid key for PUT record. Value: %s", wbr.Key)
+					}
+					if !strings.HasPrefix(string(wbr.Value), "bVal_") {
+						t.Errorf("Invalid value inside write batch record for key: %s. Value: %s", wbr.Key, wbr.Value)
+					}
+				case 0: // Delete
+					if !strings.HasPrefix(string(wbr.Key), "bKey_") {
+						t.Errorf("Invalid key for DELETE record. Value: %s", wbr.Key)
+					}
+				default:
+					t.Errorf("Invalid type: %v", wbr.Type)
+				}
 			}
 			wb.Destroy()
 			trxn_iter.Next()
