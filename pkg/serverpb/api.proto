@@ -62,14 +62,14 @@ service DKVReplication {
 
 message GetChangesRequest {
   // fromChangeNumber is the starting change number from which to retrieve changes
-  int64 fromChangeNumber = 1;
+  uint64 fromChangeNumber = 1;
   // maxNumberOfChanges is the maximum number of changes to return from this invocation
-  int32 maxNumberOfChanges = 2;
+  uint32 maxNumberOfChanges = 2;
 }
 
 message GetChangesResponse {
   // numberOfChanges indicates the number of change records in the response
-  int32 numberOfChanges = 1;
+  uint32 numberOfChanges = 1;
   // changes is the collection of change records
   repeated ChangeRecord changes = 2;
 }
@@ -78,9 +78,9 @@ message ChangeRecord {
   // serialisedForm is the internal byte array representation of this change record
   bytes serialisedForm = 1;
   // changeNumber indicates the change number of this change record
-  int64 changeNumber = 2;
+  uint64 changeNumber = 2;
   // numberOfTrxns indicates the number of transactions associated with this change record
-  int32 numberOfTrxns = 3;
+  uint32 numberOfTrxns = 3;
   // trxns is the collection of transaction records associated with this change record
   repeated TrxnRecord trxns = 4;
 }
