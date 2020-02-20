@@ -1,4 +1,4 @@
-package api
+package master
 
 import (
 	"context"
@@ -16,16 +16,18 @@ import (
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
+	serverpb.DKVReplicationServer
 }
 
 type standaloneService struct {
 	store storage.KVStore
+	cdc   storage.ChangePropagator
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore) *standaloneService {
-	return &standaloneService{store}
+func NewStandaloneService(store storage.KVStore, cdc storage.ChangePropagator) *standaloneService {
+	return &standaloneService{store, cdc}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -33,14 +35,6 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 		return &serverpb.PutResponse{Status: newErrorStatus(res.Error)}, res.Error
 	}
 	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
-}
-
-func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
-	if value, err := readResult.Value, readResult.Error; err != nil {
-		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
-	} else {
-		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: value}, nil
-	}
 }
 
 func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
@@ -62,6 +56,14 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 	return &serverpb.MultiGetResponse{GetResponses: responses}, nil
 }
 
+func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
+	if chngs, err := ss.cdc.LoadChanges(getChngsReq.FromChangeNumber, int(getChngsReq.MaxNumberOfChanges)); err != nil {
+		return &serverpb.GetChangesResponse{Status: newErrorStatus(err)}, err
+	} else {
+		return &serverpb.GetChangesResponse{Status: newEmptyStatus(), NumberOfChanges: uint32(len(chngs)), Changes: chngs}, nil
+	}
+}
+
 func (ss *standaloneService) Close() error {
 	return ss.store.Close()
 }
@@ -73,8 +75,8 @@ type distributedService struct {
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
-func NewDistributedService(kvs storage.KVStore, raftRepl nexus_api.RaftReplicator) *distributedService {
-	return &distributedService{NewStandaloneService(kvs), raftRepl}
+func NewDistributedService(kvs storage.KVStore, cdc storage.ChangePropagator, raftRepl nexus_api.RaftReplicator) *distributedService {
+	return &distributedService{NewStandaloneService(kvs, cdc), raftRepl}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -111,4 +113,12 @@ func newErrorStatus(err error) *serverpb.Status {
 
 func newEmptyStatus() *serverpb.Status {
 	return &serverpb.Status{Code: 0, Message: ""}
+}
+
+func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
+	if value, err := readResult.Value, readResult.Error; err != nil {
+		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
+	} else {
+		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: value}, nil
+	}
 }

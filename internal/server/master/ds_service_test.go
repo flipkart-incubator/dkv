@@ -1,4 +1,4 @@
-package api
+package master
 
 import (
 	"fmt"
@@ -106,27 +106,28 @@ func newListener(port int) net.Listener {
 	}
 }
 
-func newKVStoreWithId(id int) storage.KVStore {
+func newKVStoreWithId(id int) (storage.KVStore, storage.ChangePropagator) {
 	dbFolder := fmt.Sprintf("%s_%d", dbFolder, id)
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
-		return rocksdb.OpenDB(dbFolder, cacheSize)
+		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocks_db, rocks_db
 	case "badger":
-		return badger.OpenDB(dbFolder)
+		return badger.OpenDB(dbFolder), nil
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
 }
 
 func serveDistributedDKV(id int) {
-	kvs := newKVStoreWithId(id)
+	kvs, cp := newKVStoreWithId(id)
 	dkvRepl := newReplicator(id, kvs)
 	dkvRepl.Start()
 	mutex.Lock()
-	dkvSvcs[id] = NewDistributedService(kvs, dkvRepl)
+	dkvSvcs[id] = NewDistributedService(kvs, cp, dkvRepl)
 	grpcSrvs[id] = grpc.NewServer()
 	mutex.Unlock()
 	serverpb.RegisterDKVServer(grpcSrvs[id], dkvSvcs[id])

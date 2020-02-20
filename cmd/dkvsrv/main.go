@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/flipkart-incubator/dkv/internal/server/api"
+	"github.com/flipkart-incubator/dkv/internal/server/master"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
@@ -42,7 +42,8 @@ func main() {
 	nexusMode := haveFlagsWithPrefix("nexus")
 	printFlags(nexusMode)
 
-	dkvSvc := newDKVService(nexusMode, newKVStore())
+	kvs, cdc := newKVStore()
+	dkvSvc := newDKVService(nexusMode, kvs, cdc)
 	grpcSrvr := newDKVGrpcServer(dkvSvc)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
@@ -57,20 +58,21 @@ const (
 	distributed             = true
 )
 
-func newDKVService(svcMode bool, kvs storage.KVStore) api.DKVService {
-	var dkvSvc api.DKVService
+func newDKVService(svcMode bool, kvs storage.KVStore, cdc storage.ChangePropagator) master.DKVService {
+	var dkvSvc master.DKVService
 	switch serviceMode(svcMode) {
 	case standalone:
-		dkvSvc = api.NewStandaloneService(kvs)
+		dkvSvc = master.NewStandaloneService(kvs, cdc)
 	case distributed:
-		dkvSvc = api.NewDistributedService(kvs, newDKVReplicator(kvs))
+		dkvSvc = master.NewDistributedService(kvs, cdc, newDKVReplicator(kvs))
 	}
 	return dkvSvc
 }
 
-func newDKVGrpcServer(dkvSvc serverpb.DKVServer) *grpc.Server {
+func newDKVGrpcServer(dkvSvc master.DKVService) *grpc.Server {
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	lstnr := newListener(dkvSvcPort)
 	go grpcSrvr.Serve(lstnr)
 	return grpcSrvr
@@ -115,14 +117,15 @@ func printFlags(nexusMode bool) {
 
 const cacheSize = 3 << 30
 
-func newKVStore() storage.KVStore {
+func newKVStore() (storage.KVStore, storage.ChangePropagator) {
 	switch engine {
 	case "rocksdb":
-		return rocksdb.OpenDB(dbFolder, cacheSize)
+		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocks_db, rocks_db
 	case "badger":
-		return badger.OpenDB(dbFolder)
+		return badger.OpenDB(dbFolder), nil
 	case "redis":
-		return redis.OpenDB(redisPort, redisDBIndex)
+		return redis.OpenDB(redisPort, redisDBIndex), nil
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}

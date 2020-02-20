@@ -19,7 +19,7 @@ type rocksDBOpts struct {
 	folderName     string
 }
 
-func OpenDB(dbFolder string, cacheSize uint64) storage.KVStore {
+func OpenDB(dbFolder string, cacheSize uint64) *rocksDB {
 	opts := NewDefaultOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
 	if kvs, err := OpenStore(opts); err != nil {

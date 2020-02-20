@@ -9,11 +9,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-// A DKVClient instance used to communicate with DKV service
-// over GRPC.
+// A DKVClient instance is used to communicate with DKV service
+// over GRPC. It is an adapter to the underlying GRPC client that
+// exposes a simpler API to its users without having to deal with
+// contexts and other GRPC semantics.
 type DKVClient struct {
-	cliConn *grpc.ClientConn
-	dkvCli  serverpb.DKVClient
+	cliConn    *grpc.ClientConn
+	dkvCli     serverpb.DKVClient
+	dkvReplCli serverpb.DKVReplicationClient
 }
 
 // TODO: Should these be paramterised ?
@@ -30,7 +33,8 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 		return nil, err
 	} else {
 		dkvCli := serverpb.NewDKVClient(conn)
-		return &DKVClient{conn, dkvCli}, nil
+		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
+		return &DKVClient{conn, dkvCli, dkvReplCli}, nil
 	}
 }
 
@@ -71,6 +75,24 @@ func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, err
 	multiGetReq := &serverpb.MultiGetRequest{GetRequests: getReqs}
 	res, err := dkvClnt.dkvCli.MultiGet(ctx, multiGetReq)
 	return res.GetResponses, err
+}
+
+// GetChanges retrieves changes since the given change number
+// using the underlying GRPC GetChanges method. One can limit the
+// number of changes retrieved using the maxNumChanges parameter.
+// This is a convenience wrapper.
+func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32) ([]*serverpb.ChangeRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
+	if res, err := dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq); err != nil {
+		return nil, err
+	} else {
+		if res.Status.Code != 0 {
+			return nil, errors.New(res.Status.Message)
+		}
+		return res.Changes, nil
+	}
 }
 
 // Close closes the underlying GRPC client connection to DKV service
