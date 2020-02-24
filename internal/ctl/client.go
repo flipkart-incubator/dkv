@@ -65,16 +65,12 @@ func (dkvClnt *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
 
 // MultiGet takes the keys as byte arrays and invokes the
 // GRPC MultiGet method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, error) {
+func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([][]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	getReqs := make([]*serverpb.GetRequest, len(keys))
-	for i, key := range keys {
-		getReqs[i] = &serverpb.GetRequest{Key: key}
-	}
-	multiGetReq := &serverpb.MultiGetRequest{GetRequests: getReqs}
+	multiGetReq := &serverpb.MultiGetRequest{Keys: keys}
 	res, err := dkvClnt.dkvCli.MultiGet(ctx, multiGetReq)
-	return res.GetResponses, err
+	return res.Values, err
 }
 
 // GetChanges retrieves changes since the given change number

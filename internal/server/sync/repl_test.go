@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/gogo/protobuf/proto"
@@ -46,10 +45,10 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key, val []byte
 		if _, err := dkvRepl.Save(reqBts); err != nil {
 			t.Error(err)
 		} else {
-			if res := kvs.Get(key)[0]; res.Error != nil {
-				t.Error(res.Error)
-			} else if string(res.Value) != string(val) {
-				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res.Value)
+			if res, err := kvs.Get(key); err != nil {
+				t.Error(err)
+			} else if string(res[0]) != string(val) {
+				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0])
 			}
 		}
 	}
@@ -63,36 +62,37 @@ func testGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key []byte) {
 	} else {
 		if val, err := dkvRepl.Save(reqBts); err != nil {
 			t.Error(err)
-		} else if kvsVal := kvs.Get(key)[0].Value; string(val) != string(kvsVal) {
-			t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVal, val)
+		} else {
+			if kvsVals, err := kvs.Get(key); err != nil {
+				t.Error(err)
+			} else if string(val) != string(kvsVals[0]) {
+				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0], val)
+			}
 		}
 	}
 }
 
 func testMultiGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, keys ...[]byte) {
-	getReqs := make([]*serverpb.GetRequest, len(keys))
-	for i, key := range keys {
-		getReqs[i] = &serverpb.GetRequest{Key: key}
-	}
 	intReq := new(raftpb.InternalRaftRequest)
-	intReq.MultiGet = &serverpb.MultiGetRequest{GetRequests: getReqs}
+	intReq.MultiGet = &serverpb.MultiGetRequest{Keys: keys}
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
 		if vals, err := dkvRepl.Save(reqBts); err != nil {
 			t.Error(err)
 		} else {
-			readResults := make([]*storage.ReadResult, len(keys))
+			readResults := make([][]byte, len(keys))
 			buf := bytes.NewBuffer(vals)
 			if err := gob.NewDecoder(buf).Decode(&readResults); err != nil {
 				t.Error(err)
 			} else {
-				kvsVals := kvs.Get(keys...)
-				for i, readResult := range readResults {
-					readVal := readResult.Value
-					kvsVal := kvsVals[i].Value
-					if string(readVal) != string(kvsVal) {
-						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVal, readVal)
+				if kvsVals, err := kvs.Get(keys...); err != nil {
+					t.Error(err)
+				} else {
+					for i, readResult := range readResults {
+						if string(readResult) != string(kvsVals[i]) {
+							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i], readResult)
+						}
 					}
 				}
 			}
@@ -108,29 +108,27 @@ func newMemStore() *memStore {
 	return &memStore{store: make(map[string][]byte)}
 }
 
-func (ms *memStore) Put(key []byte, value []byte) *storage.Result {
+func (ms *memStore) Put(key []byte, value []byte) error {
 	storeKey := string(key)
-	res := storage.Result{}
 	if _, present := ms.store[storeKey]; present {
-		res.Error = errors.New("Given key already exists")
+		return errors.New("Given key already exists")
 	} else {
 		ms.store[storeKey] = value
+		return nil
 	}
-	return &res
 }
 
-func (ms *memStore) Get(keys ...[]byte) []*storage.ReadResult {
-	rss := make([]*storage.ReadResult, len(keys))
+func (ms *memStore) Get(keys ...[]byte) ([][]byte, error) {
+	rss := make([][]byte, len(keys))
 	for i, key := range keys {
 		storeKey := string(key)
-		rss[i] = &storage.ReadResult{&storage.Result{Error: nil}, nil}
 		if val, present := ms.store[storeKey]; present {
-			rss[i].Value = val
+			rss[i] = val
 		} else {
-			rss[i].Error = errors.New("Given key not found")
+			return nil, errors.New("Given key not found")
 		}
 	}
-	return rss
+	return rss, nil
 }
 
 func (ms *memStore) Close() error {

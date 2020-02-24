@@ -64,29 +64,24 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) Put(key []byte, value []byte) *storage.Result {
+func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	wo := gorocksdb.NewDefaultWriteOptions()
 	wo.SetSync(true)
 	defer wo.Destroy()
-	err := rdb.db.Put(wo, key, value)
-	return &storage.Result{err}
+	return rdb.db.Put(wo, key, value)
 }
 
-func (rdb *rocksDB) Get(keys ...[]byte) []*storage.ReadResult {
+func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
 
-	numKeys := len(keys)
-	var results []*storage.ReadResult
-	switch {
+	switch numKeys := len(keys); {
 	case numKeys == 1:
-		results = append(results, rdb.getSingleKey(ro, keys[0]))
-	case numKeys > 1:
-		results = rdb.getMultipleKeys(ro, keys)
+		val, err := rdb.getSingleKey(ro, keys[0])
+		return [][]byte{val}, err
 	default:
-		results = nil
+		return rdb.getMultipleKeys(ro, keys)
 	}
-	return results
 }
 
 func (rdb *rocksDB) GetLatestChangeNumber() uint64 {
@@ -165,29 +160,29 @@ func byteArrayCopy(src []byte, dstLen int) []byte {
 	return dst
 }
 
-func toReadResult(value *gorocksdb.Slice) *storage.ReadResult {
+func toByteArray(value *gorocksdb.Slice) []byte {
 	src := value.Data()
 	res := byteArrayCopy(src, value.Size())
-	return storage.NewReadResultWithValue(res)
+	return res
 }
 
-func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) *storage.ReadResult {
+func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]byte, error) {
 	if value, err := rdb.db.Get(ro, key); err != nil {
-		return storage.NewReadResultWithError(err)
+		return nil, err
 	} else {
-		return toReadResult(value)
+		return toByteArray(value), nil
 	}
 }
 
-func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) []*storage.ReadResult {
-	var results []*storage.ReadResult
+func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([][]byte, error) {
 	if values, err := rdb.db.MultiGet(ro, keys...); err != nil {
-		results = append(results, storage.NewReadResultWithError(err))
+		return nil, err
 	} else {
+		var results [][]byte
 		for _, value := range values {
-			results = append(results, toReadResult(value))
+			results = append(results, toByteArray(value))
 			value.Free()
 		}
+		return results, nil
 	}
-	return results
 }

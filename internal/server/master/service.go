@@ -31,29 +31,26 @@ func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator) *s
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	if res := ss.store.Put(putReq.Key, putReq.Value); res.Error != nil {
-		return &serverpb.PutResponse{Status: newErrorStatus(res.Error)}, res.Error
+	if err := ss.store.Put(putReq.Key, putReq.Value); err != nil {
+		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
 	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 }
 
 func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	readResult := ss.store.Get(getReq.Key)[0]
-	return toGetResponse(readResult)
+	if readResults, err := ss.store.Get(getReq.Key); err != nil {
+		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
+	} else {
+		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: readResults[0]}, nil
+	}
 }
 
 func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	numReqs := len(multiGetReq.GetRequests)
-	keys := make([][]byte, numReqs)
-	for i, getReq := range multiGetReq.GetRequests {
-		keys[i] = getReq.Key
+	if readResults, err := ss.store.Get(multiGetReq.Keys...); err != nil {
+		return &serverpb.MultiGetResponse{Status: newErrorStatus(err), Values: nil}, err
+	} else {
+		return &serverpb.MultiGetResponse{Status: newEmptyStatus(), Values: readResults}, nil
 	}
-	readResults := ss.store.Get(keys...)
-	responses := make([]*serverpb.GetResponse, len(readResults))
-	for i, readResult := range readResults {
-		responses[i], _ = toGetResponse(readResult)
-	}
-	return &serverpb.MultiGetResponse{GetResponses: responses}, nil
 }
 
 func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
@@ -113,12 +110,4 @@ func newErrorStatus(err error) *serverpb.Status {
 
 func newEmptyStatus() *serverpb.Status {
 	return &serverpb.Status{Code: 0, Message: ""}
-}
-
-func toGetResponse(readResult *storage.ReadResult) (*serverpb.GetResponse, error) {
-	if value, err := readResult.Value, readResult.Error; err != nil {
-		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
-	} else {
-		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: value}, nil
-	}
 }

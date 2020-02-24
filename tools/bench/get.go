@@ -23,10 +23,10 @@ func (this *GetHotKeysBenchmark) ApiName() string {
 }
 
 func (this *GetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
-	var getReqs []*serverpb.GetRequest
+	var getReqs [][]byte
 	for i, j := 0, 0; i < int(numRequests); i, j = i+1, (j+1)%int(this.numHotKeys) {
 		key := []byte(fmt.Sprintf("%s%d", ExistingKeyPrefix, j))
-		getReqs = append(getReqs, &serverpb.GetRequest{Key: key})
+		getReqs = append(getReqs, key)
 	}
 	return getReqs
 }
@@ -58,12 +58,12 @@ func (this *MultiGetHotKeysBenchmark) ApiName() string {
 func (this *MultiGetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
 	var multiGetReqs []*serverpb.MultiGetRequest
 	for i, j := 0, 0; i < int(numRequests); i++ {
-		var getReqs []*serverpb.GetRequest
+		var keys [][]byte
 		for k := 0; k < int(this.batchSize); k, j = k+1, (j+1)%int(this.numHotKeys) {
 			key := []byte(fmt.Sprintf("%s%d", ExistingKeyPrefix, j))
-			getReqs = append(getReqs, &serverpb.GetRequest{Key: key})
+			keys = append(keys, key)
 		}
-		multiGetReqs = append(multiGetReqs, &serverpb.MultiGetRequest{GetRequests: getReqs})
+		multiGetReqs = append(multiGetReqs, &serverpb.MultiGetRequest{Keys: keys})
 	}
 	return multiGetReqs
 }

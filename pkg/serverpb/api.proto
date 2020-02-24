@@ -46,13 +46,15 @@ message GetResponse {
 }
 
 message MultiGetRequest {
-  // GetRequests are the individual Get requests comprising bulk Get operation.
-  repeated GetRequest getRequests = 1;
+  // Keys is the collection of keys whose values are returned from the bulk Get operation.
+  repeated bytes keys = 1;
 }
 
 message MultiGetResponse {
-  // GetResponses are the individual responses of bulk Get operation.
-  repeated GetResponse getResponses = 1;
+  // Status indicates the result of the bulk Get operation
+  Status status = 1;
+  // Values are the individual responses of the bulk Get operation.
+  repeated bytes values = 2;
 }
 
 service DKVReplication {

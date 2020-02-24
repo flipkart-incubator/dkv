@@ -39,18 +39,19 @@ func TestPutAndGet(t *testing.T) {
 	numKeys := 10
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
-		if err := store.Put([]byte(key), []byte(value)).Error; err != nil {
+		if err := store.Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
 	for i := 1; i <= numKeys; i++ {
 		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
-		readResult := store.Get([]byte(key))[0]
-		if actualValue, err := readResult.Value, readResult.Error; err != nil {
+		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-		} else if string(actualValue) != expectedValue {
-			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
+		} else {
+			if string(readResults[0]) != expectedValue {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
+			}
 		}
 	}
 }
@@ -211,7 +212,7 @@ func TestMultiGet(t *testing.T) {
 	keys, vals := make([][]byte, numKeys), make([]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("MK%d", i), fmt.Sprintf("MV%d", i)
-		if err := store.Put([]byte(key), []byte(value)).Error; err != nil {
+		if err := store.Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		} else {
 			keys[i-1] = []byte(key)
@@ -219,30 +220,30 @@ func TestMultiGet(t *testing.T) {
 		}
 	}
 
-	results := store.Get(keys...)
-	for i, result := range results {
-		if val, err := result.Value, result.Error; err != nil {
-			t.Fatalf("Unable to Multi Get. Key: %s, Error: %v", keys[i], err)
-		} else if string(val) != vals[i] {
-			t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], val)
+	if results, err := store.Get(keys...); err != nil {
+		t.Fatal(err)
+	} else {
+		for i, result := range results {
+			if string(result) != vals[i] {
+				t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], result)
+			}
 		}
 	}
 }
 
 func TestMissingGet(t *testing.T) {
 	key, expectedValue := "MissingKey", ""
-	readResult := store.Get([]byte(key))[0]
-	if val, err := readResult.Value, readResult.Error; err != nil {
-		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-	} else if string(val) != "" {
-		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, val)
+	if readResults, err := store.Get([]byte(key)); err != nil {
+		t.Fatal(err)
+	} else if string(readResults[0]) != "" {
+		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
 	}
 }
 
 func BenchmarkPutNewKeys(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("BK%d", i), fmt.Sprintf("BV%d", i)
-		if err := store.Put([]byte(key), []byte(value)).Error; err != nil {
+		if err := store.Put([]byte(key), []byte(value)); err != nil {
 			b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -250,12 +251,12 @@ func BenchmarkPutNewKeys(b *testing.B) {
 
 func BenchmarkPutExistingKey(b *testing.B) {
 	key := "BKey"
-	if err := store.Put([]byte(key), []byte("BVal")).Error; err != nil {
+	if err := store.Put([]byte(key), []byte("BVal")); err != nil {
 		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
 	}
 	for i := 0; i < b.N; i++ {
 		value := fmt.Sprintf("BVal%d", i)
-		if err := store.Put([]byte(key), []byte(value)).Error; err != nil {
+		if err := store.Put([]byte(key), []byte(value)); err != nil {
 			b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -263,15 +264,14 @@ func BenchmarkPutExistingKey(b *testing.B) {
 
 func BenchmarkGetKey(b *testing.B) {
 	key, val := "BGetKey", "BGetVal"
-	if err := store.Put([]byte(key), []byte(val)).Error; err != nil {
+	if err := store.Put([]byte(key), []byte(val)); err != nil {
 		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
 	}
 	for i := 0; i < b.N; i++ {
-		readResult := store.Get([]byte(key))[0]
-		if value, err := readResult.Value, readResult.Error; err != nil {
+		if readResults, err := store.Get([]byte(key)); err != nil {
 			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-		} else if string(value) != val {
-			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, value)
+		} else if string(readResults[0]) != val {
+			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, readResults[0])
 		}
 	}
 }
@@ -279,7 +279,7 @@ func BenchmarkGetKey(b *testing.B) {
 func BenchmarkGetMissingKey(b *testing.B) {
 	key := "BMissingKey"
 	for i := 0; i < b.N; i++ {
-		if err := store.Get([]byte(key))[0].Error; err != nil {
+		if _, err := store.Get([]byte(key)); err != nil {
 			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		}
 	}
@@ -288,11 +288,10 @@ func BenchmarkGetMissingKey(b *testing.B) {
 func noKeys(t *testing.T, numKeys int, keyPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key := fmt.Sprintf("%s_%d", keyPrefix, i)
-		readResult := store.Get([]byte(key))[0]
-		if val, err := readResult.Value, readResult.Error; err != nil {
+		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-		} else if string(val) != "" {
-			t.Errorf("Expected missing for key: %s. But found it with value: %s", key, val)
+		} else if string(readResults[0]) != "" {
+			t.Errorf("Expected missing for key: %s. But found it with value: %s", key, readResults[0])
 		}
 	}
 }
@@ -300,11 +299,10 @@ func noKeys(t *testing.T, numKeys int, keyPrefix string) {
 func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		readResult := store.Get([]byte(key))[0]
-		if actualValue, err := readResult.Value, readResult.Error; err != nil {
+		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-		} else if string(actualValue) != expectedValue {
-			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
+		} else if string(readResults[0]) != expectedValue {
+			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
 		}
 	}
 }
@@ -312,14 +310,13 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := store.Put([]byte(k), []byte(v)).Error; err != nil {
+		if err := store.Put([]byte(k), []byte(v)); err != nil {
 			t.Fatal(err)
 		} else {
-			read_result := store.Get([]byte(k))[0]
-			if act_val, err := read_result.Value, read_result.Error; err != nil {
+			if read_results, err := store.Get([]byte(k)); err != nil {
 				t.Fatal(err)
-			} else if string(act_val) != string(v) {
-				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, act_val)
+			} else if string(read_results[0]) != string(v) {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, read_results[0])
 			}
 		}
 	}

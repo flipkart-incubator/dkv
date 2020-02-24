@@ -36,46 +36,40 @@ func (rdb *RedisDBStore) Close() error {
 	return rdb.db.Close()
 }
 
-func (rdb *RedisDBStore) Put(key []byte, value []byte) *storage.Result {
-	err := rdb.db.Set(string(key), value, 0).Err()
-	return &storage.Result{err}
+func (rdb *RedisDBStore) Put(key []byte, value []byte) error {
+	return rdb.db.Set(string(key), value, 0).Err()
 }
 
-func (rdb *RedisDBStore) Get(keys ...[]byte) []*storage.ReadResult {
-	var results []*storage.ReadResult
-	numKeys := len(keys)
-
-	switch {
+func (rdb *RedisDBStore) Get(keys ...[]byte) ([][]byte, error) {
+	switch numKeys := len(keys); {
 	case numKeys == 1:
-		results = append(results, rdb.getSingleKey(keys[0]))
-	case numKeys > 1:
-		results = rdb.getMultipleKeys(keys)
+		val, err := rdb.getSingleKey(keys[0])
+		return [][]byte{val}, err
 	default:
-		results = nil
+		return rdb.getMultipleKeys(keys)
 	}
-	return results
 }
 
-func (rdb *RedisDBStore) getSingleKey(key []byte) *storage.ReadResult {
+func (rdb *RedisDBStore) getSingleKey(key []byte) ([]byte, error) {
 	if val, err := rdb.db.Get(string(key)).Result(); err != nil && !strings.HasSuffix(err.Error(), "nil") {
-		return storage.NewReadResultWithError(err)
+		return nil, err
 	} else {
-		return storage.NewReadResultWithValue([]byte(val))
+		return []byte(val), nil
 	}
 }
 
-func (rdb *RedisDBStore) getMultipleKeys(keys [][]byte) []*storage.ReadResult {
+func (rdb *RedisDBStore) getMultipleKeys(keys [][]byte) ([][]byte, error) {
 	var str_keys []string
 	for _, key := range keys {
 		str_keys = append(str_keys, string(key))
 	}
 	if vals, err := rdb.db.MGet(str_keys...).Result(); err != nil && !strings.HasSuffix(err.Error(), "nil") {
-		return []*storage.ReadResult{storage.NewReadResultWithError(err)}
+		return nil, err
 	} else {
-		results := make([]*storage.ReadResult, len(vals))
+		results := make([][]byte, len(vals))
 		for i, val := range vals {
-			results[i] = storage.NewReadResultWithValue([]byte(val.(string)))
+			results[i] = []byte(val.(string))
 		}
-		return results
+		return results, nil
 	}
 }

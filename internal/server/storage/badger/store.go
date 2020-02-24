@@ -44,31 +44,27 @@ func (this *BadgerDBStore) Close() error {
 	return this.db.Close()
 }
 
-func (this *BadgerDBStore) Put(key []byte, value []byte) *storage.Result {
-	err := this.db.Update(func(txn *badger.Txn) error {
+func (this *BadgerDBStore) Put(key []byte, value []byte) error {
+	return this.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})
-	return &storage.Result{err}
 }
 
-func (this *BadgerDBStore) Get(keys ...[]byte) []*storage.ReadResult {
-	var results []*storage.ReadResult
+func (this *BadgerDBStore) Get(keys ...[]byte) ([][]byte, error) {
+	var results [][]byte
 	err := this.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
 			if item, err := txn.Get(key); err != nil {
-				results = append(results, storage.NewReadResultWithError(err))
+				return err
 			} else {
 				if value, err := item.ValueCopy(nil); err != nil {
-					results = append(results, storage.NewReadResultWithError(err))
+					return err
 				} else {
-					results = append(results, storage.NewReadResultWithValue(value))
+					results = append(results, value)
 				}
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		results = append(results, storage.NewReadResultWithError(err))
-	}
-	return results
+	return results, err
 }
