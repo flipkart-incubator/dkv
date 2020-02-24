@@ -128,11 +128,11 @@ func TestSaveChanges(t *testing.T) {
 		chngs[i] = toChangeRecord(wb, chng_num)
 		chng_num++
 	}
+	exp_chng_num := chng_num - 1
 
 	if act_chng_num, err := changeApplier.SaveChanges(chngs); err != nil {
 		t.Fatal(err)
 	} else {
-		exp_chng_num := chng_num - 1
 		if exp_chng_num != act_chng_num {
 			t.Errorf("Change numbers mismatch. Expected: %d, Actual: %d", exp_chng_num, act_chng_num)
 		}

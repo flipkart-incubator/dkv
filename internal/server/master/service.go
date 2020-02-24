@@ -21,13 +21,13 @@ type DKVService interface {
 
 type standaloneService struct {
 	store storage.KVStore
-	cdc   storage.ChangePropagator
+	cp    storage.ChangePropagator
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cdc storage.ChangePropagator) *standaloneService {
-	return &standaloneService{store, cdc}
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator) *standaloneService {
+	return &standaloneService{store, cp}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -57,7 +57,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 }
 
 func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
-	if chngs, err := ss.cdc.LoadChanges(getChngsReq.FromChangeNumber, int(getChngsReq.MaxNumberOfChanges)); err != nil {
+	if chngs, err := ss.cp.LoadChanges(getChngsReq.FromChangeNumber, int(getChngsReq.MaxNumberOfChanges)); err != nil {
 		return &serverpb.GetChangesResponse{Status: newErrorStatus(err)}, err
 	} else {
 		return &serverpb.GetChangesResponse{Status: newEmptyStatus(), NumberOfChanges: uint32(len(chngs)), Changes: chngs}, nil
@@ -75,8 +75,8 @@ type distributedService struct {
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
-func NewDistributedService(kvs storage.KVStore, cdc storage.ChangePropagator, raftRepl nexus_api.RaftReplicator) *distributedService {
-	return &distributedService{NewStandaloneService(kvs, cdc), raftRepl}
+func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, raftRepl nexus_api.RaftReplicator) *distributedService {
+	return &distributedService{NewStandaloneService(kvs, cp), raftRepl}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
