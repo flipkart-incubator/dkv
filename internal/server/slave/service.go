@@ -63,15 +63,23 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier) (*dkvSlaveServi
 }
 
 func (dss *dkvSlaveService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	return nil, errors.New("DKV slave service does not support mutations")
+	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }
 
 func (dss *dkvSlaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	return nil, errors.New("Not implemented yet")
+	if readResults, err := dss.store.Get(getReq.Key); err != nil {
+		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
+	} else {
+		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: readResults[0]}, nil
+	}
 }
 
 func (dss *dkvSlaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	return nil, errors.New("Not implemented yet")
+	if readResults, err := dss.store.Get(multiGetReq.Keys...); err != nil {
+		return &serverpb.MultiGetResponse{Status: newErrorStatus(err), Values: nil}, err
+	} else {
+		return &serverpb.MultiGetResponse{Status: newEmptyStatus(), Values: readResults}, nil
+	}
 }
 
 func (dss *dkvSlaveService) Close() error {
@@ -139,4 +147,12 @@ func validateFlags() error {
 	}
 
 	return nil
+}
+
+func newErrorStatus(err error) *serverpb.Status {
+	return &serverpb.Status{Code: -1, Message: err.Error()}
+}
+
+func newEmptyStatus() *serverpb.Status {
+	return &serverpb.Status{Code: 0, Message: ""}
 }
