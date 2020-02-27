@@ -60,6 +60,13 @@ message MultiGetResponse {
 service DKVReplication {
   // GetChanges retrieves all changes from a given change number
   rpc GetChanges (GetChangesRequest) returns (GetChangesResponse);
+  // StreamChanges streams changes from a given change number
+  rpc StreamChanges (StreamChangesRequest) returns (stream ChangeRecord);
+}
+
+message StreamChangesRequest {
+  // FromChangeNumber is the starting change number from which to stream changes
+  uint64 fromChangeNumber = 1;
 }
 
 message GetChangesRequest {

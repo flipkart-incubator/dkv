@@ -91,6 +91,24 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 	}
 }
 
+func (dkvClnt *DKVClient) StreamChanges(frmChngNum uint64) (chan *serverpb.ChangeRecord, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	strmChngsReq := &serverpb.StreamChangesRequest{FromChangeNumber: frmChngNum}
+	if stream, err := dkvClnt.dkvReplCli.StreamChanges(ctx, strmChngsReq); err != nil {
+		return nil, err
+	} else {
+		strm_chan := make(chan *serverpb.ChangeRecord)
+		go func() {
+			defer close(strm_chan)
+			for chng, err := stream.Recv(); err == nil; {
+				strm_chan <- chng
+			}
+		}()
+		return strm_chan, nil
+	}
+}
+
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
 	return dkvClnt.cliConn.Close()

@@ -3,6 +3,7 @@ package master
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
@@ -20,14 +21,16 @@ type DKVService interface {
 }
 
 type standaloneService struct {
-	store storage.KVStore
-	cp    storage.ChangePropagator
+	store              storage.KVStore
+	cp                 storage.ChangePropagator
+	streamSignals      []chan struct{}
+	streamSignalsMutex *sync.Mutex
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
 func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator) *standaloneService {
-	return &standaloneService{store, cp}
+	return &standaloneService{store: store, cp: cp, streamSignalsMutex: &sync.Mutex{}}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -61,7 +64,42 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 	}
 }
 
+const NumChangesToLoadPerBatch = 100
+
+func (ss *standaloneService) StreamChanges(strmChngsReq *serverpb.StreamChangesRequest, chngStream serverpb.DKVReplication_StreamChangesServer) error {
+	strm_sig := ss.newStreamSignal()
+	for chng_num := strmChngsReq.FromChangeNumber; ; {
+		select {
+		case <-strm_sig:
+			break
+		default:
+			if chngs, err := ss.cp.LoadChanges(chng_num, NumChangesToLoadPerBatch); err != nil {
+				return err
+			} else {
+				for _, chng := range chngs {
+					if err := chngStream.Send(chng); err != nil {
+						return err
+					} else {
+						chng_num = chng.ChangeNumber
+					}
+				}
+			}
+		}
+	}
+}
+
+func (ss *standaloneService) newStreamSignal() chan struct{} {
+	ss.streamSignalsMutex.Lock()
+	defer ss.streamSignalsMutex.Unlock()
+	stream_sig := make(chan struct{})
+	ss.streamSignals = append(ss.streamSignals, stream_sig)
+	return stream_sig
+}
+
 func (ss *standaloneService) Close() error {
+	for _, stream_sig := range ss.streamSignals {
+		stream_sig <- struct{}{}
+	}
 	return ss.store.Close()
 }
 

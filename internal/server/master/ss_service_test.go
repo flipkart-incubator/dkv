@@ -42,6 +42,7 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
+		t.Run("testStreamChanges", testStreamChanges)
 	}
 }
 
@@ -118,6 +119,34 @@ func testGetChanges(t *testing.T) {
 					} else if string(trxn.Value) != expVal {
 						t.Errorf("Value mismatch. Expected %s, Actual %s", trxn.Value, expVal)
 					}
+				}
+			}
+		}
+	}
+}
+
+func testStreamChanges(t *testing.T) {
+	numKeys, keyPrefix, valPrefix := 10, "GCK", "GCV"
+	putKeys(t, numKeys, keyPrefix, valPrefix)
+
+	if strm_chan, err := dkvCli.StreamChanges(0); err != nil {
+		t.Error(err)
+	} else {
+		i := 1
+		for chng := range strm_chan {
+			expKey, expVal := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
+			if chng.NumberOfTrxns != 1 {
+				t.Errorf("Expected one transaction, but found %d transactions.", chng.NumberOfTrxns)
+			} else {
+				trxn := chng.Trxns[0]
+				if trxn.Type != serverpb.TrxnRecord_Put {
+					t.Errorf("Expected PUT transaction but found %s transaction", trxn.Type.String())
+				} else if string(trxn.Key) != expKey {
+					t.Errorf("Key mismatch. Expected %s, Actual %s", trxn.Key, expKey)
+				} else if string(trxn.Value) != expVal {
+					t.Errorf("Value mismatch. Expected %s, Actual %s", trxn.Value, expVal)
+				} else {
+					i++
 				}
 			}
 		}
