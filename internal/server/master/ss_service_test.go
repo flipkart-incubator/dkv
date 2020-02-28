@@ -96,9 +96,13 @@ func testGetChanges(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "GCK", "GCV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 
-	if chngs, err := dkvCli.GetChanges(0, 100); err != nil {
+	if chngsRes, err := dkvCli.GetChanges(0, 100); err != nil {
 		t.Fatalf("Unable to get changes. Error: %v", err)
 	} else {
+		if chngsRes.MasterChangeNumber == 0 {
+			t.Errorf("Expected master change number to be greater than 0")
+		}
+		chngs := chngsRes.Changes
 		numChngs := len(chngs)
 		if numChngs < numKeys {
 			t.Errorf("Expected at least %d changes. But got only %d changes.", numKeys, numChngs)

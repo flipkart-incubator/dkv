@@ -72,10 +72,12 @@ message GetChangesRequest {
 message GetChangesResponse {
   // Status indicates the result of the GetChanges operation
   Status status = 1;
+  // MasterChangeNumber indicates the latest change number on master node
+  uint64 masterChangeNumber = 2;
   // NumberOfChanges indicates the number of change records in the response
-  uint32 numberOfChanges = 2;
+  uint32 numberOfChanges = 3;
   // Changes is the collection of change records
-  repeated ChangeRecord changes = 3;
+  repeated ChangeRecord changes = 4;
 }
 
 message ChangeRecord {

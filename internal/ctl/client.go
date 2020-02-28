@@ -77,7 +77,7 @@ func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([][]byte, error) {
 // using the underlying GRPC GetChanges method. One can limit the
 // number of changes retrieved using the maxNumChanges parameter.
 // This is a convenience wrapper.
-func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32) ([]*serverpb.ChangeRecord, error) {
+func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32) (*serverpb.GetChangesResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
@@ -87,7 +87,7 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 		if res.Status.Code != 0 {
 			return nil, errors.New(res.Status.Message)
 		}
-		return res.Changes, nil
+		return res, nil
 	}
 }
 

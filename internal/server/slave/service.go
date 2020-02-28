@@ -24,6 +24,7 @@ type dkvSlaveService struct {
 	replCli     serverpb.DKVReplicationClient
 	replTckr    *time.Ticker
 	replStop    chan struct{}
+	replLag     uint64
 	fromChngNum uint64
 	maxNumChngs uint32
 }
@@ -56,10 +57,14 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier) (*dkvSlaveServi
 		return nil, err
 	} else {
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
-		dss := &dkvSlaveService{store: store, ca: ca, replCli: dkvReplCli}
-		dss.startReplPoller(replPollInterval, replTimeout)
-		return dss, nil
+		return newSlaveService(store, ca, dkvReplCli, replPollInterval, replTimeout), nil
 	}
+}
+
+func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, dkvReplCli serverpb.DKVReplicationClient, pollInterval, timeout time.Duration) *dkvSlaveService {
+	dss := &dkvSlaveService{store: store, ca: ca, replCli: dkvReplCli}
+	dss.startReplPoller(pollInterval, timeout)
+	return dss
 }
 
 func (dss *dkvSlaveService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -119,14 +124,18 @@ func (dss *dkvSlaveService) applyChangesFromMaster(replTimeout time.Duration) er
 		if res.Status.Code != 0 {
 			return errors.New(res.Status.Message)
 		}
-		return dss.applyChanges(res.Changes)
+		return dss.applyChanges(res)
 	}
 }
 
-func (dss *dkvSlaveService) applyChanges(chngs []*serverpb.ChangeRecord) error {
-	act_chng_num, err := dss.ca.SaveChanges(chngs)
-	dss.fromChngNum = act_chng_num + 1
-	return err
+func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) error {
+	if chngsRes.NumberOfChanges > 0 {
+		act_chng_num, err := dss.ca.SaveChanges(chngsRes.Changes)
+		dss.fromChngNum = act_chng_num + 1
+		dss.replLag = chngsRes.MasterChangeNumber - act_chng_num
+		return err
+	}
+	return nil
 }
 
 func validateFlags() error {
