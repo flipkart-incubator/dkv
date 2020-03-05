@@ -142,8 +142,8 @@ func (ms *memStore) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 	return chng_num, nil
 }
 
-func (ms *memStore) GetLatestChangeNumber() uint64 {
-	return ms.chngNum
+func (ms *memStore) GetLatestAppliedChangeNumber() (uint64, error) {
+	return ms.chngNum, nil
 }
 
 func (ms *memStore) Close() error {

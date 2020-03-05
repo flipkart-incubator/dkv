@@ -84,8 +84,8 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
-func (rdb *rocksDB) GetLatestChangeNumber() uint64 {
-	return rdb.db.GetLatestSequenceNumber()
+func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
+	return rdb.db.GetLatestSequenceNumber(), nil
 }
 
 func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
@@ -103,6 +103,10 @@ func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*ser
 		}
 		return chngs[0:i:i], nil
 	}
+}
+
+func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
+	return rdb.db.GetLatestSequenceNumber(), nil
 }
 
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {

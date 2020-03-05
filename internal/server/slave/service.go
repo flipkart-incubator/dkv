@@ -53,7 +53,12 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier) (*dkvSlaveServi
 	if err := validateFlags(); err != nil {
 		return nil, err
 	}
-	if conn, err := grpc.Dial(masterAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(grpcReadBufSize), grpc.WithWriteBufferSize(grpcWriteBufSize)); err != nil {
+	if conn, err := grpc.Dial(masterAddr,
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+		grpc.WithReadBufferSize(grpcReadBufSize),
+		grpc.WithWriteBufferSize(grpcWriteBufSize),
+	); err != nil {
 		return nil, err
 	} else {
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
@@ -63,7 +68,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier) (*dkvSlaveServi
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, dkvReplCli serverpb.DKVReplicationClient, pollInterval, timeout time.Duration) *dkvSlaveService {
 	dss := &dkvSlaveService{store: store, ca: ca, replCli: dkvReplCli}
-	dss.startReplPoller(pollInterval, timeout)
+	dss.startReplication(pollInterval, timeout)
 	return dss
 }
 
@@ -93,9 +98,10 @@ func (dss *dkvSlaveService) Close() error {
 	return dss.store.Close()
 }
 
-func (dss *dkvSlaveService) startReplPoller(replPollInterval, replTimeout time.Duration) {
+func (dss *dkvSlaveService) startReplication(replPollInterval, replTimeout time.Duration) {
 	dss.replTckr = time.NewTicker(replPollInterval)
-	dss.fromChngNum = 1 + dss.ca.GetLatestChangeNumber()
+	latest_chng_num, _ := dss.ca.GetLatestAppliedChangeNumber()
+	dss.fromChngNum = 1 + latest_chng_num
 	dss.maxNumChngs = MaxNumChangesRepl
 	dss.replStop = make(chan struct{})
 	go dss.pollAndApplyChanges(replTimeout)

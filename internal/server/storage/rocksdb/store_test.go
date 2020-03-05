@@ -58,16 +58,16 @@ func TestPutAndGet(t *testing.T) {
 
 func TestGetLatestChangeNumber(t *testing.T) {
 	exp_num_trxns := uint64(5)
-	before_chng_num := changePropagator.GetLatestChangeNumber()
+	before_chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
 	putKeys(t, int(exp_num_trxns), "aaKey", "aaVal")
-	after_chng_num := changePropagator.GetLatestChangeNumber()
+	after_chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
 	act_num_trxns := after_chng_num - before_chng_num
 	if exp_num_trxns != act_num_trxns {
 		t.Errorf("Mismatch in number of transactions. Expected: %d, Actual: %d", exp_num_trxns, act_num_trxns)
 	}
 	before_chng_num = after_chng_num
 	getKeys(t, int(exp_num_trxns), "aaKey", "aaVal")
-	after_chng_num = changePropagator.GetLatestChangeNumber()
+	after_chng_num, _ = changePropagator.GetLatestCommittedChangeNumber()
 	act_num_trxns = after_chng_num - before_chng_num
 	if act_num_trxns != 0 {
 		t.Errorf("Expected no transactions to have occurred but found %d transactions", act_num_trxns)
@@ -77,7 +77,8 @@ func TestGetLatestChangeNumber(t *testing.T) {
 func TestLoadChanges(t *testing.T) {
 	exp_num_trxns, max_chngs := 3, 8
 	key_prefix, val_prefix := "bbKey", "bbVal"
-	chng_num := 1 + changePropagator.GetLatestChangeNumber() // due to possible previous transaction
+	chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
+	chng_num++ // due to possible previous transaction
 	putKeys(t, exp_num_trxns, key_prefix, val_prefix)
 	if chngs, err := changePropagator.LoadChanges(chng_num, max_chngs); err != nil {
 		t.Fatal(err)
@@ -116,7 +117,8 @@ func TestSaveChanges(t *testing.T) {
 	num_trxns := 3
 	put_key_prefix, put_val_prefix := "ccKey", "ccVal"
 	putKeys(t, num_trxns, put_key_prefix, put_val_prefix)
-	chng_num := 1 + changePropagator.GetLatestChangeNumber() // due to possible previous transaction
+	chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
+	chng_num++ // due to possible previous transaction
 	wb_put_key_prefix, wb_put_val_prefix := "ddKey", "ddVal"
 	chngs := make([]*serverpb.ChangeRecord, num_trxns)
 	for i := 0; i < num_trxns; i++ {

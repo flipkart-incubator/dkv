@@ -57,7 +57,7 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 	if chngs, err := ss.cp.LoadChanges(getChngsReq.FromChangeNumber, int(getChngsReq.MaxNumberOfChanges)); err != nil {
 		return &serverpb.GetChangesResponse{Status: newErrorStatus(err)}, err
 	} else {
-		latestChngNum := ss.cp.GetLatestChangeNumber()
+		latestChngNum, _ := ss.cp.GetLatestCommittedChangeNumber()
 		numChngs := uint32(len(chngs))
 		return &serverpb.GetChangesResponse{Status: newEmptyStatus(), MasterChangeNumber: latestChngNum, NumberOfChanges: numChngs, Changes: chngs}, nil
 	}
