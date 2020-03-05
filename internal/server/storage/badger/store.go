@@ -153,7 +153,7 @@ func (bdb *badgerDBStore) SaveChanges(changes []*serverpb.ChangeRecord) (uint64,
 			break
 		}
 
-		// Commit the badger transaction
+		// Commit the badger transaction for the current change
 		if last_error = chng_trxn.Commit(); last_error != nil {
 			break
 		} else {

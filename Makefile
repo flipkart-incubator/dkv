@@ -48,6 +48,17 @@ test:
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@$(GO) test -v --count=1 -tags="$(BUILD_TAGS)" $(PACKAGES)
 
+.PHONY: bench
+bench:
+	@echo ">> running benchmarks from all packages"
+	@echo "   GOOS        = $(GOOS)"
+	@echo "   GOARCH      = $(GOARCH)"
+	@echo "   CGO_ENABLED = $(CGO_ENABLED)"
+	@echo "   CGO_CFLAGS  = $(CGO_CFLAGS)"
+	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
+	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
+	@$(GO) test -v --run=xxx --bench=. --count=1 -tags="$(BUILD_TAGS)" $(PACKAGES)
+
 .PHONY: build
 build:
 	@echo ">> building binaries"
