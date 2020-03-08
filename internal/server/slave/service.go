@@ -3,14 +3,13 @@ package slave
 import (
 	"context"
 	"errors"
-	"flag"
 	"io"
 	"log"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"google.golang.org/grpc"
 )
 
 type DKVService interface {
@@ -21,7 +20,7 @@ type DKVService interface {
 type dkvSlaveService struct {
 	store       storage.KVStore
 	ca          storage.ChangeApplier
-	replCli     serverpb.DKVReplicationClient
+	replCli     *ctl.DKVClient
 	replTckr    *time.Ticker
 	replStop    chan struct{}
 	replLag     uint64
@@ -29,46 +28,22 @@ type dkvSlaveService struct {
 	maxNumChngs uint32
 }
 
-var (
-	masterAddr           string
-	replTimeout          time.Duration
-	replPollInterval     time.Duration
-	replTimeoutSecs      uint
-	replPollIntervalSecs uint
-)
-
 const (
-	grpcReadBufSize   = 10 << 30
-	grpcWriteBufSize  = 10 << 30
 	MaxNumChangesRepl = 100 // TODO: check if this needs to be exposed as a flag
 )
 
-func init() {
-	flag.StringVar(&masterAddr, "replMasterAddr", "", "GRPC service addr of DKV Master for replication [host:port]")
-	flag.UintVar(&replTimeoutSecs, "replTimeout", 10, "Replication timeout in seconds")
-	flag.UintVar(&replPollIntervalSecs, "replPollInterval", 1, "Interval between successive polls in seconds")
-}
-
-func NewService(store storage.KVStore, ca storage.ChangeApplier) (*dkvSlaveService, error) {
-	if err := validateFlags(); err != nil {
-		return nil, err
-	}
-	if conn, err := grpc.Dial(masterAddr,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		grpc.WithReadBufferSize(grpcReadBufSize),
-		grpc.WithWriteBufferSize(grpcWriteBufSize),
-	); err != nil {
-		return nil, err
+func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint) (*dkvSlaveService, error) {
+	if replPollIntervalSecs == 0 || replCli == nil || store == nil || ca == nil {
+		return nil, errors.New("Invalid args. Params `store`, `ca`, `replCli` and `replPollIntervalSecs` are all mandatory.")
 	} else {
-		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
-		return newSlaveService(store, ca, dkvReplCli, replPollInterval, replTimeout), nil
+		replPollInterval := time.Duration(replPollIntervalSecs) * time.Second
+		return newSlaveService(store, ca, replCli, replPollInterval), nil
 	}
 }
 
-func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, dkvReplCli serverpb.DKVReplicationClient, pollInterval, timeout time.Duration) *dkvSlaveService {
-	dss := &dkvSlaveService{store: store, ca: ca, replCli: dkvReplCli}
-	dss.startReplication(pollInterval, timeout)
+func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration) *dkvSlaveService {
+	dss := &dkvSlaveService{store: store, ca: ca, replCli: replCli}
+	dss.startReplication(pollInterval)
 	return dss
 }
 
@@ -93,25 +68,27 @@ func (dss *dkvSlaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.
 }
 
 func (dss *dkvSlaveService) Close() error {
-	dss.replTckr.Stop()
 	dss.replStop <- struct{}{}
-	return dss.store.Close()
+	dss.replTckr.Stop()
+	dss.replCli.Close()
+	dss.store.Close()
+	return nil
 }
 
-func (dss *dkvSlaveService) startReplication(replPollInterval, replTimeout time.Duration) {
+func (dss *dkvSlaveService) startReplication(replPollInterval time.Duration) {
 	dss.replTckr = time.NewTicker(replPollInterval)
 	latest_chng_num, _ := dss.ca.GetLatestAppliedChangeNumber()
 	dss.fromChngNum = 1 + latest_chng_num
 	dss.maxNumChngs = MaxNumChangesRepl
 	dss.replStop = make(chan struct{})
-	go dss.pollAndApplyChanges(replTimeout)
+	go dss.pollAndApplyChanges()
 }
 
-func (dss *dkvSlaveService) pollAndApplyChanges(replTimeout time.Duration) {
+func (dss *dkvSlaveService) pollAndApplyChanges() {
 	for {
 		select {
 		case <-dss.replTckr.C:
-			if err := dss.applyChangesFromMaster(replTimeout); err != nil {
+			if err := dss.applyChangesFromMaster(); err != nil {
 				log.Fatal(err)
 			}
 		case <-dss.replStop:
@@ -120,11 +97,8 @@ func (dss *dkvSlaveService) pollAndApplyChanges(replTimeout time.Duration) {
 	}
 }
 
-func (dss *dkvSlaveService) applyChangesFromMaster(replTimeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), replTimeout)
-	defer cancel()
-	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: dss.fromChngNum, MaxNumberOfChanges: dss.maxNumChngs}
-	if res, err := dss.replCli.GetChanges(ctx, getChngsReq); err != nil {
+func (dss *dkvSlaveService) applyChangesFromMaster() error {
+	if res, err := dss.replCli.GetChanges(dss.fromChngNum, dss.maxNumChngs); err != nil {
 		return err
 	} else {
 		if res.Status.Code != 0 {
@@ -141,26 +115,6 @@ func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) 
 		dss.replLag = chngsRes.MasterChangeNumber - act_chng_num
 		return err
 	}
-	return nil
-}
-
-func validateFlags() error {
-	if masterAddr == "" {
-		return errors.New("GRPC service address of DKV Master is missing")
-	}
-
-	if replTimeoutSecs == 0 {
-		return errors.New("Replication timeout in seconds must be a positive integer")
-	} else {
-		replTimeout = time.Duration(replTimeoutSecs) * time.Second
-	}
-
-	if replPollIntervalSecs == 0 {
-		return errors.New("Replication polling interval in seconds must be a positive integer")
-	} else {
-		replPollInterval = time.Duration(replPollIntervalSecs) * time.Second
-	}
-
 	return nil
 }
 

@@ -54,17 +54,21 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 }
 
 func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
+	latestChngNum, _ := ss.cp.GetLatestCommittedChangeNumber()
+	if getChngsReq.FromChangeNumber > latestChngNum {
+		return &serverpb.GetChangesResponse{Status: newEmptyStatus(), MasterChangeNumber: latestChngNum, NumberOfChanges: 0}, nil
+	}
 	if chngs, err := ss.cp.LoadChanges(getChngsReq.FromChangeNumber, int(getChngsReq.MaxNumberOfChanges)); err != nil {
 		return &serverpb.GetChangesResponse{Status: newErrorStatus(err)}, err
 	} else {
-		latestChngNum, _ := ss.cp.GetLatestCommittedChangeNumber()
 		numChngs := uint32(len(chngs))
 		return &serverpb.GetChangesResponse{Status: newEmptyStatus(), MasterChangeNumber: latestChngNum, NumberOfChanges: numChngs, Changes: chngs}, nil
 	}
 }
 
 func (ss *standaloneService) Close() error {
-	return ss.store.Close()
+	ss.store.Close()
+	return nil
 }
 
 type distributedService struct {

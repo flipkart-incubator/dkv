@@ -247,7 +247,7 @@ func newPutChange(chngNum uint64, key, val []byte) *serverpb.ChangeRecord {
 	}
 }
 
-func openBadgerDB() (*badgerDBStore, error) {
+func openBadgerDB() (*badgerDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}

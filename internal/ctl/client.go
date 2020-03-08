@@ -81,14 +81,7 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
-	if res, err := dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq); err != nil {
-		return nil, err
-	} else {
-		if res.Status.Code != 0 {
-			return nil, errors.New(res.Status.Message)
-		}
-		return res, nil
-	}
+	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
 }
 
 // Close closes the underlying GRPC client connection to DKV service

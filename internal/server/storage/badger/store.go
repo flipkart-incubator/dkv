@@ -8,7 +8,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-type badgerDBStore struct {
+type badgerDB struct {
 	storage.KVStore
 	storage.ChangeApplier
 	db *badger.DB
@@ -18,7 +18,7 @@ type badgerDBOpts struct {
 	opts badger.Options
 }
 
-func OpenDB(dbFolder string) storage.KVStore {
+func OpenDB(dbFolder string) *badgerDB {
 	opts := NewDefaultOptions(dbFolder)
 	if kvs, err := OpenStore(opts); err != nil {
 		panic(err)
@@ -37,25 +37,25 @@ func (bdb *badgerDBOpts) ValueFolder(folder string) *badgerDBOpts {
 	return bdb
 }
 
-func OpenStore(badgerDBOpts *badgerDBOpts) (*badgerDBStore, error) {
+func OpenStore(badgerDBOpts *badgerDBOpts) (*badgerDB, error) {
 	if db, err := badger.Open(badgerDBOpts.opts); err != nil {
 		return nil, err
 	} else {
-		return &badgerDBStore{db: db}, nil
+		return &badgerDB{db: db}, nil
 	}
 }
 
-func (bdb *badgerDBStore) Close() error {
+func (bdb *badgerDB) Close() error {
 	return bdb.db.Close()
 }
 
-func (bdb *badgerDBStore) Put(key []byte, value []byte) error {
+func (bdb *badgerDB) Put(key []byte, value []byte) error {
 	return bdb.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})
 }
 
-func (bdb *badgerDBStore) Get(keys ...[]byte) ([][]byte, error) {
+func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 	var results [][]byte
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
@@ -76,7 +76,7 @@ func (bdb *badgerDBStore) Get(keys ...[]byte) ([][]byte, error) {
 
 const ChangeNumberKey = "_dkv_meta::ChangeNumber"
 
-func (bdb *badgerDBStore) GetLatestAppliedChangeNumber() (uint64, error) {
+func (bdb *badgerDB) GetLatestAppliedChangeNumber() (uint64, error) {
 	var chng_num uint64
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		chng_num_val, err := txn.Get([]byte(ChangeNumberKey))
@@ -98,7 +98,7 @@ func (bdb *badgerDBStore) GetLatestAppliedChangeNumber() (uint64, error) {
 	return chng_num, err
 }
 
-func (bdb *badgerDBStore) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
+func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	var appld_chng_num uint64
 	var last_error error
 
