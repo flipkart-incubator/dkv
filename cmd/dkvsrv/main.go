@@ -9,10 +9,11 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/master"
+	"github.com/flipkart-incubator/dkv/internal/server/slave"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/redis"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/internal/server/sync"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -22,60 +23,82 @@ import (
 )
 
 var (
-	dbEngine     string
-	dbFolder     string
-	dbListenAddr string
-	redisPort    int
-	redisDBIndex int
+	dbEngine         string
+	dbFolder         string
+	dbListenAddr     string
+	dbRole           string
+	replMasterAddr   string
+	replPollInterval uint
 )
 
 func init() {
 	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
-	flag.IntVar(&redisPort, "redisPort", 6379, "Redis port")
-	flag.IntVar(&redisDBIndex, "redisDBIndex", 0, "Redis DB Index")
+	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
+	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
+	flag.UintVar(&replPollInterval, "replPollInterval", 5, "Interval (in seconds) used by the replication poller of this node")
+}
+
+type dkvSrvrRole string
+
+const (
+	None   dkvSrvrRole = "none"
+	Master             = "master"
+	Slave              = "slave"
+)
+
+func toDKVSrvrRole(role string) dkvSrvrRole {
+	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
 }
 
 func main() {
 	flag.Parse()
-	nexusMode := haveFlagsWithPrefix("nexus")
-	printFlags(nexusMode)
 
-	kvs, cdc := newKVStore()
-	dkvSvc := newDKVService(nexusMode, kvs, cdc)
-	grpcSrvr := newDKVGrpcServer(dkvSvc)
+	kvs, cp, ca := newKVStore()
+	grpcSrvr, lstnr := newGrpcServerListener()
+	defer grpcSrvr.GracefulStop()
+	switch toDKVSrvrRole(dbRole) {
+	case None:
+		printFlagsWithPrefix("db")
+		dkvSvc := master.NewStandaloneService(kvs, nil)
+		defer dkvSvc.Close()
+		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+	case Master:
+		if cp == nil {
+			panic(fmt.Sprintf("Storage engine %s is not supported for DKV master role.", dbEngine))
+		}
+		var dkvSvc master.DKVService
+		if haveFlagsWithPrefix("nexus") {
+			printFlagsWithPrefix("db", "nexus")
+			dkvSvc = master.NewDistributedService(kvs, cp, newDKVReplicator(kvs))
+		} else {
+			printFlagsWithPrefix("db")
+			dkvSvc = master.NewStandaloneService(kvs, cp)
+		}
+		defer dkvSvc.Close()
+		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+	case Slave:
+		printFlagsWithPrefix("db", "repl")
+		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr); err != nil {
+			panic(err)
+		} else {
+			defer replCli.Close()
+			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval)
+			defer dkvSvc.Close()
+			serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+		}
+	default:
+		panic("Invalid 'dbRole'. Allowed values are none|master|slave.")
+	}
+	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-	dkvSvc.Close()
-	grpcSrvr.GracefulStop()
 }
 
-type serviceMode bool
-
-const (
-	standalone  serviceMode = false
-	distributed             = true
-)
-
-func newDKVService(svcMode bool, kvs storage.KVStore, cdc storage.ChangePropagator) master.DKVService {
-	var dkvSvc master.DKVService
-	switch serviceMode(svcMode) {
-	case standalone:
-		dkvSvc = master.NewStandaloneService(kvs, cdc)
-	case distributed:
-		dkvSvc = master.NewDistributedService(kvs, cdc, newDKVReplicator(kvs))
-	}
-	return dkvSvc
-}
-
-func newDKVGrpcServer(dkvSvc master.DKVService) *grpc.Server {
-	grpcSrvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-	lstnr := newListener()
-	go grpcSrvr.Serve(lstnr)
-	return grpcSrvr
+func newGrpcServerListener() (*grpc.Server, net.Listener) {
+	return grpc.NewServer(), newListener()
 }
 
 func newListener() net.Listener {
@@ -103,29 +126,27 @@ func haveFlagsWithPrefix(prefix string) bool {
 	return res
 }
 
-func printFlags(nexusMode bool) {
+func printFlagsWithPrefix(prefixes ...string) {
 	fmt.Println("Launching DKV server with following flags:")
 	flag.VisitAll(func(f *flag.Flag) {
-		if strings.HasPrefix(f.Name, "test.") || (!nexusMode && strings.HasPrefix(f.Name, "nexus")) {
-			return
-		} else {
-			fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+		for _, pf := range prefixes {
+			if strings.HasPrefix(f.Name, pf) {
+				fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+			}
 		}
 	})
-	fmt.Println()
 }
 
 const cacheSize = 3 << 30
 
-func newKVStore() (storage.KVStore, storage.ChangePropagator) {
+func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier) {
 	switch dbEngine {
 	case "rocksdb":
 		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocks_db, rocks_db
+		return rocks_db, rocks_db, rocks_db
 	case "badger":
-		return badger.OpenDB(dbFolder), nil
-	case "redis":
-		return redis.OpenDB(redisPort, redisDBIndex), nil
+		badger_db := badger.OpenDB(dbFolder)
+		return badger_db, nil, badger_db
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
 	}
