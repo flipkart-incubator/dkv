@@ -11,8 +11,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-// A DKVService captures the publicly visible behaviors
-// of the key value store.
+// A DKVService represents a service for serving key value data
+// along with exposing all mutations as a replication stream.
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer

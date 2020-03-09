@@ -22,17 +22,17 @@ import (
 )
 
 var (
-	engine       string
+	dbEngine     string
 	dbFolder     string
-	dkvSvcPort   uint
+	dbListenAddr string
 	redisPort    int
 	redisDBIndex int
 )
 
 func init() {
-	flag.StringVar(&engine, "storage", "rocksdb", "Storage engine to use - badger|rocksdb")
-	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path")
-	flag.UintVar(&dkvSvcPort, "dkvSvcPort", 8080, "DKV service port")
+	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
+	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
+	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.IntVar(&redisPort, "redisPort", 6379, "Redis port")
 	flag.IntVar(&redisDBIndex, "redisDBIndex", 0, "Redis DB Index")
 }
@@ -73,13 +73,13 @@ func newDKVGrpcServer(dkvSvc master.DKVService) *grpc.Server {
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-	lstnr := newListener(dkvSvcPort)
+	lstnr := newListener()
 	go grpcSrvr.Serve(lstnr)
 	return grpcSrvr
 }
 
-func newListener(port uint) net.Listener {
-	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
+func newListener() net.Listener {
+	if lis, err := net.Listen("tcp", dbListenAddr); err != nil {
 		panic(fmt.Sprintf("failed to listen: %v", err))
 	} else {
 		return lis
@@ -118,7 +118,7 @@ func printFlags(nexusMode bool) {
 const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator) {
-	switch engine {
+	switch dbEngine {
 	case "rocksdb":
 		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
 		return rocks_db, rocks_db
@@ -127,7 +127,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator) {
 	case "redis":
 		return redis.OpenDB(redisPort, redisDBIndex), nil
 	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
+		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
 	}
 }
 

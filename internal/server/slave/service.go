@@ -12,6 +12,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
+// A DKVService represents a service for serving key value data.
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
@@ -28,10 +29,13 @@ type dkvSlaveService struct {
 	maxNumChngs uint32
 }
 
-const (
-	MaxNumChangesRepl = 100 // TODO: check if this needs to be exposed as a flag
-)
+// TODO: check if this needs to be exposed as a flag
+const MaxNumChangesRepl = 100
 
+// NewService creates a slave DKVService that periodically polls
+// for changes from master node and replicates them onto its local
+// storage. As a result, it forbids changes to this local storage
+// through any of the other key value mutators.
 func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint) (*dkvSlaveService, error) {
 	if replPollIntervalSecs == 0 || replCli == nil || store == nil || ca == nil {
 		return nil, errors.New("Invalid args. Params `store`, `ca`, `replCli` and `replPollIntervalSecs` are all mandatory.")
