@@ -9,9 +9,6 @@ RUN apt-get update && apt-get install --yes --allow-unauthenticated adduser vim 
 # Install Compression libs
 RUN apt-get update && apt-get install --yes --allow-unauthenticated zlib1g-dev libbz2-dev libsnappy-dev
 
-# Install Redis
-RUN apt-get update && apt-get install --yes --allow-unauthenticated redis-server redis-sentinel redis-tools
-
 # Install ZStandard lib
 RUN curl -fsSL https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar xz \
     && cd zstd-1.4.4 && make install

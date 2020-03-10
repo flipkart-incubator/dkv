@@ -26,7 +26,7 @@ Follow these instructions to launch a DKV container using the Dockerfile include
 
 ```bash
 $ curl -fsSL https://raw.githubusercontent.com/flipkart-incubator/dkv/master/Dockerfile | docker build -t dkv/dkv-deb9-amd64 -f - .
-$ docker run -it dkv/dkv-deb9-amd64:latest bash
+$ docker run -it dkv/dkv-deb9-amd64:latest dkvsrv --help
 ```
 
 ## Building DKV on Mac OSX
@@ -67,14 +67,20 @@ Once DKV is built, the `<PROJECT_ROOT>/bin` folder should contain the following 
 - `dkvctl` - DKV client program
 - `dkvbench` - DKV benchmarking program
 
-### Launching the DKV server
+### Launching the DKV server in standalone mode
+
+A single DKV instance can be launched using the following command:
 
 ```bash
-$ ./bin/dkvsrv -dbFolder <folder_name> -dkvSvcPort <port_number> -storage <rocksdb|badger>
+$ ./bin/dkvsrv \
+    -dbFolder <folder_name> \
+    -dbListenAddr <host:port> \
+    -dbEngine <rocksdb|badger>
 ```
 
 ```bash
-$ ./bin/dkvctl -dkvAddr <host:port> -set <key:value> -get <key>
+$ ./bin/dkvctl -dkvAddr <host:port> -set <key:value>
+$ ./bin/dkvctl -dkvAddr <host:port> -get <key>
 ```
 
 Example session:
@@ -88,9 +94,52 @@ $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
 world
 ```
 
+### Launching the DKV server for asynchronous replication
+
+This configuration allows for DKV instances to be launched either as a master
+node or a slave node. All mutations are permitted only on the master node while
+one or more slave nodes asynchronously replicate the changes received from master
+and make them available for reads. In other words, no keyspace mutations are
+permitted on the slave nodes, except by the replication stream received from
+master node.
+
+The built-in replication mechanism guarantees _sequential consistency_ for reads
+executed from the slave nodes. Moreover, all slave nodes will eventually converge
+to an identical state which is often referred to as _string eventual consistency_.
+
+Such a configuration is typically deployed on applications where the typical number
+of reads far exceed the number of writes.
+
+First launch the DKV master node using the RocksDB engine with this command:
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder <folder_name> \
+    -dbListenAddr <host:port> \
+    -dbEngine rocksdb \
+    -dbRole master
+```
+
+Then launch the DKV slave node using either RocksDB or Badger engine with this command:
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder <folder_name> \
+    -dbListenAddr <host:port> \
+    -dbEngine <rocksdb|badger> \
+    -dbRole slave \
+    -replMasterAddr <dkv_master_listen_addr> \
+```
+
+Subsequently, any mutations performed on the master node's keyspace using `dkvctl`
+will be applied automatically onto the slave node's keyspace. By default, a given
+slave node polls for changes from its master node once every _5 seconds_. This can
+be changes through the `replPollInterval` flag while launching the slave node.
+
+Note that only **rocksdb** engine is supported on the DKV master node while the slave
+node can be launched with either *rocksdb* or *badger* engines.
+
 ## Testing
 
-If you want to test your changes, run command like following:
+If you want to execute tests inside DKV, run command like following:
 
 ```bash
 $ make test
