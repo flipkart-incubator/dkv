@@ -19,7 +19,7 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - Go version 1.13+
 - [RocksDB](https://github.com/facebook/rocksdb) v5.16+ as the storage engine
 - [GoRocksDB](https://github.com/tecbot/gorocksdb) provides the CGo bindings with RocksDB
-- [Raft consensus algorithm](https://raft.github.io/) by [etcd/raft](https://github.com/etcd-io/etcd/tree/master/raft)
+- [Nexus](https://github.com/flipkart-incubator/nexus) for sync replication over [Raft](https://raft.github.io/) consensus
 
 ## DKV on Docker
 Follow these instructions to launch a DKV container using the Dockerfile included.
@@ -105,7 +105,7 @@ master node.
 
 The built-in replication mechanism guarantees _sequential consistency_ for reads
 executed from the slave nodes. Moreover, all slave nodes will eventually converge
-to an identical state which is often referred to as _string eventual consistency_.
+to an identical state which is often referred to as _strong eventual consistency_.
 
 Such a configuration is typically deployed on applications where the typical number
 of reads far exceed the number of writes.
@@ -132,14 +132,14 @@ $ ./bin/dkvsrv \
 Subsequently, any mutations performed on the master node's keyspace using `dkvctl`
 will be applied automatically onto the slave node's keyspace. By default, a given
 slave node polls for changes from its master node once every _5 seconds_. This can
-be changes through the `replPollInterval` flag while launching the slave node.
+be changed through the `replPollInterval` flag while launching the slave node.
 
 Note that only **rocksdb** engine is supported on the DKV master node while the slave
-node can be launched with either *rocksdb* or *badger* engines.
+node can be launched with either *rocksdb* or *badger* storage engines.
 
 ## Testing
 
-If you want to execute tests inside DKV, run command like following:
+If you want to execute tests inside DKV, run this command:
 
 ```bash
 $ make test
