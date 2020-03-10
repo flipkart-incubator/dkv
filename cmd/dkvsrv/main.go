@@ -52,15 +52,32 @@ func toDKVSrvrRole(role string) dkvSrvrRole {
 	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
 }
 
+func (role dkvSrvrRole) PrintFlags() {
+	switch role {
+	case None:
+		printFlagsWithPrefix("db")
+	case Master:
+		if haveFlagsWithPrefix("nexus") {
+			printFlagsWithPrefix("db", "nexus")
+		} else {
+			printFlagsWithPrefix("db")
+		}
+	case Slave:
+		printFlagsWithPrefix("db", "repl")
+	}
+}
+
 func main() {
 	flag.Parse()
 
 	kvs, cp, ca := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
-	switch toDKVSrvrRole(dbRole) {
+	srvrRole := toDKVSrvrRole(dbRole)
+	srvrRole.PrintFlags()
+
+	switch srvrRole {
 	case None:
-		printFlagsWithPrefix("db")
 		dkvSvc := master.NewStandaloneService(kvs, nil)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
@@ -70,17 +87,14 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			printFlagsWithPrefix("db", "nexus")
 			dkvSvc = master.NewDistributedService(kvs, cp, newDKVReplicator(kvs))
 		} else {
-			printFlagsWithPrefix("db")
 			dkvSvc = master.NewStandaloneService(kvs, cp)
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	case Slave:
-		printFlagsWithPrefix("db", "repl")
 		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr); err != nil {
 			panic(err)
 		} else {
