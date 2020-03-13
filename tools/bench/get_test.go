@@ -13,7 +13,7 @@ const (
 	numReqsPerBatch = 4
 )
 
-func checkKeys(t *testing.T, getReqs []*serverpb.GetRequest) {
+func checkKeys(t *testing.T, getReqs [][]byte) {
 	j := 0
 	for i, getReq := range getReqs {
 		if i%hotKeyCnt == 0 {
@@ -22,7 +22,7 @@ func checkKeys(t *testing.T, getReqs []*serverpb.GetRequest) {
 			j++
 		}
 		expKey := fmt.Sprintf("%s%d", ExistingKeyPrefix, j)
-		actKey := string(getReq.Key)
+		actKey := string(getReq)
 		if expKey != actKey {
 			t.Errorf("Key mismatch. Expected key: %s, Actual key: %s", expKey, actKey)
 		}
@@ -31,7 +31,7 @@ func checkKeys(t *testing.T, getReqs []*serverpb.GetRequest) {
 
 func TestGetHotKeysBenchmark(t *testing.T) {
 	bm := CreateGetHotKeysBenchmark(hotKeyCnt)
-	getReqs := bm.CreateRequests(reqCnt).([]*serverpb.GetRequest)
+	getReqs := bm.CreateRequests(reqCnt).([][]byte)
 	numGetReqs := len(getReqs)
 	if numGetReqs != reqCnt {
 		t.Errorf("Expected number of get requests: %d. Actual: %d", reqCnt, numGetReqs)
@@ -47,13 +47,13 @@ func TestMultiGetHotKeysBenchmark(t *testing.T) {
 		t.Errorf("Expected number of multi get requests: %d. Actual: %d", reqCnt, numMGetReqs)
 	}
 	numGetReqCnt := numReqsPerBatch * numMGetReqs
-	getReqs := make([]*serverpb.GetRequest, numGetReqCnt)
+	getReqs := make([][]byte, numGetReqCnt)
 	for i, j := 0, -1; i < numGetReqCnt; i++ {
 		k := i % numReqsPerBatch
 		if k == 0 {
 			j++
 		}
-		getReqs[i] = multiGetReqs[j].GetRequests[k]
+		getReqs[i] = multiGetReqs[j].Keys[k]
 	}
 	checkKeys(t, getReqs)
 }

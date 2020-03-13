@@ -40,28 +40,29 @@ func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
 }
 
 func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
-	putRes := dr.kvs.Put(putReq.Key, putReq.Value)
-	return nil, putRes.Error
+	err := dr.kvs.Put(putReq.Key, putReq.Value)
+	return nil, err
 }
 
 func (dr *dkvReplStore) get(getReq *serverpb.GetRequest) ([]byte, error) {
-	getRes := dr.kvs.Get(getReq.Key)[0]
-	return getRes.Value, getRes.Error
+	if vals, err := dr.kvs.Get(getReq.Key); err != nil {
+		return nil, err
+	} else {
+		return vals[0], nil
+	}
 }
 
 func (dr *dkvReplStore) multiGet(multiGetReq *serverpb.MultiGetRequest) ([]byte, error) {
-	numReqs := len(multiGetReq.GetRequests)
-	keys := make([][]byte, numReqs)
-	for i, getReq := range multiGetReq.GetRequests {
-		keys[i] = getReq.Key
+	if vals, err := dr.kvs.Get(multiGetReq.Keys...); err != nil {
+		return nil, err
+	} else {
+		return gobEncode(vals)
 	}
-	readResults := dr.kvs.Get(keys...)
-	return gobEncode(readResults)
 }
 
-func gobEncode(readResults []*storage.ReadResult) ([]byte, error) {
+func gobEncode(byteArrays [][]byte) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(readResults); err != nil {
+	if err := gob.NewEncoder(&buf).Encode(byteArrays); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

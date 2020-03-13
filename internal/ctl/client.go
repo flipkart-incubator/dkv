@@ -9,11 +9,14 @@ import (
 	"google.golang.org/grpc"
 )
 
-// A DKVClient instance used to communicate with DKV service
-// over GRPC.
+// A DKVClient instance is used to communicate with DKV service
+// over GRPC. It is an adapter to the underlying GRPC client that
+// exposes a simpler API to its users without having to deal with
+// contexts and other GRPC semantics.
 type DKVClient struct {
-	cliConn *grpc.ClientConn
-	dkvCli  serverpb.DKVClient
+	cliConn    *grpc.ClientConn
+	dkvCli     serverpb.DKVClient
+	dkvReplCli serverpb.DKVReplicationClient
 }
 
 // TODO: Should these be paramterised ?
@@ -30,7 +33,8 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 		return nil, err
 	} else {
 		dkvCli := serverpb.NewDKVClient(conn)
-		return &DKVClient{conn, dkvCli}, nil
+		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
+		return &DKVClient{conn, dkvCli, dkvReplCli}, nil
 	}
 }
 
@@ -61,16 +65,23 @@ func (dkvClnt *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
 
 // MultiGet takes the keys as byte arrays and invokes the
 // GRPC MultiGet method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([]*serverpb.GetResponse, error) {
+func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([][]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	getReqs := make([]*serverpb.GetRequest, len(keys))
-	for i, key := range keys {
-		getReqs[i] = &serverpb.GetRequest{Key: key}
-	}
-	multiGetReq := &serverpb.MultiGetRequest{GetRequests: getReqs}
+	multiGetReq := &serverpb.MultiGetRequest{Keys: keys}
 	res, err := dkvClnt.dkvCli.MultiGet(ctx, multiGetReq)
-	return res.GetResponses, err
+	return res.Values, err
+}
+
+// GetChanges retrieves changes since the given change number
+// using the underlying GRPC GetChanges method. One can limit the
+// number of changes retrieved using the maxNumChanges parameter.
+// This is a convenience wrapper.
+func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32) (*serverpb.GetChangesResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
+	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
 }
 
 // Close closes the underlying GRPC client connection to DKV service

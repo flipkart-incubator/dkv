@@ -14,43 +14,94 @@ service DKV {
 }
 
 message Status {
-  // code captures the error code of the underlying operation.
+  // Code captures the error code of the underlying operation.
   // A non zero error code is considered to be a failure.
   int32 code = 1;
-  // message captures if any the error message of the failed operation.
+  // Message captures if any the error message of the failed operation.
   string message = 2;
 }
 
 message PutRequest {
-  // key is the key, in bytes, to put into the key value store.
+  // Key is the key, in bytes, to put into the key value store.
   bytes key = 1;
-  // value is the value, in bytes, to associate with the key in the key value store.
+  // Value is the value, in bytes, to associate with the key in the key value store.
   bytes value = 2;
 }
 
 message PutResponse {
-  // status indicates the result of the Put operation
+  // Status indicates the result of the Put operation
   Status status = 1;
 }
 
 message GetRequest {
-  // key is the key, in bytes, whose associated value is loaded from the key value store.
+  // Key is the key, in bytes, whose associated value is loaded from the key value store.
   bytes key = 1;
 }
 
 message GetResponse {
-  // status indicates the result of the Get operation
+  // Status indicates the result of the Get operation
   Status status = 1;
-  // value is the value, in bytes, that is associated with the given key in the key value store.
+  // Value is the value, in bytes, that is associated with the given key in the key value store.
   bytes value = 2;
 }
 
 message MultiGetRequest {
-  // getRequests are the individual Get requests comprising bulk Get operation.
-  repeated GetRequest getRequests = 1;
+  // Keys is the collection of keys whose values are returned from the bulk Get operation.
+  repeated bytes keys = 1;
 }
 
 message MultiGetResponse {
-  // getResponses are the individual responses of bulk Get operation.
-  repeated GetResponse getResponses = 1;
+  // Status indicates the result of the bulk Get operation
+  Status status = 1;
+  // Values are the individual responses of the bulk Get operation.
+  repeated bytes values = 2;
 }
+
+service DKVReplication {
+  // GetChanges retrieves all changes from a given change number
+  rpc GetChanges (GetChangesRequest) returns (GetChangesResponse);
+}
+
+message GetChangesRequest {
+  // FromChangeNumber is the starting change number from which to retrieve changes
+  uint64 fromChangeNumber = 1;
+  // MaxNumberOfChanges is the maximum number of changes to return from this invocation
+  uint32 maxNumberOfChanges = 2;
+}
+
+message GetChangesResponse {
+  // Status indicates the result of the GetChanges operation
+  Status status = 1;
+  // MasterChangeNumber indicates the latest change number on master node
+  uint64 masterChangeNumber = 2;
+  // NumberOfChanges indicates the number of change records in the response
+  uint32 numberOfChanges = 3;
+  // Changes is the collection of change records
+  repeated ChangeRecord changes = 4;
+}
+
+message ChangeRecord {
+  // SerialisedForm is the internal byte array representation of this change record
+  bytes serialisedForm = 1;
+  // ChangeNumber indicates the change number of this change record
+  uint64 changeNumber = 2;
+  // NumberOfTrxns indicates the number of transactions associated with this change record
+  uint32 numberOfTrxns = 3;
+  // Trxns is the collection of transaction records associated with this change record
+  repeated TrxnRecord trxns = 4;
+}
+
+message TrxnRecord {
+  enum TrxnType {
+    Unknown = 0;
+    Put = 1;
+    Delete = 2;
+  }
+  // Type indicates the type of this transaction - Put, Delete, etc.
+  TrxnType type = 1;
+  // Key is the byte array representation of the key associated with this transaction
+  bytes key = 2;
+  // Value is the byte array representation of the value associated with this transaction
+  bytes value = 3;
+}
+

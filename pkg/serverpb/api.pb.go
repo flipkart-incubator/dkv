@@ -24,8 +24,39 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
+type TrxnRecord_TrxnType int32
+
+const (
+	TrxnRecord_Unknown TrxnRecord_TrxnType = 0
+	TrxnRecord_Put     TrxnRecord_TrxnType = 1
+	TrxnRecord_Delete  TrxnRecord_TrxnType = 2
+)
+
+var TrxnRecord_TrxnType_name = map[int32]string{
+	0: "Unknown",
+	1: "Put",
+	2: "Delete",
+}
+
+var TrxnRecord_TrxnType_value = map[string]int32{
+	"Unknown": 0,
+	"Put":     1,
+	"Delete":  2,
+}
+
+func (x TrxnRecord_TrxnType) String() string {
+	return proto.EnumName(TrxnRecord_TrxnType_name, int32(x))
+}
+
+func (TrxnRecord_TrxnType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_8ac913527469ef71, []int{10, 0}
+}
+
 type Status struct {
-	Code                 int32    `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	// Code captures the error code of the underlying operation.
+	// A non zero error code is considered to be a failure.
+	Code int32 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	// Message captures if any the error message of the failed operation.
 	Message              string   `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -72,7 +103,9 @@ func (m *Status) GetMessage() string {
 }
 
 type PutRequest struct {
-	Key                  []byte   `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// Key is the key, in bytes, to put into the key value store.
+	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// Value is the value, in bytes, to associate with the key in the key value store.
 	Value                []byte   `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -119,6 +152,7 @@ func (m *PutRequest) GetValue() []byte {
 }
 
 type PutResponse struct {
+	// Status indicates the result of the Put operation
 	Status               *Status  `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -158,6 +192,7 @@ func (m *PutResponse) GetStatus() *Status {
 }
 
 type GetRequest struct {
+	// Key is the key, in bytes, whose associated value is loaded from the key value store.
 	Key                  []byte   `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -197,7 +232,9 @@ func (m *GetRequest) GetKey() []byte {
 }
 
 type GetResponse struct {
-	Status               *Status  `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	// Status indicates the result of the Get operation
+	Status *Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	// Value is the value, in bytes, that is associated with the given key in the key value store.
 	Value                []byte   `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -244,10 +281,11 @@ func (m *GetResponse) GetValue() []byte {
 }
 
 type MultiGetRequest struct {
-	GetRequests          []*GetRequest `protobuf:"bytes,1,rep,name=getRequests,proto3" json:"getRequests,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
-	XXX_unrecognized     []byte        `json:"-"`
-	XXX_sizecache        int32         `json:"-"`
+	// Keys is the collection of keys whose values are returned from the bulk Get operation.
+	Keys                 [][]byte `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *MultiGetRequest) Reset()         { *m = MultiGetRequest{} }
@@ -275,18 +313,21 @@ func (m *MultiGetRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_MultiGetRequest proto.InternalMessageInfo
 
-func (m *MultiGetRequest) GetGetRequests() []*GetRequest {
+func (m *MultiGetRequest) GetKeys() [][]byte {
 	if m != nil {
-		return m.GetRequests
+		return m.Keys
 	}
 	return nil
 }
 
 type MultiGetResponse struct {
-	GetResponses         []*GetResponse `protobuf:"bytes,1,rep,name=getResponses,proto3" json:"getResponses,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	// Status indicates the result of the bulk Get operation
+	Status *Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	// Values are the individual responses of the bulk Get operation.
+	Values               [][]byte `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *MultiGetResponse) Reset()         { *m = MultiGetResponse{} }
@@ -314,14 +355,263 @@ func (m *MultiGetResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_MultiGetResponse proto.InternalMessageInfo
 
-func (m *MultiGetResponse) GetGetResponses() []*GetResponse {
+func (m *MultiGetResponse) GetStatus() *Status {
 	if m != nil {
-		return m.GetResponses
+		return m.Status
+	}
+	return nil
+}
+
+func (m *MultiGetResponse) GetValues() [][]byte {
+	if m != nil {
+		return m.Values
+	}
+	return nil
+}
+
+type GetChangesRequest struct {
+	// FromChangeNumber is the starting change number from which to retrieve changes
+	FromChangeNumber uint64 `protobuf:"varint,1,opt,name=fromChangeNumber,proto3" json:"fromChangeNumber,omitempty"`
+	// MaxNumberOfChanges is the maximum number of changes to return from this invocation
+	MaxNumberOfChanges   uint32   `protobuf:"varint,2,opt,name=maxNumberOfChanges,proto3" json:"maxNumberOfChanges,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetChangesRequest) Reset()         { *m = GetChangesRequest{} }
+func (m *GetChangesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetChangesRequest) ProtoMessage()    {}
+func (*GetChangesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8ac913527469ef71, []int{7}
+}
+
+func (m *GetChangesRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetChangesRequest.Unmarshal(m, b)
+}
+func (m *GetChangesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetChangesRequest.Marshal(b, m, deterministic)
+}
+func (m *GetChangesRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetChangesRequest.Merge(m, src)
+}
+func (m *GetChangesRequest) XXX_Size() int {
+	return xxx_messageInfo_GetChangesRequest.Size(m)
+}
+func (m *GetChangesRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetChangesRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetChangesRequest proto.InternalMessageInfo
+
+func (m *GetChangesRequest) GetFromChangeNumber() uint64 {
+	if m != nil {
+		return m.FromChangeNumber
+	}
+	return 0
+}
+
+func (m *GetChangesRequest) GetMaxNumberOfChanges() uint32 {
+	if m != nil {
+		return m.MaxNumberOfChanges
+	}
+	return 0
+}
+
+type GetChangesResponse struct {
+	// Status indicates the result of the GetChanges operation
+	Status *Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	// MasterChangeNumber indicates the latest change number on master node
+	MasterChangeNumber uint64 `protobuf:"varint,2,opt,name=masterChangeNumber,proto3" json:"masterChangeNumber,omitempty"`
+	// NumberOfChanges indicates the number of change records in the response
+	NumberOfChanges uint32 `protobuf:"varint,3,opt,name=numberOfChanges,proto3" json:"numberOfChanges,omitempty"`
+	// Changes is the collection of change records
+	Changes              []*ChangeRecord `protobuf:"bytes,4,rep,name=changes,proto3" json:"changes,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
+}
+
+func (m *GetChangesResponse) Reset()         { *m = GetChangesResponse{} }
+func (m *GetChangesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetChangesResponse) ProtoMessage()    {}
+func (*GetChangesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8ac913527469ef71, []int{8}
+}
+
+func (m *GetChangesResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetChangesResponse.Unmarshal(m, b)
+}
+func (m *GetChangesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetChangesResponse.Marshal(b, m, deterministic)
+}
+func (m *GetChangesResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetChangesResponse.Merge(m, src)
+}
+func (m *GetChangesResponse) XXX_Size() int {
+	return xxx_messageInfo_GetChangesResponse.Size(m)
+}
+func (m *GetChangesResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetChangesResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetChangesResponse proto.InternalMessageInfo
+
+func (m *GetChangesResponse) GetStatus() *Status {
+	if m != nil {
+		return m.Status
+	}
+	return nil
+}
+
+func (m *GetChangesResponse) GetMasterChangeNumber() uint64 {
+	if m != nil {
+		return m.MasterChangeNumber
+	}
+	return 0
+}
+
+func (m *GetChangesResponse) GetNumberOfChanges() uint32 {
+	if m != nil {
+		return m.NumberOfChanges
+	}
+	return 0
+}
+
+func (m *GetChangesResponse) GetChanges() []*ChangeRecord {
+	if m != nil {
+		return m.Changes
+	}
+	return nil
+}
+
+type ChangeRecord struct {
+	// SerialisedForm is the internal byte array representation of this change record
+	SerialisedForm []byte `protobuf:"bytes,1,opt,name=serialisedForm,proto3" json:"serialisedForm,omitempty"`
+	// ChangeNumber indicates the change number of this change record
+	ChangeNumber uint64 `protobuf:"varint,2,opt,name=changeNumber,proto3" json:"changeNumber,omitempty"`
+	// NumberOfTrxns indicates the number of transactions associated with this change record
+	NumberOfTrxns uint32 `protobuf:"varint,3,opt,name=numberOfTrxns,proto3" json:"numberOfTrxns,omitempty"`
+	// Trxns is the collection of transaction records associated with this change record
+	Trxns                []*TrxnRecord `protobuf:"bytes,4,rep,name=trxns,proto3" json:"trxns,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
+	XXX_unrecognized     []byte        `json:"-"`
+	XXX_sizecache        int32         `json:"-"`
+}
+
+func (m *ChangeRecord) Reset()         { *m = ChangeRecord{} }
+func (m *ChangeRecord) String() string { return proto.CompactTextString(m) }
+func (*ChangeRecord) ProtoMessage()    {}
+func (*ChangeRecord) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8ac913527469ef71, []int{9}
+}
+
+func (m *ChangeRecord) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ChangeRecord.Unmarshal(m, b)
+}
+func (m *ChangeRecord) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ChangeRecord.Marshal(b, m, deterministic)
+}
+func (m *ChangeRecord) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChangeRecord.Merge(m, src)
+}
+func (m *ChangeRecord) XXX_Size() int {
+	return xxx_messageInfo_ChangeRecord.Size(m)
+}
+func (m *ChangeRecord) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChangeRecord.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ChangeRecord proto.InternalMessageInfo
+
+func (m *ChangeRecord) GetSerialisedForm() []byte {
+	if m != nil {
+		return m.SerialisedForm
+	}
+	return nil
+}
+
+func (m *ChangeRecord) GetChangeNumber() uint64 {
+	if m != nil {
+		return m.ChangeNumber
+	}
+	return 0
+}
+
+func (m *ChangeRecord) GetNumberOfTrxns() uint32 {
+	if m != nil {
+		return m.NumberOfTrxns
+	}
+	return 0
+}
+
+func (m *ChangeRecord) GetTrxns() []*TrxnRecord {
+	if m != nil {
+		return m.Trxns
+	}
+	return nil
+}
+
+type TrxnRecord struct {
+	// Type indicates the type of this transaction - Put, Delete, etc.
+	Type TrxnRecord_TrxnType `protobuf:"varint,1,opt,name=type,proto3,enum=dkv.serverpb.TrxnRecord_TrxnType" json:"type,omitempty"`
+	// Key is the byte array representation of the key associated with this transaction
+	Key []byte `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	// Value is the byte array representation of the value associated with this transaction
+	Value                []byte   `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *TrxnRecord) Reset()         { *m = TrxnRecord{} }
+func (m *TrxnRecord) String() string { return proto.CompactTextString(m) }
+func (*TrxnRecord) ProtoMessage()    {}
+func (*TrxnRecord) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8ac913527469ef71, []int{10}
+}
+
+func (m *TrxnRecord) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_TrxnRecord.Unmarshal(m, b)
+}
+func (m *TrxnRecord) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_TrxnRecord.Marshal(b, m, deterministic)
+}
+func (m *TrxnRecord) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TrxnRecord.Merge(m, src)
+}
+func (m *TrxnRecord) XXX_Size() int {
+	return xxx_messageInfo_TrxnRecord.Size(m)
+}
+func (m *TrxnRecord) XXX_DiscardUnknown() {
+	xxx_messageInfo_TrxnRecord.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TrxnRecord proto.InternalMessageInfo
+
+func (m *TrxnRecord) GetType() TrxnRecord_TrxnType {
+	if m != nil {
+		return m.Type
+	}
+	return TrxnRecord_Unknown
+}
+
+func (m *TrxnRecord) GetKey() []byte {
+	if m != nil {
+		return m.Key
+	}
+	return nil
+}
+
+func (m *TrxnRecord) GetValue() []byte {
+	if m != nil {
+		return m.Value
 	}
 	return nil
 }
 
 func init() {
+	proto.RegisterEnum("dkv.serverpb.TrxnRecord_TrxnType", TrxnRecord_TrxnType_name, TrxnRecord_TrxnType_value)
 	proto.RegisterType((*Status)(nil), "dkv.serverpb.Status")
 	proto.RegisterType((*PutRequest)(nil), "dkv.serverpb.PutRequest")
 	proto.RegisterType((*PutResponse)(nil), "dkv.serverpb.PutResponse")
@@ -329,32 +619,52 @@ func init() {
 	proto.RegisterType((*GetResponse)(nil), "dkv.serverpb.GetResponse")
 	proto.RegisterType((*MultiGetRequest)(nil), "dkv.serverpb.MultiGetRequest")
 	proto.RegisterType((*MultiGetResponse)(nil), "dkv.serverpb.MultiGetResponse")
+	proto.RegisterType((*GetChangesRequest)(nil), "dkv.serverpb.GetChangesRequest")
+	proto.RegisterType((*GetChangesResponse)(nil), "dkv.serverpb.GetChangesResponse")
+	proto.RegisterType((*ChangeRecord)(nil), "dkv.serverpb.ChangeRecord")
+	proto.RegisterType((*TrxnRecord)(nil), "dkv.serverpb.TrxnRecord")
 }
 
 func init() { proto.RegisterFile("pkg/serverpb/api.proto", fileDescriptor_8ac913527469ef71) }
 
 var fileDescriptor_8ac913527469ef71 = []byte{
-	// 313 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x52, 0xdf, 0x4b, 0x83, 0x50,
-	0x14, 0xc6, 0x6c, 0xb6, 0x8e, 0x42, 0xe3, 0x32, 0xc2, 0x09, 0x8d, 0x71, 0x9f, 0x7c, 0x08, 0x07,
-	0x16, 0x3d, 0x18, 0xbd, 0x44, 0x30, 0x22, 0x06, 0xdb, 0x0d, 0x7a, 0xe8, 0xcd, 0xb5, 0x83, 0x0c,
-	0x57, 0x9a, 0xf7, 0x5e, 0xa1, 0xff, 0xb0, 0x3f, 0x2b, 0x76, 0xd5, 0xd4, 0x35, 0x5f, 0x7a, 0x3b,
-	0x9f, 0xdf, 0x8f, 0xf3, 0x1d, 0x15, 0xce, 0xd3, 0x38, 0x9a, 0x72, 0xcc, 0x72, 0xcc, 0xd2, 0xd5,
-	0x34, 0x4c, 0x37, 0x5e, 0x9a, 0x25, 0x22, 0x21, 0xd6, 0x3a, 0xce, 0xbd, 0xea, 0x39, 0xbd, 0x01,
-	0xe3, 0x59, 0x84, 0x42, 0x72, 0x42, 0xe0, 0xf8, 0x2d, 0x59, 0xa3, 0xad, 0x4d, 0x34, 0xb7, 0xc7,
-	0xd4, 0x4c, 0x6c, 0x38, 0x79, 0x47, 0xce, 0xc3, 0x08, 0xed, 0xa3, 0x89, 0xe6, 0x9e, 0xb2, 0x0a,
-	0xd2, 0x6b, 0x80, 0x85, 0x14, 0x0c, 0x3f, 0x25, 0x72, 0x41, 0x06, 0xa0, 0xc7, 0xf8, 0xa5, 0xac,
-	0x16, 0xdb, 0x8d, 0x64, 0x08, 0xbd, 0x3c, 0xdc, 0xca, 0xc2, 0x67, 0xb1, 0x02, 0xd0, 0x5b, 0x30,
-	0x95, 0x8b, 0xa7, 0xc9, 0x07, 0x47, 0x72, 0x09, 0x06, 0x57, 0xcb, 0x95, 0xd3, 0xf4, 0x87, 0x5e,
-	0xb3, 0x9b, 0x57, 0x14, 0x63, 0xa5, 0x86, 0x8e, 0x01, 0x66, 0xd8, 0xbd, 0x92, 0x2e, 0xc1, 0x54,
-	0xfc, 0x7f, 0xc2, 0x3b, 0xfa, 0xce, 0xe1, 0x6c, 0x2e, 0xb7, 0x62, 0xd3, 0xd8, 0x1b, 0x80, 0x19,
-	0xfd, 0xa2, 0x5d, 0xb6, 0xee, 0x9a, 0xbe, 0xdd, 0xce, 0xae, 0xe5, 0xac, 0x29, 0xa6, 0x4b, 0x18,
-	0xd4, 0x71, 0x65, 0xcd, 0x3b, 0xb0, 0xa2, 0x1a, 0x56, 0x81, 0xa3, 0x03, 0x81, 0x85, 0x82, 0xb5,
-	0xe4, 0xfe, 0xb7, 0x06, 0xfa, 0xc3, 0xd3, 0x0b, 0x09, 0x40, 0x5f, 0x48, 0x41, 0xf6, 0x8a, 0xd4,
-	0x9f, 0xc8, 0x19, 0x1d, 0x60, 0xca, 0x0a, 0x01, 0xe8, 0x33, 0xfc, 0xe3, 0xad, 0x8f, 0x70, 0xba,
-	0xdb, 0x90, 0x47, 0xe8, 0x57, 0x27, 0x91, 0x8b, 0xb6, 0x6c, 0xef, 0xcd, 0x39, 0xe3, 0x2e, 0xba,
-	0x88, 0xba, 0x87, 0xd7, 0x7e, 0x45, 0xae, 0x0c, 0xf5, 0xaf, 0x5e, 0xfd, 0x04, 0x00, 0x00, 0xff,
-	0xff, 0xbb, 0xbd, 0x04, 0xb6, 0xc5, 0x02, 0x00, 0x00,
+	// 567 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x54, 0xc1, 0x6e, 0xd3, 0x40,
+	0x10, 0xc5, 0x71, 0x9a, 0x84, 0x89, 0x9b, 0x9a, 0x51, 0x55, 0x85, 0x48, 0x94, 0x60, 0x01, 0x8a,
+	0x50, 0xe5, 0x4a, 0xa1, 0x70, 0x28, 0x37, 0x88, 0x88, 0x50, 0x05, 0x2d, 0x4b, 0xa9, 0x10, 0x37,
+	0x27, 0x99, 0x06, 0x2b, 0x89, 0x6d, 0xbc, 0xeb, 0xd0, 0x7c, 0x0a, 0x7f, 0xc1, 0x67, 0x70, 0xe6,
+	0x8b, 0x50, 0x76, 0xbd, 0x8a, 0xed, 0x24, 0x97, 0xdc, 0x76, 0xe7, 0xbd, 0x99, 0xf7, 0x56, 0x9a,
+	0xb7, 0x70, 0x14, 0x4d, 0xc6, 0xa7, 0x9c, 0xe2, 0x39, 0xc5, 0xd1, 0xe0, 0xd4, 0x8b, 0x7c, 0x37,
+	0x8a, 0x43, 0x11, 0xa2, 0x35, 0x9a, 0xcc, 0x5d, 0x5d, 0x77, 0x5e, 0x43, 0xe5, 0x8b, 0xf0, 0x44,
+	0xc2, 0x11, 0xa1, 0x3c, 0x0c, 0x47, 0xd4, 0x34, 0xda, 0x46, 0x67, 0x8f, 0xc9, 0x33, 0x36, 0xa1,
+	0x3a, 0x23, 0xce, 0xbd, 0x31, 0x35, 0x4b, 0x6d, 0xa3, 0x73, 0x9f, 0xe9, 0xab, 0x73, 0x06, 0x70,
+	0x95, 0x08, 0x46, 0x3f, 0x13, 0xe2, 0x02, 0x6d, 0x30, 0x27, 0xb4, 0x90, 0xad, 0x16, 0x5b, 0x1e,
+	0xf1, 0x10, 0xf6, 0xe6, 0xde, 0x34, 0x51, 0x7d, 0x16, 0x53, 0x17, 0xe7, 0x0d, 0xd4, 0x65, 0x17,
+	0x8f, 0xc2, 0x80, 0x13, 0x9e, 0x40, 0x85, 0x4b, 0x71, 0xd9, 0x59, 0xef, 0x1e, 0xba, 0x59, 0x6f,
+	0xae, 0x32, 0xc6, 0x52, 0x8e, 0x73, 0x0c, 0xd0, 0xa7, 0xed, 0x92, 0xce, 0x67, 0xa8, 0x4b, 0x7c,
+	0x97, 0xe1, 0x5b, 0xfc, 0x3e, 0x83, 0x83, 0x8f, 0xc9, 0x54, 0xf8, 0x19, 0x5d, 0x84, 0xf2, 0x84,
+	0x16, 0xcb, 0xa1, 0x66, 0xc7, 0x62, 0xf2, 0xec, 0x7c, 0x03, 0x7b, 0x45, 0xdb, 0x49, 0xfe, 0x08,
+	0x2a, 0x52, 0x91, 0x37, 0x4b, 0x72, 0x6e, 0x7a, 0x73, 0x42, 0x78, 0xd0, 0x27, 0xf1, 0xee, 0x87,
+	0x17, 0x8c, 0x89, 0x6b, 0x0b, 0x2f, 0xc0, 0xbe, 0x8d, 0xc3, 0x99, 0xaa, 0x7e, 0x4a, 0x66, 0x03,
+	0x8a, 0xa5, 0x48, 0x99, 0xad, 0xd5, 0xd1, 0x05, 0x9c, 0x79, 0x77, 0xea, 0x72, 0x79, 0x9b, 0x0e,
+	0x92, 0x8f, 0xdc, 0x67, 0x1b, 0x10, 0xe7, 0x9f, 0x01, 0x98, 0x55, 0xdc, 0xe9, 0x35, 0x52, 0x94,
+	0x0b, 0x8a, 0x73, 0x16, 0x4b, 0xd2, 0xe2, 0x06, 0x04, 0x3b, 0x70, 0x10, 0x14, 0x1c, 0x9a, 0xd2,
+	0x61, 0xb1, 0x8c, 0x67, 0x50, 0x1d, 0xa6, 0x8c, 0x72, 0xdb, 0xec, 0xd4, 0xbb, 0xad, 0xbc, 0x11,
+	0xc5, 0x63, 0x34, 0x0c, 0xe3, 0x11, 0xd3, 0x54, 0xe7, 0x8f, 0x01, 0x56, 0x16, 0xc1, 0xe7, 0xd0,
+	0xe0, 0x14, 0xfb, 0xde, 0xd4, 0xe7, 0x34, 0x7a, 0x1f, 0xc6, 0xb3, 0x74, 0x8f, 0x0a, 0x55, 0x74,
+	0xc0, 0x1a, 0xae, 0x3f, 0x21, 0x57, 0xc3, 0xa7, 0xb0, 0xaf, 0x5d, 0x5e, 0xc7, 0x77, 0x81, 0xb6,
+	0x9e, 0x2f, 0xa2, 0x0b, 0x7b, 0x42, 0xa2, 0xca, 0x76, 0x33, 0x6f, 0x7b, 0xc9, 0x49, 0x4d, 0x2b,
+	0x9a, 0xf3, 0xdb, 0x00, 0x58, 0x55, 0xf1, 0x15, 0x94, 0xc5, 0x22, 0x52, 0xe1, 0x6c, 0x74, 0x9f,
+	0x6c, 0xeb, 0x96, 0xc7, 0xeb, 0x45, 0x44, 0x4c, 0xd2, 0x75, 0x48, 0x4a, 0x1b, 0x72, 0x69, 0x66,
+	0xf7, 0xfc, 0x04, 0x6a, 0xba, 0x13, 0xeb, 0x50, 0xfd, 0x1a, 0x4c, 0x82, 0xf0, 0x57, 0x60, 0xdf,
+	0xc3, 0x2a, 0x98, 0x57, 0x89, 0xb0, 0x0d, 0x04, 0xa8, 0xf4, 0x68, 0x4a, 0x82, 0xec, 0x52, 0xf7,
+	0xaf, 0x01, 0x66, 0xef, 0xe2, 0x06, 0xcf, 0x25, 0x88, 0x85, 0xb7, 0xac, 0xbe, 0x85, 0xd6, 0xc3,
+	0x0d, 0x48, 0xba, 0x50, 0xe7, 0x60, 0xf6, 0x69, 0xad, 0x77, 0x95, 0xb3, 0x62, 0x6f, 0x36, 0x5a,
+	0x1f, 0xa0, 0xa6, 0xe3, 0x86, 0x8f, 0xf2, 0xb4, 0x42, 0x5a, 0x5b, 0xc7, 0xdb, 0x60, 0x35, 0xaa,
+	0xeb, 0x41, 0xa3, 0x77, 0x71, 0xc3, 0x28, 0x9a, 0xfa, 0x43, 0x4f, 0xf8, 0x61, 0x80, 0x97, 0xf2,
+	0x97, 0xd1, 0xfb, 0xf6, 0x78, 0xcd, 0x45, 0x3e, 0x8b, 0xad, 0xf6, 0x76, 0x82, 0x92, 0x78, 0x0b,
+	0xdf, 0x6b, 0x1a, 0x1e, 0x54, 0xe4, 0x17, 0xfc, 0xf2, 0x7f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xb4,
+	0x24, 0x11, 0x25, 0x9c, 0x05, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -369,8 +679,11 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type DKVClient interface {
+	// Put puts the given key into the key value store
 	Put(ctx context.Context, in *PutRequest, opts ...grpc.CallOption) (*PutResponse, error)
+	// Get gets the value associated with the given key from the key value store
 	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
+	// MultiGet gets all the values associated with the given keys from the key value store
 	MultiGet(ctx context.Context, in *MultiGetRequest, opts ...grpc.CallOption) (*MultiGetResponse, error)
 }
 
@@ -411,8 +724,11 @@ func (c *dKVClient) MultiGet(ctx context.Context, in *MultiGetRequest, opts ...g
 
 // DKVServer is the server API for DKV service.
 type DKVServer interface {
+	// Put puts the given key into the key value store
 	Put(context.Context, *PutRequest) (*PutResponse, error)
+	// Get gets the value associated with the given key from the key value store
 	Get(context.Context, *GetRequest) (*GetResponse, error)
+	// MultiGet gets all the values associated with the given keys from the key value store
 	MultiGet(context.Context, *MultiGetRequest) (*MultiGetResponse, error)
 }
 
@@ -503,6 +819,80 @@ var _DKV_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MultiGet",
 			Handler:    _DKV_MultiGet_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/serverpb/api.proto",
+}
+
+// DKVReplicationClient is the client API for DKVReplication service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type DKVReplicationClient interface {
+	// GetChanges retrieves all changes from a given change number
+	GetChanges(ctx context.Context, in *GetChangesRequest, opts ...grpc.CallOption) (*GetChangesResponse, error)
+}
+
+type dKVReplicationClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewDKVReplicationClient(cc *grpc.ClientConn) DKVReplicationClient {
+	return &dKVReplicationClient{cc}
+}
+
+func (c *dKVReplicationClient) GetChanges(ctx context.Context, in *GetChangesRequest, opts ...grpc.CallOption) (*GetChangesResponse, error) {
+	out := new(GetChangesResponse)
+	err := c.cc.Invoke(ctx, "/dkv.serverpb.DKVReplication/GetChanges", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DKVReplicationServer is the server API for DKVReplication service.
+type DKVReplicationServer interface {
+	// GetChanges retrieves all changes from a given change number
+	GetChanges(context.Context, *GetChangesRequest) (*GetChangesResponse, error)
+}
+
+// UnimplementedDKVReplicationServer can be embedded to have forward compatible implementations.
+type UnimplementedDKVReplicationServer struct {
+}
+
+func (*UnimplementedDKVReplicationServer) GetChanges(ctx context.Context, req *GetChangesRequest) (*GetChangesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetChanges not implemented")
+}
+
+func RegisterDKVReplicationServer(s *grpc.Server, srv DKVReplicationServer) {
+	s.RegisterService(&_DKVReplication_serviceDesc, srv)
+}
+
+func _DKVReplication_GetChanges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetChangesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DKVReplicationServer).GetChanges(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dkv.serverpb.DKVReplication/GetChanges",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DKVReplicationServer).GetChanges(ctx, req.(*GetChangesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _DKVReplication_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "dkv.serverpb.DKVReplication",
+	HandlerType: (*DKVReplicationServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetChanges",
+			Handler:    _DKVReplication_GetChanges_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
