@@ -57,102 +57,102 @@ func TestPutAndGet(t *testing.T) {
 }
 
 func TestGetLatestChangeNumber(t *testing.T) {
-	exp_num_trxns := uint64(5)
-	before_chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
-	putKeys(t, int(exp_num_trxns), "aaKey", "aaVal")
-	after_chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
-	act_num_trxns := after_chng_num - before_chng_num
-	if exp_num_trxns != act_num_trxns {
-		t.Errorf("Mismatch in number of transactions. Expected: %d, Actual: %d", exp_num_trxns, act_num_trxns)
+	expNumTrxns := uint64(5)
+	beforeChngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	putKeys(t, int(expNumTrxns), "aaKey", "aaVal")
+	afterChngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	actNumTrxns := afterChngNum - beforeChngNum
+	if expNumTrxns != actNumTrxns {
+		t.Errorf("Mismatch in number of transactions. Expected: %d, Actual: %d", expNumTrxns, actNumTrxns)
 	}
-	before_chng_num = after_chng_num
-	getKeys(t, int(exp_num_trxns), "aaKey", "aaVal")
-	after_chng_num, _ = changePropagator.GetLatestCommittedChangeNumber()
-	act_num_trxns = after_chng_num - before_chng_num
-	if act_num_trxns != 0 {
-		t.Errorf("Expected no transactions to have occurred but found %d transactions", act_num_trxns)
+	beforeChngNum = afterChngNum
+	getKeys(t, int(expNumTrxns), "aaKey", "aaVal")
+	afterChngNum, _ = changePropagator.GetLatestCommittedChangeNumber()
+	actNumTrxns = afterChngNum - beforeChngNum
+	if actNumTrxns != 0 {
+		t.Errorf("Expected no transactions to have occurred but found %d transactions", actNumTrxns)
 	}
 }
 
 func TestLoadChanges(t *testing.T) {
-	exp_num_trxns, max_chngs := 3, 8
-	key_prefix, val_prefix := "bbKey", "bbVal"
-	chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
-	chng_num++ // due to possible previous transaction
-	putKeys(t, exp_num_trxns, key_prefix, val_prefix)
-	if chngs, err := changePropagator.LoadChanges(chng_num, max_chngs); err != nil {
+	expNumTrxns, maxChngs := 3, 8
+	keyPrefix, valPrefix := "bbKey", "bbVal"
+	chngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	chngNum++ // due to possible previous transaction
+	putKeys(t, expNumTrxns, keyPrefix, valPrefix)
+	if chngs, err := changePropagator.LoadChanges(chngNum, maxChngs); err != nil {
 		t.Fatal(err)
 	} else {
-		exp_num_chngs, act_num_chngs := 3, len(chngs)
-		if exp_num_chngs != act_num_chngs {
-			t.Errorf("Incorrect number of changes retrieved. Expected: %d, Actual: %d", exp_num_chngs, act_num_chngs)
+		expNumChngs, actNumChngs := 3, len(chngs)
+		if expNumChngs != actNumChngs {
+			t.Errorf("Incorrect number of changes retrieved. Expected: %d, Actual: %d", expNumChngs, actNumChngs)
 		}
-		first_chng_num := chngs[0].ChangeNumber
-		if first_chng_num != chng_num {
-			t.Errorf("Expected first change number to be %d but it is %d", chng_num, first_chng_num)
+		firstChngNum := chngs[0].ChangeNumber
+		if firstChngNum != chngNum {
+			t.Errorf("Expected first change number to be %d but it is %d", chngNum, firstChngNum)
 		}
-		for i := 0; i < act_num_chngs; i++ {
+		for i := 0; i < actNumChngs; i++ {
 			chng := chngs[i]
 			// t.Log(string(chng.SerialisedForm))
 			if chng.NumberOfTrxns != 1 {
 				t.Errorf("Expected only one transaction in this change but found %d transactions", chng.NumberOfTrxns)
 			}
-			trxn_rec := chng.Trxns[0]
-			if trxn_rec.Type != serverpb.TrxnRecord_Put {
-				t.Errorf("Expected transaction type to be Put but found %s", trxn_rec.Type.String())
+			trxnRec := chng.Trxns[0]
+			if trxnRec.Type != serverpb.TrxnRecord_Put {
+				t.Errorf("Expected transaction type to be Put but found %s", trxnRec.Type.String())
 			}
-			exp_key, exp_val := fmt.Sprintf("%s_%d", key_prefix, i+1), fmt.Sprintf("%s_%d", val_prefix, i+1)
-			act_key, act_val := string(trxn_rec.Key), string(trxn_rec.Value)
-			if exp_key != act_key {
-				t.Errorf("Key mismatch. Expected: %s, Actual: %s", exp_key, act_key)
+			expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, i+1), fmt.Sprintf("%s_%d", valPrefix, i+1)
+			actKey, actVal := string(trxnRec.Key), string(trxnRec.Value)
+			if expKey != actKey {
+				t.Errorf("Key mismatch. Expected: %s, Actual: %s", expKey, actKey)
 			}
-			if exp_val != act_val {
-				t.Errorf("Value mismatch. Expected: %s, Actual: %s", exp_val, act_val)
+			if expVal != actVal {
+				t.Errorf("Value mismatch. Expected: %s, Actual: %s", expVal, actVal)
 			}
 		}
 	}
 }
 
 func TestSaveChanges(t *testing.T) {
-	num_trxns := 3
-	put_key_prefix, put_val_prefix := "ccKey", "ccVal"
-	putKeys(t, num_trxns, put_key_prefix, put_val_prefix)
-	chng_num, _ := changePropagator.GetLatestCommittedChangeNumber()
-	chng_num++ // due to possible previous transaction
-	wb_put_key_prefix, wb_put_val_prefix := "ddKey", "ddVal"
-	chngs := make([]*serverpb.ChangeRecord, num_trxns)
-	for i := 0; i < num_trxns; i++ {
+	numTrxns := 3
+	putKeyPrefix, putValPrefix := "ccKey", "ccVal"
+	putKeys(t, numTrxns, putKeyPrefix, putValPrefix)
+	chngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	chngNum++ // due to possible previous transaction
+	wbPutKeyPrefix, wbPutValPrefix := "ddKey", "ddVal"
+	chngs := make([]*serverpb.ChangeRecord, numTrxns)
+	for i := 0; i < numTrxns; i++ {
 		wb := gorocksdb.NewWriteBatch()
 		defer wb.Destroy()
-		ks, vs := fmt.Sprintf("%s_%d", wb_put_key_prefix, i+1), fmt.Sprintf("%s_%d", wb_put_val_prefix, i+1)
+		ks, vs := fmt.Sprintf("%s_%d", wbPutKeyPrefix, i+1), fmt.Sprintf("%s_%d", wbPutValPrefix, i+1)
 		wb.Put([]byte(ks), []byte(vs))
-		del_ks := fmt.Sprintf("%s_%d", put_key_prefix, i+1)
-		wb.Delete([]byte(del_ks))
-		chngs[i] = toChangeRecord(wb, chng_num)
-		chng_num++
+		delKs := fmt.Sprintf("%s_%d", putKeyPrefix, i+1)
+		wb.Delete([]byte(delKs))
+		chngs[i] = toChangeRecord(wb, chngNum)
+		chngNum++
 	}
-	exp_chng_num := chng_num - 1
+	expChngNum := chngNum - 1
 
-	if act_chng_num, err := changeApplier.SaveChanges(chngs); err != nil {
+	if actChngNum, err := changeApplier.SaveChanges(chngs); err != nil {
 		t.Fatal(err)
 	} else {
-		if exp_chng_num != act_chng_num {
-			t.Errorf("Change numbers mismatch. Expected: %d, Actual: %d", exp_chng_num, act_chng_num)
+		if expChngNum != actChngNum {
+			t.Errorf("Change numbers mismatch. Expected: %d, Actual: %d", expChngNum, actChngNum)
 		}
-		getKeys(t, num_trxns, wb_put_key_prefix, wb_put_val_prefix)
-		noKeys(t, num_trxns, put_key_prefix)
+		getKeys(t, numTrxns, wbPutKeyPrefix, wbPutValPrefix)
+		noKeys(t, numTrxns, putKeyPrefix)
 	}
 }
 
 // Following test can be removed once DKV supports bulk writes
 func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
 	rdb := store.(*rocksDB)
-	before_seq := rdb.db.GetLatestSequenceNumber()
+	beforeSeq := rdb.db.GetLatestSequenceNumber()
 
-	exp_num_batch_trxns := 3
-	num_trxns_per_batch := 2
-	exp_num_trxns := exp_num_batch_trxns * num_trxns_per_batch
-	for i := 1; i <= exp_num_batch_trxns; i++ {
+	expNumBatchTrxns := 3
+	numTrxnsPerBatch := 2
+	expNumTrxns := expNumBatchTrxns * numTrxnsPerBatch
+	for i := 1; i <= expNumBatchTrxns; i++ {
 		k, v := fmt.Sprintf("bKey_%d", i), fmt.Sprintf("bVal_%d", i)
 		wb := gorocksdb.NewWriteBatch()
 		wb.Put([]byte(k), []byte(v))
@@ -166,26 +166,26 @@ func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
 		wo.Destroy()
 	}
 
-	after_seq := rdb.db.GetLatestSequenceNumber()
-	num_trxns := int(after_seq - before_seq)
-	if num_trxns != exp_num_trxns {
-		t.Errorf("Incorrect number of transactions reported. Expected: %d, Actual: %d", exp_num_trxns, num_trxns)
+	afterSeq := rdb.db.GetLatestSequenceNumber()
+	numTrxns := int(afterSeq - beforeSeq)
+	if numTrxns != expNumTrxns {
+		t.Errorf("Incorrect number of transactions reported. Expected: %d, Actual: %d", expNumTrxns, numTrxns)
 	}
 
-	start_seq := 1 + before_seq // This is done to remove previous transaction if any
-	if trxn_iter, err := rdb.db.GetUpdatesSince(start_seq); err != nil {
+	startSeq := 1 + beforeSeq // This is done to remove previous transaction if any
+	if trxnIter, err := rdb.db.GetUpdatesSince(startSeq); err != nil {
 		t.Fatal(err)
 	} else {
-		defer trxn_iter.Destroy()
-		for trxn_iter.Valid() {
-			wb, _ := trxn_iter.GetBatch()
-			num_trxns_per_wb := wb.Count()
-			if num_trxns_per_wb != num_trxns_per_batch {
-				t.Errorf("Incorrect number of transactions per batch. Expected: %d, Actual: %d", num_trxns_per_batch, num_trxns_per_wb)
+		defer trxnIter.Destroy()
+		for trxnIter.Valid() {
+			wb, _ := trxnIter.GetBatch()
+			numTrxnsPerWb := wb.Count()
+			if numTrxnsPerWb != numTrxnsPerBatch {
+				t.Errorf("Incorrect number of transactions per batch. Expected: %d, Actual: %d", numTrxnsPerBatch, numTrxnsPerWb)
 			}
-			wb_iter := wb.NewIterator()
-			for wb_iter.Next() {
-				wbr := wb_iter.Record()
+			wbIter := wb.NewIterator()
+			for wbIter.Next() {
+				wbr := wbIter.Record()
 				// t.Logf("Type: %v, Key: %s, Val: %s", wbr.Type, wbr.Key, wbr.Value)
 				switch wbr.Type {
 				case 1: // Put
@@ -204,7 +204,7 @@ func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
 				}
 			}
 			wb.Destroy()
-			trxn_iter.Next()
+			trxnIter.Next()
 		}
 	}
 }
@@ -315,10 +315,10 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 		if err := store.Put([]byte(k), []byte(v)); err != nil {
 			t.Fatal(err)
 		} else {
-			if read_results, err := store.Get([]byte(k)); err != nil {
+			if readResults, err := store.Get([]byte(k)); err != nil {
 				t.Fatal(err)
-			} else if string(read_results[0]) != string(v) {
-				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, read_results[0])
+			} else if string(readResults[0]) != string(v) {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
 			}
 		}
 	}
@@ -328,6 +328,6 @@ func openRocksDB() (*rocksDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := NewDefaultOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
-	return OpenStore(opts)
+	opts := newDefaultOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
+	return openStore(opts)
 }

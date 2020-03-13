@@ -41,7 +41,7 @@ func init() {
 
 func launchBenchmark(bm bench.Benchmark) {
 	report, err := runner.Run(
-		bm.ApiName(),
+		bm.APIName(),
 		fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort),
 		runner.WithProtoFile(protoFile, []string{protoDir}),
 		runner.WithData(bm.CreateRequests(totalNumKeys)),

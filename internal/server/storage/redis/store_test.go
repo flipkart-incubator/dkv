@@ -124,5 +124,5 @@ func BenchmarkGetMissingKey(b *testing.B) {
 }
 
 func openRedisDB() (storage.KVStore, error) {
-	return OpenStore(dbPort, dbIndex)
+	return openStore(dbPort, dbIndex)
 }

@@ -6,60 +6,68 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-type GetHotKeysBenchmark struct {
+type getHotKeysBenchmark struct {
 	numHotKeys uint
 }
 
-func DefaultGetHotKeysBenchmark() *GetHotKeysBenchmark {
+// DefaultGetHotKeysBenchmark returns an instance of a benchmark
+// that performs repeated GETs on a subset of keys.
+func DefaultGetHotKeysBenchmark() Benchmark {
 	return CreateGetHotKeysBenchmark(numHotKeys)
 }
 
-func CreateGetHotKeysBenchmark(numHotKeys uint) *GetHotKeysBenchmark {
-	return &GetHotKeysBenchmark{numHotKeys}
+// CreateGetHotKeysBenchmark returns an instance of a benchmark
+// that performs repeated GETs on a given number of keys.
+func CreateGetHotKeysBenchmark(numHotKeys uint) Benchmark {
+	return &getHotKeysBenchmark{numHotKeys}
 }
 
-func (this *GetHotKeysBenchmark) ApiName() string {
+func (getBm *getHotKeysBenchmark) APIName() string {
 	return "dkv.serverpb.DKV.Get"
 }
 
-func (this *GetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
+func (getBm *getHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
 	var getReqs [][]byte
-	for i, j := 0, 0; i < int(numRequests); i, j = i+1, (j+1)%int(this.numHotKeys) {
+	for i, j := 0, 0; i < int(numRequests); i, j = i+1, (j+1)%int(getBm.numHotKeys) {
 		key := []byte(fmt.Sprintf("%s%d", ExistingKeyPrefix, j))
 		getReqs = append(getReqs, key)
 	}
 	return getReqs
 }
 
-func (this *GetHotKeysBenchmark) String() string {
-	return fmt.Sprintf("API: %s, Hot Keys: %d", this.ApiName(), this.numHotKeys)
+func (getBm *getHotKeysBenchmark) String() string {
+	return fmt.Sprintf("API: %s, Hot Keys: %d", getBm.APIName(), getBm.numHotKeys)
 }
 
-type MultiGetHotKeysBenchmark struct {
-	*GetHotKeysBenchmark
-	batchSize uint
+type multiGetHotKeysBenchmark struct {
+	numHotKeys, batchSize uint
 }
 
-func DefaultMultiGetHotKeysBenchmark() *MultiGetHotKeysBenchmark {
+// DefaultMultiGetHotKeysBenchmark returns an instance of a benchmark
+// that repeatedly calls MultiGet API on a subset of keys.
+func DefaultMultiGetHotKeysBenchmark() Benchmark {
 	return CreateMultiGetHotKeysBenchmark(numHotKeys, batchSize)
 }
 
-func CreateMultiGetHotKeysBenchmark(numHotKeys, batchSize uint) *MultiGetHotKeysBenchmark {
+// CreateMultiGetHotKeysBenchmark returns an instance of a benchmark
+// that repeatedly calls MultiGet API with the given batch size and
+// the number of keys.
+func CreateMultiGetHotKeysBenchmark(numHotKeys, batchSize uint) Benchmark {
 	if batchSize > numHotKeys {
 		panic(fmt.Sprintf("Batch size must be less than or equal to the number of hot keys. Given batchSize: %d, numHotKeys: %d", batchSize, numHotKeys))
 	}
-	return &MultiGetHotKeysBenchmark{CreateGetHotKeysBenchmark(numHotKeys), batchSize}
+	return &multiGetHotKeysBenchmark{numHotKeys, batchSize}
 }
 
-func (this *MultiGetHotKeysBenchmark) ApiName() string {
+func (getBm *multiGetHotKeysBenchmark) APIName() string {
 	return "dkv.serverpb.DKV.MultiGet"
 }
 
-func (this *MultiGetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
+func (getBm *multiGetHotKeysBenchmark) CreateRequests(numRequests uint) interface{} {
 	var multiGetReqs []*serverpb.MultiGetRequest
 	for i, j := 0, 0; i < int(numRequests); i++ {
 		var keys [][]byte
-		for k := 0; k < int(this.batchSize); k, j = k+1, (j+1)%int(this.numHotKeys) {
+		for k := 0; k < int(getBm.batchSize); k, j = k+1, (j+1)%int(getBm.numHotKeys) {
 			key := []byte(fmt.Sprintf("%s%d", ExistingKeyPrefix, j))
 			keys = append(keys, key)
 		}
@@ -68,6 +76,6 @@ func (this *MultiGetHotKeysBenchmark) CreateRequests(numRequests uint) interface
 	return multiGetReqs
 }
 
-func (this *MultiGetHotKeysBenchmark) String() string {
-	return fmt.Sprintf("API: %s, Hot Keys: %d, Batch Size: %d", this.ApiName(), this.numHotKeys, this.batchSize)
+func (getBm *multiGetHotKeysBenchmark) String() string {
+	return fmt.Sprintf("API: %s, Hot Keys: %d, Batch Size: %d", getBm.APIName(), getBm.numHotKeys, getBm.batchSize)
 }

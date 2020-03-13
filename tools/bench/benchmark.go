@@ -5,14 +5,19 @@ import (
 	"math/rand"
 )
 
+// Benchmark represents the behavior required for
+// benchmarking DKV services. Each instance represents
+// the benchmark for a given DKV API.
 type Benchmark interface {
 	CreateRequests(numRequests uint) interface{}
-	ApiName() string
+	APIName() string
 	String() string
 }
 
 const (
-	NewKeyPrefix      = "NewKey"
+	// NewKeyPrefix is the prefix applied on keys for insert benchmarks
+	NewKeyPrefix = "NewKey"
+	// ExistingKeyPrefix is the prefix applied on keys for update benchmarks
 	ExistingKeyPrefix = "ExistingKey"
 )
 

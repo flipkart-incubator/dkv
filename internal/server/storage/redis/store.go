@@ -8,19 +8,21 @@ import (
 	"github.com/go-redis/redis"
 )
 
-type RedisDBStore struct {
+type redisDBStore struct {
 	db *redis.Client
 }
 
+// OpenDB initializes a new instance of RedisDB connecting
+// to the Redis DB service running on the given port.
 func OpenDB(dbPort, dbIndex int) storage.KVStore {
-	if kvs, err := OpenStore(dbPort, dbIndex); err != nil {
+	if kvs, err := openStore(dbPort, dbIndex); err != nil {
 		panic(err)
 	} else {
 		return kvs
 	}
 }
 
-func OpenStore(dbPort, dbIndex int) (*RedisDBStore, error) {
+func openStore(dbPort, dbIndex int) (*redisDBStore, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("127.0.0.1:%d", dbPort),
 		Password: "",
@@ -29,18 +31,18 @@ func OpenStore(dbPort, dbIndex int) (*RedisDBStore, error) {
 	if _, err := client.Ping().Result(); err != nil {
 		return nil, err
 	}
-	return &RedisDBStore{client}, nil
+	return &redisDBStore{client}, nil
 }
 
-func (rdb *RedisDBStore) Close() error {
+func (rdb *redisDBStore) Close() error {
 	return rdb.db.Close()
 }
 
-func (rdb *RedisDBStore) Put(key []byte, value []byte) error {
+func (rdb *redisDBStore) Put(key []byte, value []byte) error {
 	return rdb.db.Set(string(key), value, 0).Err()
 }
 
-func (rdb *RedisDBStore) Get(keys ...[]byte) ([][]byte, error) {
+func (rdb *redisDBStore) Get(keys ...[]byte) ([][]byte, error) {
 	switch numKeys := len(keys); {
 	case numKeys == 1:
 		val, err := rdb.getSingleKey(keys[0])
@@ -50,26 +52,26 @@ func (rdb *RedisDBStore) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
-func (rdb *RedisDBStore) getSingleKey(key []byte) ([]byte, error) {
-	if val, err := rdb.db.Get(string(key)).Result(); err != nil && !strings.HasSuffix(err.Error(), "nil") {
+func (rdb *redisDBStore) getSingleKey(key []byte) ([]byte, error) {
+	val, err := rdb.db.Get(string(key)).Result()
+	if err != nil && !strings.HasSuffix(err.Error(), "nil") {
 		return nil, err
-	} else {
-		return []byte(val), nil
 	}
+	return []byte(val), nil
 }
 
-func (rdb *RedisDBStore) getMultipleKeys(keys [][]byte) ([][]byte, error) {
-	var str_keys []string
+func (rdb *redisDBStore) getMultipleKeys(keys [][]byte) ([][]byte, error) {
+	var strKeys []string
 	for _, key := range keys {
-		str_keys = append(str_keys, string(key))
+		strKeys = append(strKeys, string(key))
 	}
-	if vals, err := rdb.db.MGet(str_keys...).Result(); err != nil && !strings.HasSuffix(err.Error(), "nil") {
+	vals, err := rdb.db.MGet(strKeys...).Result()
+	if err != nil && !strings.HasSuffix(err.Error(), "nil") {
 		return nil, err
-	} else {
-		results := make([][]byte, len(vals))
-		for i, val := range vals {
-			results[i] = []byte(val.(string))
-		}
-		return results, nil
 	}
+	results := make([][]byte, len(vals))
+	for i, val := range vals {
+		results[i] = []byte(val.(string))
+	}
+	return results, nil
 }

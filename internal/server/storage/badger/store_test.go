@@ -73,70 +73,70 @@ func TestMissingGet(t *testing.T) {
 }
 
 func TestSaveChangesForPutAndDelete(t *testing.T) {
-	if chng_num, err := changeApplier.GetLatestAppliedChangeNumber(); err != nil {
+	if chngNum, err := changeApplier.GetLatestAppliedChangeNumber(); err != nil {
 		t.Error(err)
 	} else {
-		num_chngs, key_pref, val_pref := 10, "KSC_", "VSC_"
-		ks, vs := make([][]byte, num_chngs), make([][]byte, num_chngs)
-		chng_recs := make([]*serverpb.ChangeRecord, num_chngs)
-		for i := 0; i < num_chngs; i++ {
-			ks[i] = []byte(fmt.Sprintf("%s%d", key_pref, i))
-			vs[i] = []byte(fmt.Sprintf("%s%d", val_pref, i))
-			chng_recs[i] = newPutChange(chng_num+uint64(i+1), ks[i], vs[i])
+		numChngs, keyPref, valPref := 10, "KSC_", "VSC_"
+		ks, vs := make([][]byte, numChngs), make([][]byte, numChngs)
+		chngRecs := make([]*serverpb.ChangeRecord, numChngs)
+		for i := 0; i < numChngs; i++ {
+			ks[i] = []byte(fmt.Sprintf("%s%d", keyPref, i))
+			vs[i] = []byte(fmt.Sprintf("%s%d", valPref, i))
+			chngRecs[i] = newPutChange(chngNum+uint64(i+1), ks[i], vs[i])
 		}
-		if appld_chng, err := changeApplier.SaveChanges(chng_recs); err != nil {
+		if appldChng, err := changeApplier.SaveChanges(chngRecs); err != nil {
 			t.Error(err)
 		} else {
-			act_num_chngs := int(appld_chng - chng_num)
-			if act_num_chngs != num_chngs {
-				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", num_chngs, act_num_chngs)
+			actNumChngs := int(appldChng - chngNum)
+			if actNumChngs != numChngs {
+				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", numChngs, actNumChngs)
 			} else {
 				checkGetResults(t, ks, vs)
 			}
 		}
-		chng_num = chng_num + uint64(num_chngs)
-		del_num_chngs := 5
-		del_chng_recs := make([]*serverpb.ChangeRecord, del_num_chngs)
-		for i := 0; i < del_num_chngs; i++ {
-			del_chng_recs[i] = newDelChange(chng_num+uint64(i+1), ks[i])
+		chngNum = chngNum + uint64(numChngs)
+		delNumChngs := 5
+		delChngRecs := make([]*serverpb.ChangeRecord, delNumChngs)
+		for i := 0; i < delNumChngs; i++ {
+			delChngRecs[i] = newDelChange(chngNum+uint64(i+1), ks[i])
 		}
-		if appld_chng, err := changeApplier.SaveChanges(del_chng_recs); err != nil {
+		if appldChng, err := changeApplier.SaveChanges(delChngRecs); err != nil {
 			t.Error(err)
 		} else {
-			act_num_chngs := int(appld_chng - chng_num)
-			if act_num_chngs != del_num_chngs {
-				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", del_num_chngs, act_num_chngs)
+			actNumChngs := int(appldChng - chngNum)
+			if actNumChngs != delNumChngs {
+				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", delNumChngs, actNumChngs)
 			} else {
-				checkMissingGetResults(t, ks[:act_num_chngs])
-				checkGetResults(t, ks[act_num_chngs:], vs[act_num_chngs:])
+				checkMissingGetResults(t, ks[:actNumChngs])
+				checkGetResults(t, ks[actNumChngs:], vs[actNumChngs:])
 			}
 		}
 	}
 }
 
 func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
-	if chng_num, err := changeApplier.GetLatestAppliedChangeNumber(); err != nil {
+	if chngNum, err := changeApplier.GetLatestAppliedChangeNumber(); err != nil {
 		t.Error(err)
 	} else {
-		num_chngs, key_pref, val_pref := 4, "KISC_", "VISC_"
-		ks, vs := make([][]byte, num_chngs>>1), make([][]byte, num_chngs>>1)
-		chng_recs := make([]*serverpb.ChangeRecord, num_chngs)
-		for i, j := 0, 0; i < num_chngs; i++ {
+		numChngs, keyPref, valPref := 4, "KISC_", "VISC_"
+		ks, vs := make([][]byte, numChngs>>1), make([][]byte, numChngs>>1)
+		chngRecs := make([]*serverpb.ChangeRecord, numChngs)
+		for i, j := 0, 0; i < numChngs; i++ {
 			if i&1 == 0 { // PUT change for even indices
-				ks[j] = []byte(fmt.Sprintf("%s%d", key_pref, j))
-				vs[j] = []byte(fmt.Sprintf("%s%d", val_pref, j))
-				chng_recs[i] = newPutChange(chng_num+uint64(i+1), ks[j], vs[j])
+				ks[j] = []byte(fmt.Sprintf("%s%d", keyPref, j))
+				vs[j] = []byte(fmt.Sprintf("%s%d", valPref, j))
+				chngRecs[i] = newPutChange(chngNum+uint64(i+1), ks[j], vs[j])
 				j++
 			} else { // DEL change for odd indices
-				chng_recs[i] = newDelChange(chng_num+uint64(i+1), ks[j-1])
+				chngRecs[i] = newDelChange(chngNum+uint64(i+1), ks[j-1])
 			}
 		}
-		if appld_chng, err := changeApplier.SaveChanges(chng_recs); err != nil {
+		if appldChng, err := changeApplier.SaveChanges(chngRecs); err != nil {
 			t.Error(err)
 		} else {
-			act_num_chngs := int(appld_chng - chng_num)
-			if act_num_chngs != num_chngs {
-				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", num_chngs, act_num_chngs)
+			actNumChngs := int(appldChng - chngNum)
+			if actNumChngs != numChngs {
+				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", numChngs, actNumChngs)
 			} else {
 				// As 'even' change records add keys and 'odd' ones remove the previous key, we expect no keys to be present
 				checkMissingGetResults(t, ks)
@@ -148,8 +148,8 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 func BenchmarkSaveChangesOneByOne(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("BSK%d", i), fmt.Sprintf("BSV%d", i)
-		chng_recs := []*serverpb.ChangeRecord{newPutChange(uint64(i+1), []byte(key), []byte(value))}
-		if _, err := changeApplier.SaveChanges(chng_recs); err != nil {
+		chngRecs := []*serverpb.ChangeRecord{newPutChange(uint64(i+1), []byte(key), []byte(value))}
+		if _, err := changeApplier.SaveChanges(chngRecs); err != nil {
 			b.Fatalf("Unable to SaveChange for PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -200,13 +200,13 @@ func BenchmarkGetMissingKey(b *testing.B) {
 	}
 }
 
-func checkGetResults(t *testing.T, ks, exp_vs [][]byte) {
+func checkGetResults(t *testing.T, ks, expVs [][]byte) {
 	if results, err := store.Get(ks...); err != nil {
 		t.Error(err)
 	} else {
 		for i, result := range results {
-			if string(result) != string(exp_vs[i]) {
-				t.Errorf("Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", ks[i], exp_vs[i], result)
+			if string(result) != string(expVs[i]) {
+				t.Errorf("Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", ks[i], expVs[i], result)
 			}
 		}
 	}
