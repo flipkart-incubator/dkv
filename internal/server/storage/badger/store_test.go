@@ -225,7 +225,7 @@ func newDelChange(chngNum uint64, key []byte) *serverpb.ChangeRecord {
 		ChangeNumber:  chngNum,
 		NumberOfTrxns: 1,
 		Trxns: []*serverpb.TrxnRecord{
-			&serverpb.TrxnRecord{
+			{
 				Type: serverpb.TrxnRecord_Delete,
 				Key:  key,
 			},
@@ -238,7 +238,7 @@ func newPutChange(chngNum uint64, key, val []byte) *serverpb.ChangeRecord {
 		ChangeNumber:  chngNum,
 		NumberOfTrxns: 1,
 		Trxns: []*serverpb.TrxnRecord{
-			&serverpb.TrxnRecord{
+			{
 				Type:  serverpb.TrxnRecord_Put,
 				Key:   key,
 				Value: val,
@@ -251,6 +251,5 @@ func openBadgerDB() (*badgerDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := NewDefaultOptions(dbFolder)
-	return OpenStore(opts)
+	return openStore(newDefaultOptions(dbFolder))
 }

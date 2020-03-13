@@ -43,9 +43,9 @@ func init() {
 type dkvSrvrRole string
 
 const (
-	None   dkvSrvrRole = "none"
-	Master             = "master"
-	Slave              = "slave"
+	noRole     dkvSrvrRole = "none"
+	masterRole             = "master"
+	slaveRole              = "slave"
 )
 
 func toDKVSrvrRole(role string) dkvSrvrRole {
@@ -54,15 +54,15 @@ func toDKVSrvrRole(role string) dkvSrvrRole {
 
 func (role dkvSrvrRole) PrintFlags() {
 	switch role {
-	case None:
+	case noRole:
 		printFlagsWithPrefix("db")
-	case Master:
+	case masterRole:
 		if haveFlagsWithPrefix("nexus") {
 			printFlagsWithPrefix("db", "nexus")
 		} else {
 			printFlagsWithPrefix("db")
 		}
-	case Slave:
+	case slaveRole:
 		printFlagsWithPrefix("db", "repl")
 	}
 }
@@ -77,11 +77,11 @@ func main() {
 	srvrRole.PrintFlags()
 
 	switch srvrRole {
-	case None:
+	case noRole:
 		dkvSvc := master.NewStandaloneService(kvs, nil)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-	case Master:
+	case masterRole:
 		if cp == nil {
 			panic(fmt.Sprintf("Storage engine %s is not supported for DKV master role.", dbEngine))
 		}
@@ -94,7 +94,7 @@ func main() {
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-	case Slave:
+	case slaveRole:
 		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr); err != nil {
 			panic(err)
 		} else {
@@ -156,11 +156,11 @@ const cacheSize = 3 << 30
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier) {
 	switch dbEngine {
 	case "rocksdb":
-		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocks_db, rocks_db, rocks_db
+		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		badger_db := badger.OpenDB(dbFolder)
-		return badger_db, nil, badger_db
+		badgerDb := badger.OpenDB(dbFolder)
+		return badgerDb, nil, badgerDb
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
 	}

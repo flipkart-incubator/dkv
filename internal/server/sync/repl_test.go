@@ -8,6 +8,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -36,7 +37,7 @@ func TestDKVReplStoreClose(t *testing.T) {
 	}
 }
 
-func testPut(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key, val []byte) {
+func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 	intReq := new(raftpb.InternalRaftRequest)
 	intReq.Put = &serverpb.PutRequest{Key: key, Value: val}
 	if reqBts, err := proto.Marshal(intReq); err != nil {
@@ -54,7 +55,7 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key, val []byte
 	}
 }
 
-func testGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key []byte) {
+func testGet(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 	intReq := new(raftpb.InternalRaftRequest)
 	intReq.Get = &serverpb.GetRequest{Key: key}
 	if reqBts, err := proto.Marshal(intReq); err != nil {
@@ -72,7 +73,7 @@ func testGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, key []byte) {
 	}
 }
 
-func testMultiGet(t *testing.T, kvs *memStore, dkvRepl *dkvReplStore, keys ...[]byte) {
+func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte) {
 	intReq := new(raftpb.InternalRaftRequest)
 	intReq.MultiGet = &serverpb.MultiGetRequest{Keys: keys}
 	if reqBts, err := proto.Marshal(intReq); err != nil {
@@ -112,10 +113,9 @@ func (ms *memStore) Put(key []byte, value []byte) error {
 	storeKey := string(key)
 	if _, present := ms.store[storeKey]; present {
 		return errors.New("Given key already exists")
-	} else {
-		ms.store[storeKey] = value
-		return nil
 	}
+	ms.store[storeKey] = value
+	return nil
 }
 
 func (ms *memStore) Get(keys ...[]byte) ([][]byte, error) {

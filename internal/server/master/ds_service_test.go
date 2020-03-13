@@ -23,7 +23,7 @@ const (
 	clusterSize = 3
 	logDir      = "/tmp/dkv_test/logs"
 	snapDir     = "/tmp/dkv_test/snap"
-	clusterUrl  = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
+	clusterURL  = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
 	replTimeout = 3 * time.Second
 )
 
@@ -88,7 +88,7 @@ func newReplicator(id int, kvs storage.KVStore) nexus_api.RaftReplicator {
 		nexus.NodeId(id),
 		nexus.LogDir(logDir),
 		nexus.SnapDir(snapDir),
-		nexus.ClusterUrl(clusterUrl),
+		nexus.ClusterUrl(clusterURL),
 		nexus.ReplicationTimeout(replTimeout),
 	}
 	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, opts...); err != nil {
@@ -106,15 +106,15 @@ func newListener(port int) net.Listener {
 	}
 }
 
-func newKVStoreWithId(id int) (storage.KVStore, storage.ChangePropagator) {
+func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator) {
 	dbFolder := fmt.Sprintf("%s_%d", dbFolder, id)
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
-		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocks_db, rocks_db
+		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocksDb, rocksDb
 	case "badger":
 		return badger.OpenDB(dbFolder), nil
 	default:
@@ -123,7 +123,7 @@ func newKVStoreWithId(id int) (storage.KVStore, storage.ChangePropagator) {
 }
 
 func serveDistributedDKV(id int) {
-	kvs, cp := newKVStoreWithId(id)
+	kvs, cp := newKVStoreWithID(id)
 	dkvRepl := newReplicator(id, kvs)
 	dkvRepl.Start()
 	mutex.Lock()

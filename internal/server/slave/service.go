@@ -30,19 +30,18 @@ type dkvSlaveService struct {
 }
 
 // TODO: check if this needs to be exposed as a flag
-const MaxNumChangesRepl = 100
+const maxNumChangesRepl = 100
 
 // NewService creates a slave DKVService that periodically polls
 // for changes from master node and replicates them onto its local
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
-func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint) (*dkvSlaveService, error) {
+func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint) (DKVService, error) {
 	if replPollIntervalSecs == 0 || replCli == nil || store == nil || ca == nil {
-		return nil, errors.New("Invalid args. Params `store`, `ca`, `replCli` and `replPollIntervalSecs` are all mandatory.")
-	} else {
-		replPollInterval := time.Duration(replPollIntervalSecs) * time.Second
-		return newSlaveService(store, ca, replCli, replPollInterval), nil
+		return nil, errors.New("invalid args - params `store`, `ca`, `replCli` and `replPollIntervalSecs` are all mandatory")
 	}
+	replPollInterval := time.Duration(replPollIntervalSecs) * time.Second
+	return newSlaveService(store, ca, replCli, replPollInterval), nil
 }
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration) *dkvSlaveService {
@@ -56,19 +55,25 @@ func (dss *dkvSlaveService) Put(ctx context.Context, putReq *serverpb.PutRequest
 }
 
 func (dss *dkvSlaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	if readResults, err := dss.store.Get(getReq.Key); err != nil {
-		return &serverpb.GetResponse{Status: newErrorStatus(err), Value: nil}, err
+	readResults, err := dss.store.Get(getReq.Key)
+	res := &serverpb.GetResponse{Status: newEmptyStatus()}
+	if err != nil {
+		res.Status = newErrorStatus(err)
 	} else {
-		return &serverpb.GetResponse{Status: newEmptyStatus(), Value: readResults[0]}, nil
+		res.Value = readResults[0]
 	}
+	return res, err
 }
 
 func (dss *dkvSlaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	if readResults, err := dss.store.Get(multiGetReq.Keys...); err != nil {
-		return &serverpb.MultiGetResponse{Status: newErrorStatus(err), Values: nil}, err
+	readResults, err := dss.store.Get(multiGetReq.Keys...)
+	res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}
+	if err != nil {
+		res.Status = newErrorStatus(err)
 	} else {
-		return &serverpb.MultiGetResponse{Status: newEmptyStatus(), Values: readResults}, nil
+		res.Values = readResults
 	}
+	return res, err
 }
 
 func (dss *dkvSlaveService) Close() error {
@@ -81,9 +86,9 @@ func (dss *dkvSlaveService) Close() error {
 
 func (dss *dkvSlaveService) startReplication(replPollInterval time.Duration) {
 	dss.replTckr = time.NewTicker(replPollInterval)
-	latest_chng_num, _ := dss.ca.GetLatestAppliedChangeNumber()
-	dss.fromChngNum = 1 + latest_chng_num
-	dss.maxNumChngs = MaxNumChangesRepl
+	latestChngNum, _ := dss.ca.GetLatestAppliedChangeNumber()
+	dss.fromChngNum = 1 + latestChngNum
+	dss.maxNumChngs = maxNumChangesRepl
 	dss.replStop = make(chan struct{})
 	go dss.pollAndApplyChanges()
 }
@@ -102,21 +107,22 @@ func (dss *dkvSlaveService) pollAndApplyChanges() {
 }
 
 func (dss *dkvSlaveService) applyChangesFromMaster() error {
-	if res, err := dss.replCli.GetChanges(dss.fromChngNum, dss.maxNumChngs); err != nil {
-		return err
-	} else {
+	res, err := dss.replCli.GetChanges(dss.fromChngNum, dss.maxNumChngs)
+	if err == nil {
 		if res.Status.Code != 0 {
-			return errors.New(res.Status.Message)
+			err = errors.New(res.Status.Message)
+		} else {
+			err = dss.applyChanges(res)
 		}
-		return dss.applyChanges(res)
 	}
+	return err
 }
 
 func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) error {
 	if chngsRes.NumberOfChanges > 0 {
-		act_chng_num, err := dss.ca.SaveChanges(chngsRes.Changes)
-		dss.fromChngNum = act_chng_num + 1
-		dss.replLag = chngsRes.MasterChangeNumber - act_chng_num
+		actChngNum, err := dss.ca.SaveChanges(chngsRes.Changes)
+		dss.fromChngNum = actChngNum + 1
+		dss.replLag = chngsRes.MasterChangeNumber - actChngNum
 		return err
 	}
 	return nil

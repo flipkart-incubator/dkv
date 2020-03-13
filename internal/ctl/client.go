@@ -29,13 +29,14 @@ const (
 // NewInSecureDKVClient creates an insecure GRPC client against the
 // given DKV service address.
 func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
-	if conn, err := grpc.Dial(svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize)); err != nil {
-		return nil, err
-	} else {
+	var dkvClnt *DKVClient
+	conn, err := grpc.Dial(svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize))
+	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
-		return &DKVClient{conn, dkvCli, dkvReplCli}, nil
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli}
 	}
+	return dkvClnt, err
 }
 
 // Put takes the key and value as byte arrays and invokes the

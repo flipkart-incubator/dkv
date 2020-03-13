@@ -134,8 +134,8 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator) {
 	}
 	switch engine {
 	case "rocksdb":
-		rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocks_db, rocks_db
+		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
+		return rocksDb, rocksDb
 	case "badger":
 		return badger.OpenDB(dbFolder), nil
 	default:

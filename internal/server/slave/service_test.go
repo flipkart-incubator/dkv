@@ -110,16 +110,16 @@ func newRocksDBStore(dbFolder string) (storage.KVStore, storage.ChangePropagator
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	rocks_db := rocksdb.OpenDB(dbFolder, cacheSize)
-	return rocks_db, rocks_db, rocks_db
+	rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
+	return rocksDb, rocksDb, rocksDb
 }
 
 func newBadgerDBStore(dbFolder string) (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	bdgr_db := badger.OpenDB(dbFolder)
-	return bdgr_db, nil, bdgr_db
+	bdgrDb := badger.OpenDB(dbFolder)
+	return bdgrDb, nil, bdgrDb
 }
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator) {
@@ -133,10 +133,10 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
-	if slave_svc, err := NewService(store, ca, masterCli, replPollIntervalSecs); err != nil {
+	if ss, err := NewService(store, ca, masterCli, replPollIntervalSecs); err != nil {
 		panic(err)
 	} else {
-		slaveSvc = slave_svc
+		slaveSvc = ss
 		slaveGrpcSrvr = grpc.NewServer()
 		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
 		lis := listen(slaveSvcPort)

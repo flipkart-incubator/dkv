@@ -8,6 +8,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -18,7 +19,7 @@ type dkvReplStore struct {
 // NewDKVReplStore creates a wrapper out of the given KVStore
 // that performs synchronous replication of all operations
 // over Nexus onto multiple replicas.
-func NewDKVReplStore(kvs storage.KVStore) *dkvReplStore {
+func NewDKVReplStore(kvs storage.KVStore) db.Store {
 	return &dkvReplStore{kvs}
 }
 
@@ -45,19 +46,19 @@ func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
 }
 
 func (dr *dkvReplStore) get(getReq *serverpb.GetRequest) ([]byte, error) {
-	if vals, err := dr.kvs.Get(getReq.Key); err != nil {
+	vals, err := dr.kvs.Get(getReq.Key)
+	if err != nil {
 		return nil, err
-	} else {
-		return vals[0], nil
 	}
+	return vals[0], nil
 }
 
 func (dr *dkvReplStore) multiGet(multiGetReq *serverpb.MultiGetRequest) ([]byte, error) {
-	if vals, err := dr.kvs.Get(multiGetReq.Keys...); err != nil {
+	vals, err := dr.kvs.Get(multiGetReq.Keys...)
+	if err != nil {
 		return nil, err
-	} else {
-		return gobEncode(vals)
 	}
+	return gobEncode(vals)
 }
 
 func gobEncode(byteArrays [][]byte) ([]byte, error) {

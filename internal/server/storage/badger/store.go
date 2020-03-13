@@ -8,9 +8,14 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-type badgerDB struct {
+// DB interface represents the capabilities exposed
+// by the underlying implmentation based on Badger engine.
+type DB interface {
 	storage.KVStore
 	storage.ChangeApplier
+}
+
+type badgerDB struct {
 	db *badger.DB
 }
 
@@ -18,16 +23,18 @@ type badgerDBOpts struct {
 	opts badger.Options
 }
 
-func OpenDB(dbFolder string) *badgerDB {
-	opts := NewDefaultOptions(dbFolder)
-	if kvs, err := OpenStore(opts); err != nil {
+// OpenDB initializes a new instance of BadgerDB with default
+// options. It uses the given folder for storing the data files.
+func OpenDB(dbFolder string) DB {
+	opts := newDefaultOptions(dbFolder)
+	if kvs, err := openStore(opts); err != nil {
 		panic(err)
 	} else {
 		return kvs
 	}
 }
 
-func NewDefaultOptions(dbFolder string) *badgerDBOpts {
+func newDefaultOptions(dbFolder string) *badgerDBOpts {
 	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true).WithLogger(nil)
 	return &badgerDBOpts{opts: opts}
 }
@@ -37,12 +44,12 @@ func (bdb *badgerDBOpts) ValueFolder(folder string) *badgerDBOpts {
 	return bdb
 }
 
-func OpenStore(badgerDBOpts *badgerDBOpts) (*badgerDB, error) {
-	if db, err := badger.Open(badgerDBOpts.opts); err != nil {
-		return nil, err
-	} else {
+func openStore(badgerDBOpts *badgerDBOpts) (*badgerDB, error) {
+	db, err := badger.Open(badgerDBOpts.opts)
+	if err == nil {
 		return &badgerDB{db: db}, nil
 	}
+	return nil, err
 }
 
 func (bdb *badgerDB) Close() error {
@@ -59,35 +66,35 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 	var results [][]byte
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
-			if item, err := txn.Get(key); err != nil {
+			item, err := txn.Get(key)
+			if err != nil {
 				return err
-			} else {
-				if value, err := item.ValueCopy(nil); err != nil {
-					return err
-				} else {
-					results = append(results, value)
-				}
 			}
+			value, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			results = append(results, value)
 		}
 		return nil
 	})
 	return results, err
 }
 
-const ChangeNumberKey = "_dkv_meta::ChangeNumber"
+const changeNumberKey = "_dkv_meta::ChangeNumber"
 
 func (bdb *badgerDB) GetLatestAppliedChangeNumber() (uint64, error) {
-	var chng_num uint64
+	var chngNum uint64
 	err := bdb.db.View(func(txn *badger.Txn) error {
-		chng_num_val, err := txn.Get([]byte(ChangeNumberKey))
+		chngNumVal, err := txn.Get([]byte(changeNumberKey))
 		switch {
 		case err == badger.ErrKeyNotFound:
-			chng_num = 0
+			chngNum = 0
 		case err != nil:
 			return err
 		default:
-			if err := chng_num_val.Value(func(v []byte) error {
-				chng_num = binary.BigEndian.Uint64(v)
+			if err := chngNumVal.Value(func(v []byte) error {
+				chngNum = binary.BigEndian.Uint64(v)
 				return nil
 			}); err != nil {
 				return err
@@ -95,70 +102,70 @@ func (bdb *badgerDB) GetLatestAppliedChangeNumber() (uint64, error) {
 		}
 		return nil
 	})
-	return chng_num, err
+	return chngNum, err
 }
 
 func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
-	var appld_chng_num uint64
-	var last_error error
+	var appldChngNum uint64
+	var lastErr error
 
 	for _, chng := range changes {
 		// Create a new badger transaction for the current change
-		chng_trxn := bdb.db.NewTransaction(true)
-		defer chng_trxn.Discard()
+		chngTrxn := bdb.db.NewTransaction(true)
+		defer chngTrxn.Discard()
 
 		// Load the current change number
-		chng_num_val, err := chng_trxn.Get([]byte(ChangeNumberKey))
-		var curr_chng_num uint64
+		chngNumVal, err := chngTrxn.Get([]byte(changeNumberKey))
+		var currChngNum uint64
 		switch {
 		case err == badger.ErrKeyNotFound:
-			curr_chng_num = 0
+			currChngNum = 0
 		case err != nil:
-			last_error = err
+			lastErr = err
 		default:
-			if err := chng_num_val.Value(func(v []byte) error {
-				curr_chng_num = binary.BigEndian.Uint64(v)
+			if err := chngNumVal.Value(func(v []byte) error {
+				currChngNum = binary.BigEndian.Uint64(v)
 				return nil
 			}); err != nil {
-				last_error = err
+				lastErr = err
 			}
 		}
-		if last_error != nil {
+		if lastErr != nil {
 			break
 		}
 
 		// Loop through every transaction record of the current change and
 		// apply the operation to the current badger transaction
-		for _, trxn_rec := range chng.Trxns {
-			switch trxn_rec.Type {
+		for _, trxnRec := range chng.Trxns {
+			switch trxnRec.Type {
 			case serverpb.TrxnRecord_Put:
-				if last_error = chng_trxn.Set(trxn_rec.Key, trxn_rec.Value); last_error != nil {
+				if lastErr = chngTrxn.Set(trxnRec.Key, trxnRec.Value); lastErr != nil {
 					break
 				}
 			case serverpb.TrxnRecord_Delete:
-				if last_error = chng_trxn.Delete(trxn_rec.Key); last_error != nil {
+				if lastErr = chngTrxn.Delete(trxnRec.Key); lastErr != nil {
 					break
 				}
 			}
 		}
-		if last_error != nil {
+		if lastErr != nil {
 			break
 		}
 
 		// Increment and set the change number in the same badger transaction
-		curr_chng_num = curr_chng_num + 1
+		currChngNum = currChngNum + 1
 		var buf [8]byte
-		binary.BigEndian.PutUint64(buf[:], curr_chng_num)
-		if last_error = chng_trxn.Set([]byte(ChangeNumberKey), buf[:]); last_error != nil {
+		binary.BigEndian.PutUint64(buf[:], currChngNum)
+		if lastErr = chngTrxn.Set([]byte(changeNumberKey), buf[:]); lastErr != nil {
 			break
 		}
 
 		// Commit the badger transaction for the current change
-		if last_error = chng_trxn.Commit(); last_error != nil {
+		if lastErr = chngTrxn.Commit(); lastErr != nil {
 			break
 		} else {
-			appld_chng_num = chng.ChangeNumber
+			appldChngNum = chng.ChangeNumber
 		}
 	}
-	return appld_chng_num, last_error
+	return appldChngNum, lastErr
 }

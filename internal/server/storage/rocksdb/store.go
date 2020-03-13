@@ -6,10 +6,15 @@ import (
 	"github.com/tecbot/gorocksdb"
 )
 
-type rocksDB struct {
+// DB interface represents the capabilities exposed
+// by the underlying implmentation based on RocksDB engine.
+type DB interface {
 	storage.KVStore
 	storage.ChangePropagator
 	storage.ChangeApplier
+}
+
+type rocksDB struct {
 	db *gorocksdb.DB
 }
 
@@ -19,7 +24,9 @@ type rocksDBOpts struct {
 	folderName     string
 }
 
-func OpenDB(dbFolder string, cacheSize uint64) *rocksDB {
+// OpenDB initializes a new instance of RocksDB with default
+// options. It uses the given folder for storing the data files.
+func OpenDB(dbFolder string, cacheSize uint64) DB {
 	opts := NewDefaultOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
 	if kvs, err := OpenStore(opts); err != nil {
