@@ -17,8 +17,9 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 
 ## Dependencies
 - Go version 1.13+
-- [RocksDB](https://github.com/facebook/rocksdb) v5.16+ as the storage engine
+- [RocksDB](https://github.com/facebook/rocksdb) v5.16+ as a storage engine
 - [GoRocksDB](https://github.com/tecbot/gorocksdb) provides the CGo bindings with RocksDB
+- [Badger](https://github.com/dgraph-io/badger) v1.6 as a storage engine
 - [Nexus](https://github.com/flipkart-incubator/nexus) for sync replication over [Raft](https://raft.github.io/) consensus
 
 ## DKV on Docker
@@ -94,9 +95,55 @@ $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
 world
 ```
 
+### Launching the DKV server for synchronous replication
+
+This launch configuration allows for synchronously replicating changes to DKV keyspace
+on multiple instances spread across independently failing regions or availability
+zones. Typically such configurations are deployed over WANs so as to ensure better
+read & write availability in the face of individual cluster failures and disasters.
+
+Under the hood, we use [Nexus](https://github.com/flipkart-incubator/nexus) to replicate
+keyspace mutations across multiple DKV instances using the RAFT consensus protocol.
+Currently, the `put` API automatically replicates changes when the request is handled
+by given DKV instance started in a special distributed mode (see below). However, `get`
+and `multiget` APIs targetting such an instance serve the data from its own local store.
+Hence such calls may or may not reflect the latest changes to the keyspace and hence are
+not *linearizable*. In the future, these APIs will be enhanced to support linearizability.
+
+Assuming you have 3 availability zones, run the following 3 commands one in every zone
+in order to setup these instances for synchronous replication.
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder <folder_path> \
+    -dbListenAddr <host:port> \
+    -dbRole master \
+    -nexusNodeId <node_id> \
+    -nexusClusterUrl <cluster_url> \
+    -nexusSnapDir <folder_path> \
+    -nexusLogDir <folder_path>
+```
+
+All these 3 DKV instances form a database cluster each listening on separate ports for
+Nexus & client communications. One can now construct the value for `nexusClusterUrl` param
+in the above command using this example setup below:
+
+|NexusNodeId|Hostname|NexusPort|
+|1|dkv.az1|9020|
+|2|dkv.az2|9020|
+|3|dkv.az3|9020|
+
+Then the value for `nexusClusterUrl` would be:
+```bash
+"http://dkv.az1:9020,http://dkv.az2:9020,http://dkv.az3:9020"
+```
+
+Note that same value must be used in each of the 3 commands used to launch the DKV cluster.
+Subsequently, `dkvctl` utility can be used to perform keyspace mutations against any one
+of the DKV instances and are automatically replicated to the other 2 instances.
+
 ### Launching the DKV server for asynchronous replication
 
-This configuration allows for DKV instances to be launched either as a master
+This launch configuration allows for DKV instances to be started either as a master
 node or a slave node. All mutations are permitted only on the master node while
 one or more slave nodes asynchronously replicate the changes received from master
 and make them available for reads. In other words, no keyspace mutations are
@@ -115,7 +162,6 @@ First launch the DKV master node using the RocksDB engine with this command:
 $ ./bin/dkvsrv \
     -dbFolder <folder_name> \
     -dbListenAddr <host:port> \
-    -dbEngine rocksdb \
     -dbRole master
 ```
 
