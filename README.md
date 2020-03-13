@@ -128,18 +128,19 @@ Nexus & client communications. One can now construct the value for `nexusCluster
 in the above command using this example setup below:
 
 |NexusNodeId|Hostname|NexusPort|
+|-|-|-|
 |1|dkv.az1|9020|
 |2|dkv.az2|9020|
 |3|dkv.az3|9020|
 
-Then the value for `nexusClusterUrl` would be:
+Then the value for `nexusClusterUrl` must be:
 ```bash
 "http://dkv.az1:9020,http://dkv.az2:9020,http://dkv.az3:9020"
 ```
 
 Note that same value must be used in each of the 3 commands used to launch the DKV cluster.
 Subsequently, `dkvctl` utility can be used to perform keyspace mutations against any one
-of the DKV instances and are automatically replicated to the other 2 instances.
+of the DKV instances which are then automatically replicated to the other 2 instances.
 
 ### Launching the DKV server for asynchronous replication
 
