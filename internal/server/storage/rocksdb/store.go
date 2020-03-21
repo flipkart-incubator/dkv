@@ -10,24 +10,29 @@ import (
 // by the underlying implmentation based on RocksDB engine.
 type DB interface {
 	storage.KVStore
+	storage.Backupable
 	storage.ChangePropagator
 	storage.ChangeApplier
 }
 
 type rocksDB struct {
-	db *gorocksdb.DB
+	db   *gorocksdb.DB
+	opts *Opts
 }
 
-type rocksDBOpts struct {
+// Opts holds the various options required for configuring
+// the RocksDB storage engine.
+type Opts struct {
 	blockTableOpts *gorocksdb.BlockBasedTableOptions
 	rocksDBOpts    *gorocksdb.Options
+	restoreOpts    *gorocksdb.RestoreOptions
 	folderName     string
 }
 
 // OpenDB initializes a new instance of RocksDB with default
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, cacheSize uint64) DB {
-	opts := newDefaultOptions()
+	opts := NewOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
 	if kvs, err := openStore(opts); err != nil {
 		panic(err)
@@ -36,37 +41,45 @@ func OpenDB(dbFolder string, cacheSize uint64) DB {
 	}
 }
 
-func newDefaultOptions() *rocksDBOpts {
+func NewOptions() *Opts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(bbto)
-	return &rocksDBOpts{blockTableOpts: bbto, rocksDBOpts: opts}
+	rstOpts := gorocksdb.NewRestoreOptions()
+	return &Opts{blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts}
 }
 
-func (rdbOpts *rocksDBOpts) CacheSize(size uint64) *rocksDBOpts {
+func (rdbOpts *Opts) CacheSize(size uint64) *Opts {
 	rdbOpts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
 	return rdbOpts
 }
 
-func (rdbOpts *rocksDBOpts) CreateDBFolderIfMissing(flag bool) *rocksDBOpts {
+func (rdbOpts *Opts) CreateDBFolderIfMissing(flag bool) *Opts {
 	rdbOpts.rocksDBOpts.SetCreateIfMissing(flag)
 	return rdbOpts
 }
 
-func (rdbOpts *rocksDBOpts) DBFolder(name string) *rocksDBOpts {
+func (rdbOpts *Opts) DBFolder(name string) *Opts {
 	rdbOpts.folderName = name
 	return rdbOpts
 }
 
-func openStore(opts *rocksDBOpts) (*rocksDB, error) {
+func (rdbOpts *Opts) destroy() {
+	rdbOpts.blockTableOpts.Destroy()
+	rdbOpts.rocksDBOpts.Destroy()
+	rdbOpts.restoreOpts.Destroy()
+}
+
+func openStore(opts *Opts) (*rocksDB, error) {
 	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName)
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{db: db}, nil
+	return &rocksDB{db, opts}, nil
 }
 
 func (rdb *rocksDB) Close() error {
+	rdb.opts.destroy()
 	rdb.db.Close()
 	return nil
 }
@@ -89,6 +102,57 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	default:
 		return rdb.getMultipleKeys(ro, keys)
 	}
+}
+
+func (rdb *rocksDB) BackupTo(folder string) error {
+	be, err := rdb.openBackupEngine(folder)
+	if err != nil {
+		return err
+	}
+	defer be.Close()
+	return be.CreateNewBackupFlush(rdb.db, true)
+}
+
+const tempDirPrefx = "rocksdb-restore-"
+
+func (rdb *rocksDB) RestoreFrom(folder string) error {
+	// 1. Open backup engine for the given folder
+	be, err := rdb.openBackupEngine(folder)
+	if err != nil {
+		return err
+	}
+	defer be.Close()
+
+	// 2. Create a temp folder where the data is restored into
+	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
+	if err != nil {
+		return err
+	}
+
+	// 3. Perform the restoration onto the temp folder using the backup engine
+	// TODO: Should this always be latest backup ?
+	err = be.RestoreDBFromLatestBackup(restoreFolder, restoreFolder, rdb.opts.restoreOpts)
+	if err != nil {
+		return err
+	}
+
+	// 4. Close the current underlying DB and remove its db folder contents
+	rdb.db.Close()
+
+	// 5. Rename the temp folder as the actual db folder
+	dbFolder := rdb.opts.folderName
+	err = storage.RenameFolder(restoreFolder, dbFolder)
+	if err != nil {
+		return err
+	}
+
+	// 6. Open the underlying DB and switch current pointer
+	restoredDB, err := openStore(rdb.opts)
+	if err != nil {
+		return err
+	}
+	*rdb = *restoredDB
+	return nil
 }
 
 func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
@@ -148,6 +212,11 @@ func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverp
 	}
 	chngRec.Trxns = trxns
 	return chngRec
+}
+
+func (rdb *rocksDB) openBackupEngine(folder string) (*gorocksdb.BackupEngine, error) {
+	opts := rdb.opts.rocksDBOpts
+	return gorocksdb.OpenBackupEngine(opts, folder)
 }
 
 func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {

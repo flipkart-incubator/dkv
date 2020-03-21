@@ -1,7 +1,9 @@
 package badger
 
 import (
+	"bufio"
 	"encoding/binary"
+	"os"
 
 	"github.com/dgraph-io/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -12,21 +14,25 @@ import (
 // by the underlying implmentation based on Badger engine.
 type DB interface {
 	storage.KVStore
+	storage.Backupable
 	storage.ChangeApplier
 }
 
 type badgerDB struct {
-	db *badger.DB
+	db   *badger.DB
+	opts *Opts
 }
 
-type badgerDBOpts struct {
+// Opts holds the various options required for configuring
+// the Badger storage engine.
+type Opts struct {
 	opts badger.Options
 }
 
 // OpenDB initializes a new instance of BadgerDB with default
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string) DB {
-	opts := newDefaultOptions(dbFolder)
+	opts := NewOptions(dbFolder)
 	if kvs, err := openStore(opts); err != nil {
 		panic(err)
 	} else {
@@ -34,26 +40,22 @@ func OpenDB(dbFolder string) DB {
 	}
 }
 
-func newDefaultOptions(dbFolder string) *badgerDBOpts {
+func NewOptions(dbFolder string) *Opts {
 	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true).WithLogger(nil)
-	return &badgerDBOpts{opts: opts}
+	return &Opts{opts}
 }
 
-func (bdb *badgerDBOpts) ValueFolder(folder string) *badgerDBOpts {
-	bdb.opts.WithValueDir(folder)
-	return bdb
-}
-
-func openStore(badgerDBOpts *badgerDBOpts) (*badgerDB, error) {
-	db, err := badger.Open(badgerDBOpts.opts)
-	if err == nil {
-		return &badgerDB{db: db}, nil
+func openStore(bdbOpts *Opts) (*badgerDB, error) {
+	db, err := badger.Open(bdbOpts.opts)
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	return &badgerDB{db, bdbOpts}, nil
 }
 
 func (bdb *badgerDB) Close() error {
-	return bdb.db.Close()
+	bdb.db.Close()
+	return nil
 }
 
 func (bdb *badgerDB) Put(key []byte, value []byte) error {
@@ -79,6 +81,78 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 		return nil
 	})
 	return results, err
+}
+
+const backupBufSize = 64 << 20
+
+func (bdb *badgerDB) BackupTo(file string) error {
+	bf, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+
+	defer bf.Close()
+	bw := bufio.NewWriterSize(bf, backupBufSize)
+	if _, err = bdb.db.Backup(bw, 0); err != nil {
+		return err
+	}
+
+	if err = bw.Flush(); err != nil {
+		return err
+	}
+
+	return bf.Sync()
+}
+
+const (
+	tempDirPrefx     = "badger-restore-"
+	tempDirValPrefx  = "badger-restore-val-"
+	maxPendingWrites = 256
+)
+
+func (bdb *badgerDB) RestoreFrom(file string) error {
+	// 1. Open the given file from which to restore
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// 2. Create temp folder for the restored data
+	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
+	if err != nil {
+		return err
+	}
+
+	// 3. Create a temp badger DB pointing to the temp folder
+	restoredDB, err := openStore(NewOptions(restoreFolder))
+	if err != nil {
+		return err
+	}
+
+	// 4. Restore data in the file onto the temp badger DB
+	err = restoredDB.db.Load(f, maxPendingWrites)
+	if err != nil {
+		return err
+	}
+
+	// 5. Close the temp and current badger DBs
+	restoredDB.db.Close()
+	bdb.db.Close()
+
+	// 6. Move the temp folders to the actual locations
+	err = storage.RenameFolder(restoreFolder, bdb.opts.opts.Dir)
+	if err != nil {
+		return err
+	}
+
+	// 7. Reopen the actual store
+	finalDB, err := openStore(bdb.opts)
+	if err != nil {
+		return err
+	}
+	*bdb = *finalDB
+	return nil
 }
 
 const changeNumberKey = "_dkv_meta::ChangeNumber"
