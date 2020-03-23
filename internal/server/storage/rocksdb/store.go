@@ -1,6 +1,9 @@
 package rocksdb
 
 import (
+	"errors"
+	"sync/atomic"
+
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
@@ -18,6 +21,10 @@ type DB interface {
 type rocksDB struct {
 	db   *gorocksdb.DB
 	opts *Opts
+
+	// Indicates a global mutation like backup and restore that
+	// require exclusivity. Shall be manipulated using atomics.
+	globalMutation uint32
 }
 
 // Opts holds the various options required for configuring
@@ -75,7 +82,7 @@ func openStore(opts *Opts) (*rocksDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{db, opts}, nil
+	return &rocksDB{db, opts, 0}, nil
 }
 
 func (rdb *rocksDB) Close() error {
@@ -104,18 +111,42 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
+func (rdb *rocksDB) beginGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
+func (rdb *rocksDB) endGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
 func (rdb *rocksDB) BackupTo(folder string) error {
+	if err := rdb.beginGlobalMutation(); err != nil {
+		return err
+	}
+	defer rdb.endGlobalMutation()
 	be, err := rdb.openBackupEngine(folder)
 	if err != nil {
 		return err
 	}
 	defer be.Close()
+	defer be.PurgeOldBackups(1)
 	return be.CreateNewBackupFlush(rdb.db, true)
 }
 
 const tempDirPrefx = "rocksdb-restore-"
 
 func (rdb *rocksDB) RestoreFrom(folder string) error {
+	if err := rdb.beginGlobalMutation(); err != nil {
+		return err
+	}
+	defer rdb.endGlobalMutation()
+
 	// 1. Open backup engine for the given folder
 	be, err := rdb.openBackupEngine(folder)
 	if err != nil {
