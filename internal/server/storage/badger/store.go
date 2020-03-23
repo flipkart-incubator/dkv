@@ -136,7 +136,6 @@ const (
 	maxPendingWrites = 256
 )
 
-// TODO: Should we hold a lock to prevent parallel backups or mutations
 func (bdb *badgerDB) RestoreFrom(file string) error {
 	// Prevent any other backups or restores
 	if err := bdb.beginGlobalMutation(); err != nil {
