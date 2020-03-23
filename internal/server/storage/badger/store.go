@@ -3,7 +3,9 @@ package badger
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"os"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -21,6 +23,10 @@ type DB interface {
 type badgerDB struct {
 	db   *badger.DB
 	opts *Opts
+
+	// Indicates a global mutation like backup and restore that
+	// require exclusivity. Shall be manipulated using atomics.
+	globalMutation uint32
 }
 
 // Opts holds the various options required for configuring
@@ -50,7 +56,7 @@ func openStore(bdbOpts *Opts) (*badgerDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts}, nil
+	return &badgerDB{db, bdbOpts, 0}, nil
 }
 
 func (bdb *badgerDB) Close() error {
@@ -83,9 +89,29 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 	return results, err
 }
 
+func (rdb *badgerDB) beginGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
+func (rdb *badgerDB) endGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
 const backupBufSize = 64 << 20
 
 func (bdb *badgerDB) BackupTo(file string) error {
+	// Prevent any other backups or restores
+	if err := bdb.beginGlobalMutation(); err != nil {
+		return err
+	}
+	defer bdb.endGlobalMutation()
+
 	bf, err := os.Create(file)
 	if err != nil {
 		return err
@@ -110,7 +136,14 @@ const (
 	maxPendingWrites = 256
 )
 
+// TODO: Should we hold a lock to prevent parallel backups or mutations
 func (bdb *badgerDB) RestoreFrom(file string) error {
+	// Prevent any other backups or restores
+	if err := bdb.beginGlobalMutation(); err != nil {
+		return err
+	}
+	defer bdb.endGlobalMutation()
+
 	// 1. Open the given file from which to restore
 	f, err := os.Open(file)
 	if err != nil {

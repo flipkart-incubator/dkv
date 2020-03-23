@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -156,6 +158,71 @@ func TestBackupAndRestore(t *testing.T) {
 			getKeys(t, numTrxns, keyPrefix, valPrefix)
 			noKeys(t, numTrxns, missKeyPrefix)
 		}
+	}
+}
+
+func TestPreventParallelBackups(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	parallelism := 5
+	var succ, fail uint32
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 1; i <= parallelism; i++ {
+		go func(n int) {
+			defer wg.Done()
+			backupPath := fmt.Sprintf("%s/%s_%d.bak", dbFolder, "backup", n)
+			if err := store.BackupTo(backupPath); err != nil {
+				atomic.AddUint32(&fail, 1)
+				t.Log(err)
+			} else {
+				atomic.AddUint32(&succ, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("Successful backups: %d", succ)
+	t.Logf("Failed backups: %d", fail)
+
+	if succ > 1 || fail < uint32(parallelism-1) {
+		t.Errorf("Only one backup must have succeeded.")
+	}
+}
+
+func TestPreventParallelRestores(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	backupPath := fmt.Sprintf("%s/%s.bak", dbFolder, "test_backup")
+	if err := store.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	}
+
+	parallelism := 5
+	var succ, fail uint32
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 1; i <= parallelism; i++ {
+		go func(n int) {
+			defer wg.Done()
+			if err := store.RestoreFrom(backupPath); err != nil {
+				atomic.AddUint32(&fail, 1)
+				t.Log(err)
+			} else {
+				atomic.AddUint32(&succ, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("Successful restores: %d", succ)
+	t.Logf("Failed restores: %d", fail)
+
+	if succ > 1 || fail < uint32(parallelism-1) {
+		t.Errorf("Only one restore must have succeeded.")
 	}
 }
 

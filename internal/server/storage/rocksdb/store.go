@@ -126,10 +126,12 @@ func (rdb *rocksDB) endGlobalMutation() error {
 }
 
 func (rdb *rocksDB) BackupTo(folder string) error {
+	// Prevent any other backups or restores
 	if err := rdb.beginGlobalMutation(); err != nil {
 		return err
 	}
 	defer rdb.endGlobalMutation()
+
 	be, err := rdb.openBackupEngine(folder)
 	if err != nil {
 		return err
@@ -142,6 +144,7 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 const tempDirPrefx = "rocksdb-restore-"
 
 func (rdb *rocksDB) RestoreFrom(folder string) error {
+	// Prevent any other backups or restores
 	if err := rdb.beginGlobalMutation(); err != nil {
 		return err
 	}
