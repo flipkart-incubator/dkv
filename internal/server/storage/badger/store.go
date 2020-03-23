@@ -46,6 +46,9 @@ func OpenDB(dbFolder string) DB {
 	}
 }
 
+// NewOptions initializes an instance of BadgerDB options with
+// default settings. It can be used to customize specific parameters
+// of the underlying Badger storage engine.
 func NewOptions(dbFolder string) *Opts {
 	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true).WithLogger(nil)
 	return &Opts{opts}
@@ -89,15 +92,15 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 	return results, err
 }
 
-func (rdb *badgerDB) beginGlobalMutation() error {
-	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
+func (bdb *badgerDB) beginGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 0, 1) {
 		return nil
 	}
 	return errors.New("Another global keyspace mutation is in progress")
 }
 
-func (rdb *badgerDB) endGlobalMutation() error {
-	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
+func (bdb *badgerDB) endGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 1, 0) {
 		return nil
 	}
 	return errors.New("Another global keyspace mutation is in progress")

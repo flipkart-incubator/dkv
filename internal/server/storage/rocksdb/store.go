@@ -48,6 +48,9 @@ func OpenDB(dbFolder string, cacheSize uint64) DB {
 	}
 }
 
+// NewOptions initializes an instance of RocksDB options with
+// default settings. It can be used to customize specific parameters
+// of the underlying RocksDB storage engine.
 func NewOptions() *Opts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
@@ -56,16 +59,20 @@ func NewOptions() *Opts {
 	return &Opts{blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts}
 }
 
+// CacheSize can be used to set the RocksDB block cache size.
 func (rdbOpts *Opts) CacheSize(size uint64) *Opts {
 	rdbOpts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
 	return rdbOpts
 }
 
+// CreateDBFolderIfMissing can be used to direct RocksDB to create
+// the database folder if its missing.
 func (rdbOpts *Opts) CreateDBFolderIfMissing(flag bool) *Opts {
 	rdbOpts.rocksDBOpts.SetCreateIfMissing(flag)
 	return rdbOpts
 }
 
+// DBFolder allows for the RocksDB database folder location to be set.
 func (rdbOpts *Opts) DBFolder(name string) *Opts {
 	rdbOpts.folderName = name
 	return rdbOpts

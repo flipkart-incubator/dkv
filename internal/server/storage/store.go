@@ -78,11 +78,17 @@ type ChangeApplier interface {
 
 const timeFormatTempDir = "20060102150405"
 
+// CreateTempFolder creates a temporary folder with the given prefix.
+// It attempts to also appends a timestamp to the given prefix so as
+// to better avoid collisions. Under the hood, it delegates to the
+// GoLang API for temporary folder creation.
 func CreateTempFolder(prefix string) (string, error) {
 	tempFolderPrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempDir)
 	return ioutil.TempDir("", string(tempFolderPrefix))
 }
 
+// RenameFolder moves the given src path onto the given dst path by
+// first removing the dst path and then performing the actual movement.
 func RenameFolder(src, dst string) error {
 	if err := os.RemoveAll(dst); err != nil {
 		return err
