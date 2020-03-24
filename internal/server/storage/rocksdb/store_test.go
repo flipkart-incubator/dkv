@@ -238,25 +238,19 @@ func TestMissingGet(t *testing.T) {
 	}
 }
 
-func expectError(t *testing.T, err error) {
-	if err == nil {
-		t.Error("Expected an error but received none")
-	}
-}
-
-func expectNoError(t *testing.T, err error) {
-	if err != nil {
-		t.Error("Expected no error but got error")
-		t.Log(err)
-	}
-}
-
 func TestBackupFolderValidity(t *testing.T) {
 	expectError(t, checksForBackup(""))
 	expectError(t, checksForBackup("/missing/backup"))
-	expectNoError(t, checksForBackup("/tmp/rocksdb_storage_test"))
 	expectNoError(t, checksForBackup("/tmp/backup.bak"))
-	expectNoError(t, checksForBackup("/temp"))
+	expectNoError(t, checksForBackup("/missing"))
+	expectNoError(t, checksForBackup(dbFolder))
+}
+
+func TestRestoreFolderValidity(t *testing.T) {
+	expectError(t, checksForRestore(""))
+	expectError(t, checksForRestore("/missing/backup"))
+	expectError(t, checksForRestore("/missing"))
+	expectNoError(t, checksForRestore(dbFolder))
 }
 
 func TestBackupAndRestore(t *testing.T) {
@@ -423,6 +417,19 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
 			}
 		}
+	}
+}
+
+func expectError(t *testing.T, err error) {
+	if err == nil {
+		t.Error("Expected an error but received none")
+	}
+}
+
+func expectNoError(t *testing.T, err error) {
+	if err != nil {
+		t.Error("Expected no error but got error")
+		t.Log(err)
 	}
 }
 

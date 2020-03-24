@@ -141,24 +141,16 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 	}
 }
 
-func expectError(t *testing.T, err error) {
-	if err == nil {
-		t.Error("Expected an error but received none")
-	}
-}
-
-func expectNoError(t *testing.T, err error) {
-	if err != nil {
-		t.Error("Expected no error but got error")
-		t.Log(err)
-	}
-}
-
 func TestBackupFileValidity(t *testing.T) {
 	expectError(t, checksForBackup(""))
-	expectError(t, checksForBackup("/tmp/badger_storage_test"))
-	expectNoError(t, checksForBackup("README.md"))
+	expectError(t, checksForBackup(dbFolder))
 	expectNoError(t, checksForBackup("/tmp/backup.bak"))
+}
+
+func TestRestoreFileValidity(t *testing.T) {
+	expectError(t, checksForRestore(""))
+	expectError(t, checksForRestore(dbFolder))
+	expectError(t, checksForRestore("/missing/backup.bak"))
 }
 
 func TestBackupAndRestore(t *testing.T) {
@@ -380,6 +372,19 @@ func newPutChange(chngNum uint64, key, val []byte) *serverpb.ChangeRecord {
 				Value: val,
 			},
 		},
+	}
+}
+
+func expectError(t *testing.T, err error) {
+	if err == nil {
+		t.Error("Expected an error but received none")
+	}
+}
+
+func expectNoError(t *testing.T, err error) {
+	if err != nil {
+		t.Error("Expected no error but got error")
+		t.Log(err)
 	}
 }
 

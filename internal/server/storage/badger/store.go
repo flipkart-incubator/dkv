@@ -94,39 +94,6 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 	return results, err
 }
 
-func (bdb *badgerDB) beginGlobalMutation() error {
-	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 0, 1) {
-		return nil
-	}
-	return errors.New("Another global keyspace mutation is in progress")
-}
-
-func (bdb *badgerDB) endGlobalMutation() error {
-	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 1, 0) {
-		return nil
-	}
-	return errors.New("Another global keyspace mutation is in progress")
-}
-
-func checksForBackup(bckpPath string) error {
-	if len(strings.TrimSpace(bckpPath)) == 0 {
-		return errors.New("valid path must be provided")
-	}
-
-	_, err := os.Stat(bckpPath)
-	// If we are given an existing path
-	if err == nil {
-		return errors.New("require a file for badger backup")
-	} else {
-		// or if the parent directory does not exist
-		bckpDir := path.Dir(bckpPath)
-		if _, err := os.Stat(bckpDir); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 const backupBufSize = 64 << 20
 
 func (bdb *badgerDB) BackupTo(file string) error {
@@ -301,4 +268,42 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 		}
 	}
 	return appldChngNum, lastErr
+}
+
+func (bdb *badgerDB) beginGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 0, 1) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
+func (bdb *badgerDB) endGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 1, 0) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
+func checksForBackup(bckpPath string) error {
+	if len(strings.TrimSpace(bckpPath)) == 0 {
+		return errors.New("valid path must be provided")
+	}
+
+	_, err := os.Stat(bckpPath)
+	if err == nil {
+		return errors.New("require a new file for badger backup")
+	}
+	_, err = os.Stat(path.Dir(bckpPath))
+	return err
+}
+
+func checksForRestore(rstrPath string) error {
+	switch fi, err := os.Stat(rstrPath); {
+	case err != nil:
+		return err
+	case fi.IsDir():
+		return errors.New("require a file for badger restore")
+	default:
+		return nil
+	}
 }

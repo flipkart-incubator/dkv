@@ -121,38 +121,6 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
-func (rdb *rocksDB) beginGlobalMutation() error {
-	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
-		return nil
-	}
-	return errors.New("Another global keyspace mutation is in progress")
-}
-
-func (rdb *rocksDB) endGlobalMutation() error {
-	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
-		return nil
-	}
-	return errors.New("Another global keyspace mutation is in progress")
-}
-
-func checksForBackup(bckpPath string) error {
-	if len(strings.TrimSpace(bckpPath)) == 0 {
-		return errors.New("valid path must be provided")
-	}
-
-	fi, err := os.Stat(bckpPath)
-	if err != nil {
-		// or if the parent directory does not exist
-		bckpDir := path.Dir(bckpPath)
-		if _, err := os.Stat(bckpDir); err != nil {
-			return err
-		}
-	} else if !fi.IsDir() {
-		return errors.New("require a folder for rocksdb backup")
-	}
-	return nil
-}
-
 func (rdb *rocksDB) BackupTo(folder string) error {
 	if err := checksForBackup(folder); err != nil {
 		return err
@@ -168,6 +136,8 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 		return err
 	}
 	defer be.Close()
+
+	// Retain only the latest backup in the given folder
 	defer be.PurgeOldBackups(1)
 	return be.CreateNewBackupFlush(rdb.db, true)
 }
@@ -195,7 +165,6 @@ func (rdb *rocksDB) RestoreFrom(folder string) error {
 	}
 
 	// 3. Perform the restoration onto the temp folder using the backup engine
-	// TODO: Should this always be latest backup ?
 	err = be.RestoreDBFromLatestBackup(restoreFolder, restoreFolder, rdb.opts.restoreOpts)
 	if err != nil {
 		return err
@@ -329,4 +298,45 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 		value.Free()
 	}
 	return results, nil
+}
+
+func (rdb *rocksDB) beginGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
+func (rdb *rocksDB) endGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
+		return nil
+	}
+	return errors.New("Another global keyspace mutation is in progress")
+}
+
+func checksForBackup(bckpPath string) error {
+	if len(strings.TrimSpace(bckpPath)) == 0 {
+		return errors.New("valid path must be provided")
+	}
+
+	switch fi, err := os.Stat(bckpPath); {
+	case err != nil:
+		_, err := os.Stat(path.Dir(bckpPath))
+		return err
+	case !fi.IsDir():
+		return errors.New("require a folder for rocksdb backup")
+	default:
+		return nil
+	}
+}
+
+func checksForRestore(rstrPath string) error {
+	switch fi, err := os.Stat(rstrPath); {
+	case err != nil:
+		return err
+	case !fi.IsDir():
+		return errors.New("require a folder for rocksdb restore")
+	default:
+		return nil
+	}
 }
