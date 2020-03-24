@@ -17,17 +17,19 @@ type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
 	serverpb.DKVReplicationServer
+	serverpb.DKVBackupRestoreServer
 }
 
 type standaloneService struct {
 	store storage.KVStore
 	cp    storage.ChangePropagator
+	br    storage.Backupable
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator) DKVService {
-	return &standaloneService{store, cp}
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable) DKVService {
+	return &standaloneService{store, cp, br}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -76,6 +78,22 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 	return res, err
 }
 
+func (ss *standaloneService) Backup(ctx context.Context, backupReq *serverpb.BackupRequest) (*serverpb.Status, error) {
+	bckpPath := backupReq.BackupPath
+	if err := ss.br.BackupTo(bckpPath); err != nil {
+		return newErrorStatus(err), err
+	}
+	return newEmptyStatus(), nil
+}
+
+func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {
+	rstrPath := restoreReq.RestorePath
+	if err := ss.br.RestoreFrom(rstrPath); err != nil {
+		return newErrorStatus(err), err
+	}
+	return newEmptyStatus(), nil
+}
+
 func (ss *standaloneService) Close() error {
 	ss.store.Close()
 	return nil
@@ -88,8 +106,8 @@ type distributedService struct {
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
-func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, raftRepl nexus_api.RaftReplicator) DKVService {
-	return &distributedService{NewStandaloneService(kvs, cp), raftRepl}
+func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, raftRepl nexus_api.RaftReplicator) DKVService {
+	return &distributedService{NewStandaloneService(kvs, cp, br), raftRepl}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {

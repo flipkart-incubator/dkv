@@ -42,6 +42,7 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
+		t.Run("testBackupRestore", testBackupRestore)
 	}
 }
 
@@ -128,16 +129,34 @@ func testGetChanges(t *testing.T) {
 	}
 }
 
-func newKVStore() (storage.KVStore, storage.ChangePropagator) {
+func testBackupRestore(t *testing.T) {
+	numKeys, keyPrefix, valPrefix := 500, "BRK", "BRV"
+	putKeys(t, numKeys, keyPrefix, valPrefix)
+
+	backupPath := fmt.Sprintf("%s/%s", dbFolder, "backup")
+	if err := dkvCli.Backup(backupPath); err != nil {
+		t.Fatal(err)
+	} else {
+		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
+		putKeys(t, numKeys, missKeyPrefix, missValPrefix)
+		if err := dkvCli.Restore(backupPath); err != nil {
+			t.Fatal(err)
+		} else {
+		}
+	}
+}
+
+func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
 		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocksDb, rocksDb
+		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		return badger.OpenDB(dbFolder), nil
+		bdgrDb := badger.OpenDB(dbFolder)
+		return bdgrDb, nil, bdgrDb
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
@@ -148,6 +167,7 @@ func serveStandaloneDKV() {
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 	listenAndServe(grpcSrvr, dkvSvcPort)
 }
 
@@ -164,6 +184,28 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 		key, value := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
 		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+}
+
+func noKeys(t *testing.T, numKeys int, keyPrefix string) {
+	for i := 1; i <= numKeys; i++ {
+		key := fmt.Sprintf("%s_%d", keyPrefix, i)
+		if res, err := dkvCli.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if string(res.Value) != "" {
+			t.Errorf("Expected missing for key: %s. But found it with value: %s", key, res.Value)
+		}
+	}
+}
+
+func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
+	for i := 1; i <= numKeys; i++ {
+		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
+		if res, err := dkvCli.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if string(res.Value) != expectedValue {
+			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, res.Value)
 		}
 	}
 }
