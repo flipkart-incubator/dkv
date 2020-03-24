@@ -10,23 +10,18 @@ import (
 
 const sep = ":"
 
-var (
-	dkvAddr string
-	cmdVals map[string]*string
-)
-
-var commands = map[string]string{
-	"set":     fmt.Sprintf("Set key%svalue", sep),
-	"get":     "Get key",
-	"backup":  "Backs up data to the given path",
-	"restore": "Restores data from the given path",
+type cmd struct {
+	name  string
+	desc  string
+	fn    func(*ctl.DKVClient, string)
+	value string
 }
 
-var cmdFns = map[string]func(*ctl.DKVClient, string){
-	"set":     set,
-	"get":     get,
-	"backup":  backup,
-	"restore": restore,
+var cmds = []*cmd{
+	{"set", fmt.Sprintf("Set key%svalue", sep), set, ""},
+	{"get", "Get key", get, ""},
+	{"backup", "Backs up data to the given path", backup, ""},
+	{"restore", "Restores data from the given path", restore, ""},
 }
 
 func set(client *ctl.DKVClient, setKV string) {
@@ -63,13 +58,12 @@ func restore(client *ctl.DKVClient, path string) {
 	}
 }
 
+var dkvAddr string
+
 func init() {
 	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "DKV server address - host:port")
-	cmdVals = make(map[string]*string, len(commands))
-	for cmd, desc := range commands {
-		var newStr string
-		cmdVals[cmd] = &newStr
-		flag.StringVar(cmdVals[cmd], cmd, "", desc)
+	for _, c := range cmds {
+		flag.StringVar(&c.value, c.name, c.value, c.desc)
 	}
 }
 
@@ -81,9 +75,9 @@ func main() {
 	}
 	defer client.Close()
 
-	for cmd, val := range cmdVals {
-		if val != nil && *val != "" {
-			cmdFns[cmd](client, *val)
+	for _, c := range cmds {
+		if c.value != "" {
+			c.fn(client, c.value)
 			break
 		}
 	}
