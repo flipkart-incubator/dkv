@@ -2,6 +2,9 @@ package rocksdb
 
 import (
 	"errors"
+	"os"
+	"path"
+	"strings"
 	"sync/atomic"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -132,14 +135,35 @@ func (rdb *rocksDB) endGlobalMutation() error {
 	return errors.New("Another global keyspace mutation is in progress")
 }
 
+func checksForBackup(bckpPath string) error {
+	if len(strings.TrimSpace(bckpPath)) == 0 {
+		return errors.New("valid path must be provided")
+	}
+
+	fi, err := os.Stat(bckpPath)
+	if err != nil {
+		// or if the parent directory does not exist
+		bckpDir := path.Dir(bckpPath)
+		if _, err := os.Stat(bckpDir); err != nil {
+			return err
+		}
+	} else if !fi.IsDir() {
+		return errors.New("require a folder for rocksdb backup")
+	}
+	return nil
+}
+
 func (rdb *rocksDB) BackupTo(folder string) error {
+	if err := checksForBackup(folder); err != nil {
+		return err
+	}
 	// Prevent any other backups or restores
 	if err := rdb.beginGlobalMutation(); err != nil {
 		return err
 	}
 	defer rdb.endGlobalMutation()
 
-	be, err := rdb.openBackupEngine(folder)
+	be, err := rdb.openBackupEngine(path.Clean(folder))
 	if err != nil {
 		return err
 	}

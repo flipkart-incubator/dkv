@@ -141,6 +141,26 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 	}
 }
 
+func expectError(t *testing.T, err error) {
+	if err == nil {
+		t.Error("Expected an error but received none")
+	}
+}
+
+func expectNoError(t *testing.T, err error) {
+	if err != nil {
+		t.Error("Expected no error but got error")
+		t.Log(err)
+	}
+}
+
+func TestBackupFileValidity(t *testing.T) {
+	expectError(t, checksForBackup(""))
+	expectError(t, checksForBackup("/tmp/badger_storage_test"))
+	expectNoError(t, checksForBackup("README.md"))
+	expectNoError(t, checksForBackup("/tmp/backup.bak"))
+}
+
 func TestBackupAndRestore(t *testing.T) {
 	numTrxns := 50
 	keyPrefix, valPrefix := "brKey", "brVal"

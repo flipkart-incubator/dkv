@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
+	"path"
+	"strings"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
@@ -106,16 +108,38 @@ func (bdb *badgerDB) endGlobalMutation() error {
 	return errors.New("Another global keyspace mutation is in progress")
 }
 
+func checksForBackup(bckpPath string) error {
+	if len(strings.TrimSpace(bckpPath)) == 0 {
+		return errors.New("valid path must be provided")
+	}
+
+	_, err := os.Stat(bckpPath)
+	// If we are given an existing path
+	if err == nil {
+		return errors.New("require a file for badger backup")
+	} else {
+		// or if the parent directory does not exist
+		bckpDir := path.Dir(bckpPath)
+		if _, err := os.Stat(bckpDir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 const backupBufSize = 64 << 20
 
 func (bdb *badgerDB) BackupTo(file string) error {
+	if err := checksForBackup(file); err != nil {
+		return err
+	}
 	// Prevent any other backups or restores
 	if err := bdb.beginGlobalMutation(); err != nil {
 		return err
 	}
 	defer bdb.endGlobalMutation()
 
-	bf, err := os.Create(file)
+	bf, err := os.Create(path.Clean(file))
 	if err != nil {
 		return err
 	}

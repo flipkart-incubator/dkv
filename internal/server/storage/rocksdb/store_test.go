@@ -238,6 +238,27 @@ func TestMissingGet(t *testing.T) {
 	}
 }
 
+func expectError(t *testing.T, err error) {
+	if err == nil {
+		t.Error("Expected an error but received none")
+	}
+}
+
+func expectNoError(t *testing.T, err error) {
+	if err != nil {
+		t.Error("Expected no error but got error")
+		t.Log(err)
+	}
+}
+
+func TestBackupFolderValidity(t *testing.T) {
+	expectError(t, checksForBackup(""))
+	expectError(t, checksForBackup("/missing/backup"))
+	expectNoError(t, checksForBackup("/tmp/rocksdb_storage_test"))
+	expectNoError(t, checksForBackup("/tmp/backup.bak"))
+	expectNoError(t, checksForBackup("/temp"))
+}
+
 func TestBackupAndRestore(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
