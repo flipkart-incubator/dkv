@@ -145,6 +145,9 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 const tempDirPrefx = "rocksdb-restore-"
 
 func (rdb *rocksDB) RestoreFrom(folder string) error {
+	if err := checksForRestore(folder); err != nil {
+		return err
+	}
 	// Prevent any other backups or restores
 	if err := rdb.beginGlobalMutation(); err != nil {
 		return err
