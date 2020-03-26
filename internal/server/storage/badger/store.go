@@ -131,6 +131,9 @@ const (
 )
 
 func (bdb *badgerDB) RestoreFrom(file string) error {
+	if err := checksForRestore(file); err != nil {
+		return err
+	}
 	// Prevent any other backups or restores
 	if err := bdb.beginGlobalMutation(); err != nil {
 		return err
