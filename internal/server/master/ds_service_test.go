@@ -1,6 +1,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
@@ -43,6 +44,7 @@ func TestDistributedService(t *testing.T) {
 	defer stopServers()
 
 	t.Run("testDistributedPut", testDistributedPut)
+	t.Run("testRestore", testRestore)
 }
 
 func testDistributedPut(t *testing.T) {
@@ -61,6 +63,17 @@ func testDistributedPut(t *testing.T) {
 			} else if string(actualValue.Value) != expectedValue {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
 			}
+		}
+	}
+}
+
+func testRestore(t *testing.T) {
+	for _, dkvSvc := range dkvSvcs {
+		rstrReq := new(serverpb.RestoreRequest)
+		if _, err := dkvSvc.Restore(context.Background(), rstrReq); err == nil {
+			t.Error("Expected error during restore from service, but got none")
+		} else {
+			t.Log(err)
 		}
 	}
 }

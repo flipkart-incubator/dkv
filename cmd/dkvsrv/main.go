@@ -91,11 +91,11 @@ func main() {
 			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs))
 		} else {
 			dkvSvc = master.NewStandaloneService(kvs, cp, br)
+			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 	case slaveRole:
 		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr); err != nil {
 			panic(err)

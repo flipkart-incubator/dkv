@@ -2,6 +2,7 @@ package master
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -131,6 +132,11 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
 	return ds.DKVService.MultiGet(ctx, multiGetReq)
+}
+
+func (ds *distributedService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {
+	err := errors.New("Current DKV instance does not support restores")
+	return newErrorStatus(err), err
 }
 
 func (ds *distributedService) Close() error {
