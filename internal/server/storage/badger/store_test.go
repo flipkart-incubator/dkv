@@ -4,26 +4,22 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
+	"sync/atomic"
 	"testing"
 
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-var (
-	store         storage.KVStore
-	changeApplier storage.ChangeApplier
-)
+const dbFolder = "/tmp/badger_storage_test"
 
-const (
-	dbFolder = "/tmp/badger_storage_test"
-)
+var store *badgerDB
 
 func TestMain(m *testing.M) {
 	if kvs, err := openBadgerDB(); err != nil {
 		panic(err)
 	} else {
-		store, changeApplier = kvs, kvs
+		store = kvs
 		res := m.Run()
 		store.Close()
 		os.Exit(res)
@@ -73,7 +69,7 @@ func TestMissingGet(t *testing.T) {
 }
 
 func TestSaveChangesForPutAndDelete(t *testing.T) {
-	if chngNum, err := changeApplier.GetLatestAppliedChangeNumber(); err != nil {
+	if chngNum, err := store.GetLatestAppliedChangeNumber(); err != nil {
 		t.Error(err)
 	} else {
 		numChngs, keyPref, valPref := 10, "KSC_", "VSC_"
@@ -84,7 +80,7 @@ func TestSaveChangesForPutAndDelete(t *testing.T) {
 			vs[i] = []byte(fmt.Sprintf("%s%d", valPref, i))
 			chngRecs[i] = newPutChange(chngNum+uint64(i+1), ks[i], vs[i])
 		}
-		if appldChng, err := changeApplier.SaveChanges(chngRecs); err != nil {
+		if appldChng, err := store.SaveChanges(chngRecs); err != nil {
 			t.Error(err)
 		} else {
 			actNumChngs := int(appldChng - chngNum)
@@ -100,7 +96,7 @@ func TestSaveChangesForPutAndDelete(t *testing.T) {
 		for i := 0; i < delNumChngs; i++ {
 			delChngRecs[i] = newDelChange(chngNum+uint64(i+1), ks[i])
 		}
-		if appldChng, err := changeApplier.SaveChanges(delChngRecs); err != nil {
+		if appldChng, err := store.SaveChanges(delChngRecs); err != nil {
 			t.Error(err)
 		} else {
 			actNumChngs := int(appldChng - chngNum)
@@ -115,7 +111,7 @@ func TestSaveChangesForPutAndDelete(t *testing.T) {
 }
 
 func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
-	if chngNum, err := changeApplier.GetLatestAppliedChangeNumber(); err != nil {
+	if chngNum, err := store.GetLatestAppliedChangeNumber(); err != nil {
 		t.Error(err)
 	} else {
 		numChngs, keyPref, valPref := 4, "KISC_", "VISC_"
@@ -131,7 +127,7 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 				chngRecs[i] = newDelChange(chngNum+uint64(i+1), ks[j-1])
 			}
 		}
-		if appldChng, err := changeApplier.SaveChanges(chngRecs); err != nil {
+		if appldChng, err := store.SaveChanges(chngRecs); err != nil {
 			t.Error(err)
 		} else {
 			actNumChngs := int(appldChng - chngNum)
@@ -145,11 +141,108 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 	}
 }
 
+func TestBackupFileValidity(t *testing.T) {
+	expectError(t, checksForBackup(""))
+	expectError(t, checksForBackup(dbFolder))
+	expectNoError(t, checksForBackup("/tmp/backup.bak"))
+}
+
+func TestRestoreFileValidity(t *testing.T) {
+	expectError(t, checksForRestore(""))
+	expectError(t, checksForRestore(dbFolder))
+	expectError(t, checksForRestore("/missing/backup.bak"))
+}
+
+func TestBackupAndRestore(t *testing.T) {
+	numTrxns := 50
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	backupPath := fmt.Sprintf("%s/%s", dbFolder, "badger.bak")
+	if err := store.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	} else {
+		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
+		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
+		if err := store.RestoreFrom(backupPath); err != nil {
+			t.Fatal(err)
+		} else {
+			getKeys(t, numTrxns, keyPrefix, valPrefix)
+			noKeys(t, numTrxns, missKeyPrefix)
+		}
+	}
+}
+
+func TestPreventParallelBackups(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	parallelism := 5
+	var succ, fail uint32
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 1; i <= parallelism; i++ {
+		go func(n int) {
+			defer wg.Done()
+			backupPath := fmt.Sprintf("%s/%s_%d.bak", dbFolder, "backup", n)
+			if err := store.BackupTo(backupPath); err != nil {
+				atomic.AddUint32(&fail, 1)
+				t.Log(err)
+			} else {
+				atomic.AddUint32(&succ, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("Successful backups: %d", succ)
+	t.Logf("Failed backups: %d", fail)
+
+	if succ > 1 || fail < uint32(parallelism-1) {
+		t.Errorf("Only one backup must have succeeded.")
+	}
+}
+
+func TestPreventParallelRestores(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	backupPath := fmt.Sprintf("%s/%s.bak", dbFolder, "test_backup")
+	if err := store.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	}
+
+	parallelism := 5
+	var succ, fail uint32
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 1; i <= parallelism; i++ {
+		go func(n int) {
+			defer wg.Done()
+			if err := store.RestoreFrom(backupPath); err != nil {
+				atomic.AddUint32(&fail, 1)
+				t.Log(err)
+			} else {
+				atomic.AddUint32(&succ, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("Successful restores: %d", succ)
+	t.Logf("Failed restores: %d", fail)
+
+	if succ > 1 || fail < uint32(parallelism-1) {
+		t.Errorf("Only one restore must have succeeded.")
+	}
+}
+
 func BenchmarkSaveChangesOneByOne(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("BSK%d", i), fmt.Sprintf("BSV%d", i)
 		chngRecs := []*serverpb.ChangeRecord{newPutChange(uint64(i+1), []byte(key), []byte(value))}
-		if _, err := changeApplier.SaveChanges(chngRecs); err != nil {
+		if _, err := store.SaveChanges(chngRecs); err != nil {
 			b.Fatalf("Unable to SaveChange for PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -212,6 +305,41 @@ func checkGetResults(t *testing.T, ks, expVs [][]byte) {
 	}
 }
 
+func noKeys(t *testing.T, numKeys int, keyPrefix string) {
+	for i := 1; i <= numKeys; i++ {
+		key := fmt.Sprintf("%s_%d", keyPrefix, i)
+		if _, err := store.Get([]byte(key)); err == nil {
+			t.Fatalf("Expected missing key. Key: %s", key)
+		}
+	}
+}
+
+func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
+	for i := 1; i <= numKeys; i++ {
+		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Errorf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if string(readResults[0]) != expectedValue {
+			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
+		}
+	}
+}
+
+func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
+	for i := 1; i <= numKeys; i++ {
+		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
+		if err := store.Put([]byte(k), []byte(v)); err != nil {
+			t.Fatal(err)
+		} else {
+			if readResults, err := store.Get([]byte(k)); err != nil {
+				t.Fatal(err)
+			} else if string(readResults[0]) != string(v) {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
+			}
+		}
+	}
+}
+
 func checkMissingGetResults(t *testing.T, ks [][]byte) {
 	for _, k := range ks {
 		if result, err := store.Get(k); err == nil {
@@ -247,9 +375,22 @@ func newPutChange(chngNum uint64, key, val []byte) *serverpb.ChangeRecord {
 	}
 }
 
+func expectError(t *testing.T, err error) {
+	if err == nil {
+		t.Error("Expected an error but received none")
+	}
+}
+
+func expectNoError(t *testing.T, err error) {
+	if err != nil {
+		t.Error("Expected no error but got error")
+		t.Log(err)
+	}
+}
+
 func openBadgerDB() (*badgerDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	return openStore(newDefaultOptions(dbFolder))
+	return openStore(NewOptions(dbFolder))
 }

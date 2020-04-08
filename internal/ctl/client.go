@@ -17,13 +17,14 @@ type DKVClient struct {
 	cliConn    *grpc.ClientConn
 	dkvCli     serverpb.DKVClient
 	dkvReplCli serverpb.DKVReplicationClient
+	dkvBRCli   serverpb.DKVBackupRestoreClient
 }
 
 // TODO: Should these be paramterised ?
 const (
 	ReadBufSize  = 10 << 30
 	WriteBufSize = 10 << 30
-	Timeout      = 1 * time.Second
+	Timeout      = 5 * time.Second
 )
 
 // NewInSecureDKVClient creates an insecure GRPC client against the
@@ -34,7 +35,8 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli}
+		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli}
 	}
 	return dkvClnt, err
 }
@@ -46,13 +48,7 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	defer cancel()
 	putReq := &serverpb.PutRequest{Key: key, Value: value}
 	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
-	if err != nil {
-		return err
-	}
-	if res.Status.Code != 0 {
-		return errors.New(res.Status.Message)
-	}
-	return nil
+	return errorFromStatus(res.Status, err)
 }
 
 // Get takes the key as byte array and invokes the
@@ -85,7 +81,40 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
 }
 
+// Backup backs up the entire keyspace into the given filesystem
+// location using the underlying GRPC Backup method. This is a
+// convenience wrapper.
+func (dkvClnt *DKVClient) Backup(path string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	backupReq := &serverpb.BackupRequest{BackupPath: path}
+	res, err := dkvClnt.dkvBRCli.Backup(ctx, backupReq)
+	return errorFromStatus(res, err)
+}
+
+// Restore restores the entire keyspace from the given filesystem
+// location using the underlying GRPC Restore method. This is a
+// convenience wrapper.
+func (dkvClnt *DKVClient) Restore(path string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	restoreReq := &serverpb.RestoreRequest{RestorePath: path}
+	res, err := dkvClnt.dkvBRCli.Restore(ctx, restoreReq)
+	return errorFromStatus(res, err)
+}
+
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
 	return dkvClnt.cliConn.Close()
+}
+
+func errorFromStatus(res *serverpb.Status, err error) error {
+	switch {
+	case err != nil:
+		return err
+	case res.Code != 0:
+		return errors.New(res.Message)
+	default:
+		return nil
+	}
 }

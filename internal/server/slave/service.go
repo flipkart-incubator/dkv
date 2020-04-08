@@ -112,7 +112,11 @@ func (dss *dkvSlaveService) applyChangesFromMaster() error {
 		if res.Status.Code != 0 {
 			err = errors.New(res.Status.Message)
 		} else {
-			err = dss.applyChanges(res)
+			if res.MasterChangeNumber < (dss.fromChngNum - 1) {
+				err = errors.New("change number of the master node can not be lesser than the change number of the slave node")
+			} else {
+				err = dss.applyChanges(res)
+			}
 		}
 	}
 	return err

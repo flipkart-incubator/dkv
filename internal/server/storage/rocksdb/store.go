@@ -1,6 +1,12 @@
 package rocksdb
 
 import (
+	"errors"
+	"os"
+	"path"
+	"strings"
+	"sync/atomic"
+
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
@@ -10,24 +16,33 @@ import (
 // by the underlying implmentation based on RocksDB engine.
 type DB interface {
 	storage.KVStore
+	storage.Backupable
 	storage.ChangePropagator
 	storage.ChangeApplier
 }
 
 type rocksDB struct {
-	db *gorocksdb.DB
+	db   *gorocksdb.DB
+	opts *Opts
+
+	// Indicates a global mutation like backup and restore that
+	// require exclusivity. Shall be manipulated using atomics.
+	globalMutation uint32
 }
 
-type rocksDBOpts struct {
+// Opts holds the various options required for configuring
+// the RocksDB storage engine.
+type Opts struct {
 	blockTableOpts *gorocksdb.BlockBasedTableOptions
 	rocksDBOpts    *gorocksdb.Options
+	restoreOpts    *gorocksdb.RestoreOptions
 	folderName     string
 }
 
 // OpenDB initializes a new instance of RocksDB with default
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, cacheSize uint64) DB {
-	opts := newDefaultOptions()
+	opts := NewOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
 	if kvs, err := openStore(opts); err != nil {
 		panic(err)
@@ -36,37 +51,52 @@ func OpenDB(dbFolder string, cacheSize uint64) DB {
 	}
 }
 
-func newDefaultOptions() *rocksDBOpts {
+// NewOptions initializes an instance of RocksDB options with
+// default settings. It can be used to customize specific parameters
+// of the underlying RocksDB storage engine.
+func NewOptions() *Opts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(bbto)
-	return &rocksDBOpts{blockTableOpts: bbto, rocksDBOpts: opts}
+	rstOpts := gorocksdb.NewRestoreOptions()
+	return &Opts{blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts}
 }
 
-func (rdbOpts *rocksDBOpts) CacheSize(size uint64) *rocksDBOpts {
+// CacheSize can be used to set the RocksDB block cache size.
+func (rdbOpts *Opts) CacheSize(size uint64) *Opts {
 	rdbOpts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
 	return rdbOpts
 }
 
-func (rdbOpts *rocksDBOpts) CreateDBFolderIfMissing(flag bool) *rocksDBOpts {
+// CreateDBFolderIfMissing can be used to direct RocksDB to create
+// the database folder if its missing.
+func (rdbOpts *Opts) CreateDBFolderIfMissing(flag bool) *Opts {
 	rdbOpts.rocksDBOpts.SetCreateIfMissing(flag)
 	return rdbOpts
 }
 
-func (rdbOpts *rocksDBOpts) DBFolder(name string) *rocksDBOpts {
+// DBFolder allows for the RocksDB database folder location to be set.
+func (rdbOpts *Opts) DBFolder(name string) *Opts {
 	rdbOpts.folderName = name
 	return rdbOpts
 }
 
-func openStore(opts *rocksDBOpts) (*rocksDB, error) {
+func (rdbOpts *Opts) destroy() {
+	rdbOpts.blockTableOpts.Destroy()
+	rdbOpts.rocksDBOpts.Destroy()
+	rdbOpts.restoreOpts.Destroy()
+}
+
+func openStore(opts *Opts) (*rocksDB, error) {
 	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName)
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{db: db}, nil
+	return &rocksDB{db, opts, 0}, nil
 }
 
 func (rdb *rocksDB) Close() error {
+	rdb.opts.destroy()
 	rdb.db.Close()
 	return nil
 }
@@ -89,6 +119,81 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	default:
 		return rdb.getMultipleKeys(ro, keys)
 	}
+}
+
+func (rdb *rocksDB) BackupTo(folder string) error {
+	if err := checksForBackup(folder); err != nil {
+		return err
+	}
+	// Prevent any other backups or restores
+	if err := rdb.beginGlobalMutation(); err != nil {
+		return err
+	}
+	defer rdb.endGlobalMutation()
+
+	be, err := rdb.openBackupEngine(path.Clean(folder))
+	if err != nil {
+		return err
+	}
+	defer be.Close()
+
+	// Retain only the latest backup in the given folder
+	defer be.PurgeOldBackups(1)
+	return be.CreateNewBackupFlush(rdb.db, true)
+}
+
+const tempDirPrefx = "rocksdb-restore-"
+
+func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
+	// 1. Prevent any other backups or restores
+	err = rdb.beginGlobalMutation()
+	if err != nil {
+		return err
+	}
+	defer rdb.endGlobalMutation()
+
+	// 2. Close the current DB to prevent further mutations
+	rdb.db.Close()
+
+	// 3. In any case, reopen the current DB
+	defer func() {
+		if finalDB, openErr := openStore(rdb.opts); openErr != nil {
+			err = openErr
+		} else {
+			*rdb = *finalDB
+		}
+	}()
+
+	// 4. Check for the given restore folder validity
+	err = checksForRestore(folder)
+	if err != nil {
+		return err
+	}
+
+	// 5. Open the backup engine with the given restore folder
+	be, err := rdb.openBackupEngine(folder)
+	if err != nil {
+		return err
+	}
+	defer be.Close()
+
+	// 6. Create temp folder for the restored data
+	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
+	if err != nil {
+		return err
+	}
+
+	// 7. Restore DB onto the temp folder
+	err = be.RestoreDBFromLatestBackup(restoreFolder, restoreFolder, rdb.opts.restoreOpts)
+	if err != nil {
+		return err
+	}
+
+	// 8. Move the temp folder to the original DB location
+	err = storage.RenameFolder(restoreFolder, rdb.opts.folderName)
+
+	// Plain return due to defer function above
+	return
 }
 
 func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
@@ -150,6 +255,11 @@ func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverp
 	return chngRec
 }
 
+func (rdb *rocksDB) openBackupEngine(folder string) (*gorocksdb.BackupEngine, error) {
+	opts := rdb.opts.rocksDBOpts
+	return gorocksdb.OpenBackupEngine(opts, folder)
+}
+
 func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	trxnRec := &serverpb.TrxnRecord{}
 	switch wbr.Type {
@@ -195,4 +305,51 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 		value.Free()
 	}
 	return results, nil
+}
+
+var globalMutationError = errors.New("Another global keyspace mutation is in progress")
+
+func (rdb *rocksDB) hasGlobalMutation() bool {
+	return atomic.LoadUint32(&rdb.globalMutation) == 1
+}
+
+func (rdb *rocksDB) beginGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
+		return nil
+	}
+	return globalMutationError
+}
+
+func (rdb *rocksDB) endGlobalMutation() error {
+	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
+		return nil
+	}
+	return globalMutationError
+}
+
+func checksForBackup(bckpPath string) error {
+	if len(strings.TrimSpace(bckpPath)) == 0 {
+		return errors.New("valid path must be provided")
+	}
+
+	switch fi, err := os.Stat(bckpPath); {
+	case err != nil:
+		_, err := os.Stat(path.Dir(bckpPath))
+		return err
+	case !fi.IsDir():
+		return errors.New("require a folder for rocksdb backup")
+	default:
+		return nil
+	}
+}
+
+func checksForRestore(rstrPath string) error {
+	switch fi, err := os.Stat(rstrPath); {
+	case err != nil:
+		return err
+	case !fi.IsDir():
+		return errors.New("require a folder for rocksdb restore")
+	default:
+		return nil
+	}
 }

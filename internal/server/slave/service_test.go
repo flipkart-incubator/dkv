@@ -38,18 +38,18 @@ var (
 )
 
 func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
-	masterStore, cp, _ := newRocksDBStore(masterDBFolder)
-	slaveStore, _, ca := newRocksDBStore(slaveDBFolder)
-	testMasterSlaveRepl(t, masterStore, slaveStore, cp, ca)
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newRocksDBStore(slaveDBFolder)
+	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB, slaveRDB)
 }
 
 func TestMasterRocksDBSlaveBadger(t *testing.T) {
-	masterStore, cp, _ := newRocksDBStore(masterDBFolder)
-	slaveStore, _, ca := newBadgerDBStore(slaveDBFolder)
-	testMasterSlaveRepl(t, masterStore, slaveStore, cp, ca)
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newBadgerDBStore(slaveDBFolder)
+	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB, slaveRDB)
 }
 
-func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier) {
+func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU, slaveBU storage.Backupable) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go serveStandaloneDKVMaster(&wg, masterStore, cp)
@@ -75,6 +75,28 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	sleepInSecs(2)
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+
+	backupFolder := fmt.Sprintf("%s/backup", masterDBFolder)
+	if err := masterBU.BackupTo(backupFolder); err != nil {
+		t.Fatal(err)
+	}
+
+	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
+	// wait for atleast one replPollInterval to ensure slave replication
+	sleepInSecs(2)
+	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
+	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+
+	if err := masterBU.RestoreFrom(backupFolder); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(); err == nil {
+		t.Error("Expected an error from slave instance")
+	} else {
+		t.Log(err)
+	}
 }
 
 func putKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPrefix string) {
@@ -106,24 +128,23 @@ func newDKVClient(port int) *ctl.DKVClient {
 	}
 }
 
-func newRocksDBStore(dbFolder string) (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier) {
+func newRocksDBStore(dbFolder string) rocksdb.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
-	return rocksDb, rocksDb, rocksDb
+	return rocksdb.OpenDB(dbFolder, cacheSize)
 }
 
-func newBadgerDBStore(dbFolder string) (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier) {
+func newBadgerDBStore(dbFolder string) badger.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	bdgrDb := badger.OpenDB(dbFolder)
-	return bdgrDb, nil, bdgrDb
+	return badger.OpenDB(dbFolder)
 }
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator) {
-	masterSvc = master.NewStandaloneService(store, cp)
+	// No need to set the storage.Backupable instance since its not needed here
+	masterSvc = master.NewStandaloneService(store, cp, nil)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)

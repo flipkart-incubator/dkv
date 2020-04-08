@@ -105,3 +105,21 @@ message TrxnRecord {
   bytes value = 3;
 }
 
+service DKVBackupRestore {
+  // Backup backs up the entire keyspace into the given filesystem location.
+  rpc Backup (BackupRequest) returns (Status);
+  // Restore restores the entire keyspace from an existing backup at the
+  // given filesystem location.
+  rpc Restore (RestoreRequest) returns (Status);
+}
+
+message BackupRequest {
+  // BackupPath indicates a filesystem folder or file used for backing up the keyspace.
+  string backupPath = 1;
+}
+
+message RestoreRequest {
+  // RestorePath indicates a filesystem folder or file used for restoring the keyspace.
+  string restorePath = 1;
+}
+

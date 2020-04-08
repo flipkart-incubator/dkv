@@ -5,17 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
-)
-
-var (
-	store            storage.KVStore
-	changePropagator storage.ChangePropagator
-	changeApplier    storage.ChangeApplier
 )
 
 const (
@@ -24,11 +19,13 @@ const (
 	cacheSize               = 3 << 30
 )
 
+var store *rocksDB
+
 func TestMain(m *testing.M) {
 	if kvs, err := openRocksDB(); err != nil {
 		panic(err)
 	} else {
-		store, changePropagator, changeApplier = kvs, kvs, kvs
+		store = kvs
 		res := m.Run()
 		store.Close()
 		os.Exit(res)
@@ -58,16 +55,16 @@ func TestPutAndGet(t *testing.T) {
 
 func TestGetLatestChangeNumber(t *testing.T) {
 	expNumTrxns := uint64(5)
-	beforeChngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	beforeChngNum, _ := store.GetLatestCommittedChangeNumber()
 	putKeys(t, int(expNumTrxns), "aaKey", "aaVal")
-	afterChngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	afterChngNum, _ := store.GetLatestCommittedChangeNumber()
 	actNumTrxns := afterChngNum - beforeChngNum
 	if expNumTrxns != actNumTrxns {
 		t.Errorf("Mismatch in number of transactions. Expected: %d, Actual: %d", expNumTrxns, actNumTrxns)
 	}
 	beforeChngNum = afterChngNum
 	getKeys(t, int(expNumTrxns), "aaKey", "aaVal")
-	afterChngNum, _ = changePropagator.GetLatestCommittedChangeNumber()
+	afterChngNum, _ = store.GetLatestCommittedChangeNumber()
 	actNumTrxns = afterChngNum - beforeChngNum
 	if actNumTrxns != 0 {
 		t.Errorf("Expected no transactions to have occurred but found %d transactions", actNumTrxns)
@@ -77,10 +74,10 @@ func TestGetLatestChangeNumber(t *testing.T) {
 func TestLoadChanges(t *testing.T) {
 	expNumTrxns, maxChngs := 3, 8
 	keyPrefix, valPrefix := "bbKey", "bbVal"
-	chngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	chngNum, _ := store.GetLatestCommittedChangeNumber()
 	chngNum++ // due to possible previous transaction
 	putKeys(t, expNumTrxns, keyPrefix, valPrefix)
-	if chngs, err := changePropagator.LoadChanges(chngNum, maxChngs); err != nil {
+	if chngs, err := store.LoadChanges(chngNum, maxChngs); err != nil {
 		t.Fatal(err)
 	} else {
 		expNumChngs, actNumChngs := 3, len(chngs)
@@ -117,7 +114,7 @@ func TestSaveChanges(t *testing.T) {
 	numTrxns := 3
 	putKeyPrefix, putValPrefix := "ccKey", "ccVal"
 	putKeys(t, numTrxns, putKeyPrefix, putValPrefix)
-	chngNum, _ := changePropagator.GetLatestCommittedChangeNumber()
+	chngNum, _ := store.GetLatestCommittedChangeNumber()
 	chngNum++ // due to possible previous transaction
 	wbPutKeyPrefix, wbPutValPrefix := "ddKey", "ddVal"
 	chngs := make([]*serverpb.ChangeRecord, numTrxns)
@@ -133,7 +130,7 @@ func TestSaveChanges(t *testing.T) {
 	}
 	expChngNum := chngNum - 1
 
-	if actChngNum, err := changeApplier.SaveChanges(chngs); err != nil {
+	if actChngNum, err := store.SaveChanges(chngs); err != nil {
 		t.Fatal(err)
 	} else {
 		if expChngNum != actChngNum {
@@ -146,8 +143,7 @@ func TestSaveChanges(t *testing.T) {
 
 // Following test can be removed once DKV supports bulk writes
 func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
-	rdb := store.(*rocksDB)
-	beforeSeq := rdb.db.GetLatestSequenceNumber()
+	beforeSeq := store.db.GetLatestSequenceNumber()
 
 	expNumBatchTrxns := 3
 	numTrxnsPerBatch := 2
@@ -159,21 +155,21 @@ func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
 		wb.Delete([]byte(k))
 		wo := gorocksdb.NewDefaultWriteOptions()
 		wo.SetSync(true)
-		if err := rdb.db.Write(wo, wb); err != nil {
+		if err := store.db.Write(wo, wb); err != nil {
 			t.Fatal(err)
 		}
 		wb.Destroy()
 		wo.Destroy()
 	}
 
-	afterSeq := rdb.db.GetLatestSequenceNumber()
+	afterSeq := store.db.GetLatestSequenceNumber()
 	numTrxns := int(afterSeq - beforeSeq)
 	if numTrxns != expNumTrxns {
 		t.Errorf("Incorrect number of transactions reported. Expected: %d, Actual: %d", expNumTrxns, numTrxns)
 	}
 
 	startSeq := 1 + beforeSeq // This is done to remove previous transaction if any
-	if trxnIter, err := rdb.db.GetUpdatesSince(startSeq); err != nil {
+	if trxnIter, err := store.db.GetUpdatesSince(startSeq); err != nil {
 		t.Fatal(err)
 	} else {
 		defer trxnIter.Destroy()
@@ -239,6 +235,106 @@ func TestMissingGet(t *testing.T) {
 		t.Fatal(err)
 	} else if string(readResults[0]) != "" {
 		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
+	}
+}
+
+func TestBackupFolderValidity(t *testing.T) {
+	expectError(t, checksForBackup(""))
+	expectError(t, checksForBackup("/missing/backup"))
+	expectNoError(t, checksForBackup("/tmp/backup.bak"))
+	expectNoError(t, checksForBackup("/missing"))
+	expectNoError(t, checksForBackup(dbFolder))
+}
+
+func TestRestoreFolderValidity(t *testing.T) {
+	expectError(t, checksForRestore(""))
+	expectError(t, checksForRestore("/missing/backup"))
+	expectError(t, checksForRestore("/missing"))
+	expectNoError(t, checksForRestore(dbFolder))
+}
+
+func TestBackupAndRestore(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	backupPath := fmt.Sprintf("%s/%s", dbFolder, "backup")
+	if err := store.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	} else {
+		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
+		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
+		if err := store.RestoreFrom(backupPath); err != nil {
+			t.Fatal(err)
+		} else {
+			getKeys(t, numTrxns, keyPrefix, valPrefix)
+			noKeys(t, numTrxns, missKeyPrefix)
+		}
+	}
+}
+
+func TestPreventParallelBackups(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	parallelism := 5
+	var succ, fail uint32
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 1; i <= parallelism; i++ {
+		go func(n int) {
+			defer wg.Done()
+			backupPath := fmt.Sprintf("%s/%s_%d", dbFolder, "backup", n)
+			if err := store.BackupTo(backupPath); err != nil {
+				atomic.AddUint32(&fail, 1)
+				t.Log(err)
+			} else {
+				atomic.AddUint32(&succ, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("Successful backups: %d", succ)
+	t.Logf("Failed backups: %d", fail)
+
+	if succ > 1 || fail < uint32(parallelism-1) {
+		t.Errorf("Only one backup must have succeeded.")
+	}
+}
+
+func TestPreventParallelRestores(t *testing.T) {
+	numTrxns := 500
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	backupPath := fmt.Sprintf("%s/%s", dbFolder, "test_backup")
+	if err := store.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	}
+
+	parallelism := 5
+	var succ, fail uint32
+	var wg sync.WaitGroup
+	wg.Add(parallelism)
+
+	for i := 1; i <= parallelism; i++ {
+		go func(n int) {
+			defer wg.Done()
+			if err := store.RestoreFrom(backupPath); err != nil {
+				atomic.AddUint32(&fail, 1)
+				t.Log(err)
+			} else {
+				atomic.AddUint32(&succ, 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	t.Logf("Successful restores: %d", succ)
+	t.Logf("Failed restores: %d", fail)
+
+	if succ > 1 || fail < uint32(parallelism-1) {
+		t.Errorf("Only one restore must have succeeded.")
 	}
 }
 
@@ -324,10 +420,23 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
+func expectError(t *testing.T, err error) {
+	if err == nil {
+		t.Error("Expected an error but received none")
+	}
+}
+
+func expectNoError(t *testing.T, err error) {
+	if err != nil {
+		t.Error("Expected no error but got error")
+		t.Log(err)
+	}
+}
+
 func openRocksDB() (*rocksDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := newDefaultOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
+	opts := NewOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
 	return openStore(opts)
 }

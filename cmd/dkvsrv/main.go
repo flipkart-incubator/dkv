@@ -70,7 +70,7 @@ func (role dkvSrvrRole) PrintFlags() {
 func main() {
 	flag.Parse()
 
-	kvs, cp, ca := newKVStore()
+	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
@@ -78,18 +78,20 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 	case masterRole:
 		if cp == nil {
 			panic(fmt.Sprintf("Storage engine %s is not supported for DKV master role.", dbEngine))
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, newDKVReplicator(kvs))
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br)
+			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
@@ -153,14 +155,14 @@ func printFlagsWithPrefix(prefixes ...string) {
 
 const cacheSize = 3 << 30
 
-func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier) {
+func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
 	switch dbEngine {
 	case "rocksdb":
 		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocksDb, rocksDb, rocksDb
+		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
 		badgerDb := badger.OpenDB(dbFolder)
-		return badgerDb, nil, badgerDb
+		return badgerDb, nil, badgerDb, badgerDb
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
 	}

@@ -1,6 +1,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
@@ -43,6 +44,7 @@ func TestDistributedService(t *testing.T) {
 	defer stopServers()
 
 	t.Run("testDistributedPut", testDistributedPut)
+	t.Run("testRestore", testRestore)
 }
 
 func testDistributedPut(t *testing.T) {
@@ -61,6 +63,17 @@ func testDistributedPut(t *testing.T) {
 			} else if string(actualValue.Value) != expectedValue {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
 			}
+		}
+	}
+}
+
+func testRestore(t *testing.T) {
+	for _, dkvSvc := range dkvSvcs {
+		rstrReq := new(serverpb.RestoreRequest)
+		if _, err := dkvSvc.Restore(context.Background(), rstrReq); err == nil {
+			t.Error("Expected error during restore from service, but got none")
+		} else {
+			t.Log(err)
 		}
 	}
 }
@@ -106,7 +119,7 @@ func newListener(port int) net.Listener {
 	}
 }
 
-func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator) {
+func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
 	dbFolder := fmt.Sprintf("%s_%d", dbFolder, id)
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
@@ -114,20 +127,21 @@ func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator) {
 	switch engine {
 	case "rocksdb":
 		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
-		return rocksDb, rocksDb
+		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		return badger.OpenDB(dbFolder), nil
+		bdgrDb := badger.OpenDB(dbFolder)
+		return bdgrDb, nil, bdgrDb
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
 	}
 }
 
 func serveDistributedDKV(id int) {
-	kvs, cp := newKVStoreWithID(id)
+	kvs, cp, br := newKVStoreWithID(id)
 	dkvRepl := newReplicator(id, kvs)
 	dkvRepl.Start()
 	mutex.Lock()
-	dkvSvcs[id] = NewDistributedService(kvs, cp, dkvRepl)
+	dkvSvcs[id] = NewDistributedService(kvs, cp, br, dkvRepl)
 	grpcSrvs[id] = grpc.NewServer()
 	mutex.Unlock()
 	serverpb.RegisterDKVServer(grpcSrvs[id], dkvSvcs[id])
