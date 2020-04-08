@@ -144,52 +144,56 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 
 const tempDirPrefx = "rocksdb-restore-"
 
-func (rdb *rocksDB) RestoreFrom(folder string) error {
-	if err := checksForRestore(folder); err != nil {
-		return err
-	}
-	// Prevent any other backups or restores
-	if err := rdb.beginGlobalMutation(); err != nil {
+func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
+	// 1. Prevent any other backups or restores
+	err = rdb.beginGlobalMutation()
+	if err != nil {
 		return err
 	}
 	defer rdb.endGlobalMutation()
 
-	// 1. Open backup engine for the given folder
+	// 2. Close the current DB to prevent further mutations
+	rdb.db.Close()
+
+	// 3. In any case, reopen the current DB
+	defer func() {
+		if finalDB, openErr := openStore(rdb.opts); openErr != nil {
+			err = openErr
+		} else {
+			*rdb = *finalDB
+		}
+	}()
+
+	// 4. Check for the given restore folder validity
+	err = checksForRestore(folder)
+	if err != nil {
+		return err
+	}
+
+	// 5. Open the backup engine with the given restore folder
 	be, err := rdb.openBackupEngine(folder)
 	if err != nil {
 		return err
 	}
 	defer be.Close()
 
-	// 2. Create a temp folder where the data is restored into
+	// 6. Create temp folder for the restored data
 	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
 	if err != nil {
 		return err
 	}
 
-	// 3. Perform the restoration onto the temp folder using the backup engine
+	// 7. Restore DB onto the temp folder
 	err = be.RestoreDBFromLatestBackup(restoreFolder, restoreFolder, rdb.opts.restoreOpts)
 	if err != nil {
 		return err
 	}
 
-	// 4. Close the current underlying DB and remove its db folder contents
-	rdb.db.Close()
+	// 8. Move the temp folder to the original DB location
+	err = storage.RenameFolder(restoreFolder, rdb.opts.folderName)
 
-	// 5. Rename the temp folder as the actual db folder
-	dbFolder := rdb.opts.folderName
-	err = storage.RenameFolder(restoreFolder, dbFolder)
-	if err != nil {
-		return err
-	}
-
-	// 6. Open the underlying DB and switch current pointer
-	restoredDB, err := openStore(rdb.opts)
-	if err != nil {
-		return err
-	}
-	*rdb = *restoredDB
-	return nil
+	// Plain return due to defer function above
+	return
 }
 
 func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
