@@ -130,58 +130,65 @@ const (
 	maxPendingWrites = 256
 )
 
-func (bdb *badgerDB) RestoreFrom(file string) error {
-	if err := checksForRestore(file); err != nil {
-		return err
-	}
-	// Prevent any other backups or restores
-	if err := bdb.beginGlobalMutation(); err != nil {
+func (bdb *badgerDB) RestoreFrom(file string) (err error) {
+	// 1. Prevent any other backups or restores
+	err = bdb.beginGlobalMutation()
+	if err != nil {
 		return err
 	}
 	defer bdb.endGlobalMutation()
 
-	// 1. Open the given file from which to restore
+	// 2. Close the current DB to prevent further mutations
+	bdb.db.Close()
+
+	// 3. In any case, reopen the current DB
+	defer func() {
+		if finalDB, openErr := openStore(bdb.opts); openErr != nil {
+			err = openErr
+		} else {
+			*bdb = *finalDB
+		}
+	}()
+
+	// 4. Check for the given restore file validity
+	err = checksForRestore(file)
+	if err != nil {
+		return err
+	}
+
+	// 5. Open the given restore file
 	f, err := os.Open(file)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	// 2. Create temp folder for the restored data
+	// 6. Create temp folder for the restored data
 	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
 	if err != nil {
 		return err
 	}
 
-	// 3. Create a temp badger DB pointing to the temp folder
+	// 7. Create a temp badger DB pointing to the temp folder
 	restoredDB, err := openStore(NewOptions(restoreFolder))
 	if err != nil {
 		return err
 	}
 
-	// 4. Restore data in the file onto the temp badger DB
+	// 8. Restore data in the file onto the temp badger DB
 	err = restoredDB.db.Load(f, maxPendingWrites)
 	if err != nil {
 		return err
 	}
 
-	// 5. Close the temp and current badger DBs
+	// 9. Close the temp badger DB
 	restoredDB.db.Close()
-	bdb.db.Close()
 
-	// 6. Move the temp folders to the actual locations
+	// 10. Move the temp folders to the actual locations
 	err = storage.RenameFolder(restoreFolder, bdb.opts.opts.Dir)
-	if err != nil {
-		return err
-	}
 
-	// 7. Reopen the actual store
-	finalDB, err := openStore(bdb.opts)
-	if err != nil {
-		return err
-	}
-	*bdb = *finalDB
-	return nil
+	// Plain return due to defer function above
+	return
 }
 
 const changeNumberKey = "_dkv_meta::ChangeNumber"
