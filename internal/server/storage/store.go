@@ -9,6 +9,12 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
+// A Snapshot represents the entire state of the keyspace
+// with latest value against every key. It is typically
+// used for saving and restoring snapshots by KVStore
+// implementors.
+type Snapshot map[string][]byte
+
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various
 // DKV operations.
@@ -20,6 +26,13 @@ type KVStore interface {
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
 	Get(keys ...[]byte) ([][]byte, error)
+	// GetSnapshot retrieves the entire keyspace representation
+	// with latest value against every key.
+	GetSnapshot() (Snapshot, error)
+	// PutSnapshot ingests the given keyspace representation wholly
+	// into the current state. Any existing state will be discarded
+	// or replaced with the given state.
+	PutSnapshot(Snapshot) error
 }
 
 // A Backupable represents the capability of the underlying store

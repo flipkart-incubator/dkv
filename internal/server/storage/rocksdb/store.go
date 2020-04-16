@@ -121,6 +121,30 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
+func (rdb *rocksDB) GetSnapshot() (storage.Snapshot, error) {
+	snap := rdb.db.NewSnapshot()
+	defer rdb.db.ReleaseSnapshot(snap)
+
+	// TODO: Any options need to be set
+	readOpts := gorocksdb.NewDefaultReadOptions()
+	defer readOpts.Destroy()
+	readOpts.SetSnapshot(snap)
+
+	it := rdb.db.NewIterator(readOpts)
+	defer it.Close()
+
+	ss := make(storage.Snapshot)
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		ss[string(it.Key().Data())] = it.Value().Data()
+	}
+
+	return ss, it.Err()
+}
+
+func (rdb *rocksDB) PutSnapshot(snap storage.Snapshot) error {
+	return nil
+}
+
 func (rdb *rocksDB) BackupTo(folder string) error {
 	if err := checksForBackup(folder); err != nil {
 		return err

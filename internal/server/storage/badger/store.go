@@ -2,6 +2,7 @@ package badger
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
+	badger_pb "github.com/dgraph-io/badger/pb"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
@@ -92,6 +94,24 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 		return nil
 	})
 	return results, err
+}
+
+func (bdb *badgerDB) GetSnapshot() (storage.Snapshot, error) {
+	// TODO: Check if any options need to be set on stream
+	strm := bdb.db.NewStream()
+	snap := make(storage.Snapshot)
+	strm.Send = func(list *badger_pb.KVList) error {
+		for _, kv := range list.Kv {
+			snap[string(kv.Key)] = kv.Value
+		}
+		return nil
+	}
+	err := strm.Orchestrate(context.Background())
+	return snap, err
+}
+
+func (bdb *badgerDB) PutSnapshot(snap storage.Snapshot) error {
+	return nil
 }
 
 const backupBufSize = 64 << 20

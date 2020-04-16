@@ -273,6 +273,65 @@ func TestBackupAndRestore(t *testing.T) {
 	}
 }
 
+func TestGetSnapshot(t *testing.T) {
+	numTrxns := 100
+	keyPrefix, valPrefix := "snapKey", "snapVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	if snap, err := store.GetSnapshot(); err != nil {
+		t.Fatal(err)
+	} else {
+		actCnt := 0
+		for k, v := range snap {
+			if strings.HasPrefix(k, keyPrefix) && strings.HasPrefix(string(v), valPrefix) {
+				actCnt++
+			}
+		}
+		if actCnt != numTrxns {
+			t.Errorf("Expected snapshot to contain %d keys, but only got %d keys", numTrxns, actCnt)
+		}
+	}
+}
+
+func TestIterationOnExplicitSnapshot(t *testing.T) {
+	numTrxns := 100
+	keyPrefix1, valPrefix1 := "firKey", "firVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+
+	snap := store.db.NewSnapshot()
+	defer store.db.ReleaseSnapshot(snap)
+
+	keyPrefix2, valPrefix2 := "secKey", "secVal"
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+
+	readOpts := gorocksdb.NewDefaultReadOptions()
+	defer readOpts.Destroy()
+
+	readOpts.SetSnapshot(snap)
+	it := store.db.NewIterator(readOpts)
+	defer it.Close()
+
+	actCnt := 0
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		k, v := string(it.Key().Data()), string(it.Value().Data())
+		if strings.HasPrefix(k, keyPrefix1) && strings.HasPrefix(v, valPrefix1) {
+			actCnt++
+		}
+
+		if strings.HasPrefix(k, keyPrefix2) || strings.HasPrefix(v, valPrefix2) {
+			t.Errorf("Did not expect snapshot iterator to give key: %s with value: %s", k, v)
+		}
+	}
+
+	if err := it.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if actCnt != numTrxns {
+		t.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
 func TestPreventParallelBackups(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
@@ -383,6 +442,41 @@ func BenchmarkGetMissingKey(b *testing.B) {
 	}
 }
 
+func BenchmarkIteration(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+	numTrxns := b.N
+	keyPrefix, valPrefix := "snapBenchKey", "snapBenchVal"
+	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	b.StartTimer()
+
+	snap := store.db.NewSnapshot()
+	defer store.db.ReleaseSnapshot(snap)
+
+	readOpts := gorocksdb.NewDefaultReadOptions()
+	defer readOpts.Destroy()
+
+	readOpts.SetSnapshot(snap)
+	it := store.db.NewIterator(readOpts)
+	defer it.Close()
+
+	actCnt := 0
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		k, v := string(it.Key().Data()), string(it.Value().Data())
+		if expVal, present := data[k]; present && expVal == v {
+			actCnt++
+		}
+	}
+
+	if err := it.Err(); err != nil {
+		b.Fatal(err)
+	}
+
+	if actCnt != numTrxns {
+		b.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
 func noKeys(t *testing.T, numKeys int, keyPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key := fmt.Sprintf("%s_%d", keyPrefix, i)
@@ -405,7 +499,8 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
-func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
+func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string) map[string]string {
+	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 		if err := store.Put([]byte(k), []byte(v)); err != nil {
@@ -415,9 +510,12 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 				t.Fatal(err)
 			} else if string(readResults[0]) != string(v) {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
+			} else {
+				data[k] = v
 			}
 		}
 	}
+	return data
 }
 
 func expectError(t *testing.T, err error) {

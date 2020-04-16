@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
@@ -133,5 +134,14 @@ func (ms *memStore) Get(keys ...[]byte) ([][]byte, error) {
 
 func (ms *memStore) Close() error {
 	ms.store = nil
+	return nil
+}
+
+func (ms *memStore) GetSnapshot() (storage.Snapshot, error) {
+	return ms.store, nil
+}
+
+func (ms *memStore) PutSnapshot(snap storage.Snapshot) error {
+	ms.store = snap
 	return nil
 }
