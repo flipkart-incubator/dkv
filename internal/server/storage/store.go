@@ -9,12 +9,6 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-// A Snapshot represents the entire state of the keyspace
-// with latest value against every key. It is typically
-// used for saving and restoring snapshots by KVStore
-// implementors.
-type Snapshot map[string][]byte
-
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various
 // DKV operations.
@@ -28,11 +22,11 @@ type KVStore interface {
 	Get(keys ...[]byte) ([][]byte, error)
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
-	GetSnapshot() (Snapshot, error)
+	GetSnapshot() ([]byte, error)
 	// PutSnapshot ingests the given keyspace representation wholly
 	// into the current state. Any existing state will be discarded
 	// or replaced with the given state.
-	PutSnapshot(Snapshot) error
+	PutSnapshot([]byte) error
 }
 
 // A Backupable represents the capability of the underlying store
@@ -89,14 +83,27 @@ type ChangeApplier interface {
 
 // TODO: Following functions should be moved to a util layer ?
 
-const timeFormatTempDir = "20060102150405"
+const timeFormatTempPath = "20060102150405"
+
+// CreateTempFile creates a temporary folder with the given prefix.
+// It attempts to also appends a timestamp to the given prefix so as
+// to better avoid collisions. Under the hood, it delegates to the
+// GoLang API for temporary folder creation.
+func CreateTempFile(prefix string) (string, error) {
+	tempFilePrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
+	tempFile, err := ioutil.TempFile("", string(tempFilePrefix))
+	if err != nil {
+		return "", err
+	}
+	return tempFile.Name(), nil
+}
 
 // CreateTempFolder creates a temporary folder with the given prefix.
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
 func CreateTempFolder(prefix string) (string, error) {
-	tempFolderPrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempDir)
+	tempFolderPrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
 	return ioutil.TempDir("", string(tempFolderPrefix))
 }
 

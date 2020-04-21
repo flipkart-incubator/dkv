@@ -26,11 +26,13 @@ const (
 	snapDir     = "/tmp/dkv_test/snap"
 	clusterURL  = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
 	replTimeout = 3 * time.Second
+	newNodeID   = 4
+	newNodeURL  = "http://127.0.0.1:9324"
 )
 
 var (
 	grpcSrvs = make(map[int]*grpc.Server)
-	dkvPorts = map[int]int{1: 9081, 2: 9082, 3: 9083}
+	dkvPorts = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084}
 	dkvClis  = make(map[int]*ctl.DKVClient)
 	dkvSvcs  = make(map[int]DKVService)
 	mutex    = sync.Mutex{}
@@ -45,6 +47,7 @@ func TestDistributedService(t *testing.T) {
 
 	t.Run("testDistributedPut", testDistributedPut)
 	t.Run("testRestore", testRestore)
+	t.Run("testNewDKVNodeJoining", testNewDKVNodeJoining)
 }
 
 func testDistributedPut(t *testing.T) {
@@ -78,6 +81,38 @@ func testRestore(t *testing.T) {
 	}
 }
 
+func testNewDKVNodeJoining(t *testing.T) {
+	// Add new DKV node through an other DKV node (1)
+	dkvPeer := dkvSvcs[1].(*distributedService)
+	if err := dkvPeer.raftRepl.AddMember(context.Background(), newNodeID, newNodeURL); err != nil {
+		t.Fatal(err)
+	}
+	<-time.After(3 * time.Second)
+	clusUrl := fmt.Sprintf("%s,%s", clusterURL, newNodeURL)
+	// Create the new DKV node
+	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, true, clusUrl)
+	defer dkvSvc.Close()
+	defer grpcSrv.GracefulStop()
+	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
+	<-time.After(3 * time.Second)
+	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[newNodeID])
+	// Create the client for the new DKV node
+	if dkvCli, err := ctl.NewInSecureDKVClient(svcAddr); err != nil {
+		t.Fatal(err)
+	} else {
+		defer dkvCli.Close()
+		// Expect to find all data in the new DKV node
+		for i := 1; i <= clusterSize; i++ {
+			key, expectedValue := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
+			if actualValue, err := dkvCli.Get([]byte(key)); err != nil {
+				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
+			} else if string(actualValue.Value) != expectedValue {
+				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
+			}
+		}
+	}
+}
+
 func initDKVClients(ids ...int) {
 	for id := 1; id <= clusterSize; id++ {
 		svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
@@ -95,14 +130,15 @@ func initDKVServers(ids ...int) {
 	}
 }
 
-func newReplicator(id int, kvs storage.KVStore) nexus_api.RaftReplicator {
+func newReplicator(id int, kvs storage.KVStore, joining bool, clusterUrl string) nexus_api.RaftReplicator {
 	replStore := dkv_sync.NewDKVReplStore(kvs)
 	opts := []nexus.Option{
 		nexus.NodeId(id),
 		nexus.LogDir(logDir),
 		nexus.SnapDir(snapDir),
-		nexus.ClusterUrl(clusterURL),
+		nexus.ClusterUrl(clusterUrl),
 		nexus.ReplicationTimeout(replTimeout),
+		nexus.Join(joining),
 	}
 	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, opts...); err != nil {
 		panic(err)
@@ -136,15 +172,22 @@ func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storag
 	}
 }
 
-func serveDistributedDKV(id int) {
+func newDistributedDKVNode(id int, join bool, clusUrl string) (DKVService, *grpc.Server) {
 	kvs, cp, br := newKVStoreWithID(id)
-	dkvRepl := newReplicator(id, kvs)
+	dkvRepl := newReplicator(id, kvs, join, clusUrl)
 	dkvRepl.Start()
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl)
+	grpcSrv := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcSrv, distSrv)
+	return distSrv, grpcSrv
+}
+
+func serveDistributedDKV(id int) {
+	dkvSvc, grpcSvc := newDistributedDKVNode(id, false, clusterURL)
 	mutex.Lock()
-	dkvSvcs[id] = NewDistributedService(kvs, cp, br, dkvRepl)
-	grpcSrvs[id] = grpc.NewServer()
+	dkvSvcs[id] = dkvSvc
+	grpcSrvs[id] = grpcSvc
 	mutex.Unlock()
-	serverpb.RegisterDKVServer(grpcSrvs[id], dkvSvcs[id])
 	grpcSrvs[id].Serve(newListener(dkvPorts[id]))
 }
 

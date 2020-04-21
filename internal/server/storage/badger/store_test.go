@@ -177,22 +177,23 @@ func TestBackupAndRestore(t *testing.T) {
 	}
 }
 
-func TestGetSnapshot(t *testing.T) {
+func TestGetPutSnapshot(t *testing.T) {
 	numTrxns := 100
-	keyPrefix, valPrefix := "snapKey", "snapVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	keyPrefix1, valPrefix1, newValPrefix1 := "firSnapKey", "firSnapVal", "newFirSnapVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
 
 	if snap, err := store.GetSnapshot(); err != nil {
 		t.Fatal(err)
 	} else {
-		actCnt := 0
-		for k, v := range snap {
-			if strings.HasPrefix(k, keyPrefix) && strings.HasPrefix(string(v), valPrefix) {
-				actCnt++
-			}
-		}
-		if actCnt != numTrxns {
-			t.Errorf("Expected snapshot to contain %d keys, but only got %d keys", numTrxns, actCnt)
+		putKeys(t, numTrxns, keyPrefix1, newValPrefix1)
+		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
+		putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+
+		if err := store.PutSnapshot(snap); err != nil {
+			t.Fatal(err)
+		} else {
+			getKeys(t, numTrxns, keyPrefix1, valPrefix1)
+			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
 		}
 	}
 }

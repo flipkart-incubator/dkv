@@ -61,9 +61,9 @@ func (dr *dkvReplStore) multiGet(multiGetReq *serverpb.MultiGetRequest) ([]byte,
 	return gobEncode(vals)
 }
 
-func gobEncode(byteArrays [][]byte) ([]byte, error) {
+func gobEncode(data interface{}) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(byteArrays); err != nil {
+	if err := gob.NewEncoder(&buf).Encode(data); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -74,11 +74,9 @@ func (dr *dkvReplStore) Close() error {
 }
 
 func (dr *dkvReplStore) Backup() ([]byte, error) {
-	// TODO: Implement this
-	return nil, nil
+	return dr.kvs.GetSnapshot()
 }
 
 func (dr *dkvReplStore) Restore(data []byte) error {
-	// TODO: Implement this
-	return nil
+	return dr.kvs.PutSnapshot(data)
 }

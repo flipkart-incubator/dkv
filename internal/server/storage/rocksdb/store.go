@@ -2,6 +2,7 @@ package rocksdb
 
 import (
 	"errors"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -121,9 +122,26 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
-func (rdb *rocksDB) GetSnapshot() (storage.Snapshot, error) {
+const tempFilePrefix = "rocksdb-sstfile-"
+
+func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
+
+	envOpts := gorocksdb.NewDefaultEnvOptions()
+	opts := gorocksdb.NewDefaultOptions()
+	sstWrtr := gorocksdb.NewSSTFileWriter(envOpts, opts)
+	defer sstWrtr.Destroy()
+
+	sstFile, err := storage.CreateTempFile(tempFilePrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	defer os.Remove(sstFile)
+	if err = sstWrtr.Open(sstFile); err != nil {
+		return nil, err
+	}
 
 	// TODO: Any options need to be set
 	readOpts := gorocksdb.NewDefaultReadOptions()
@@ -132,17 +150,46 @@ func (rdb *rocksDB) GetSnapshot() (storage.Snapshot, error) {
 
 	it := rdb.db.NewIterator(readOpts)
 	defer it.Close()
+	it.SeekToFirst()
 
-	ss := make(storage.Snapshot)
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		ss[string(it.Key().Data())] = it.Value().Data()
+	if it.Valid() {
+		for it.Valid() {
+			sstWrtr.Add(it.Key().Data(), it.Value().Data())
+			it.Next()
+		}
+	} else {
+		return nil, nil
 	}
 
-	return ss, it.Err()
+	if err = sstWrtr.Finish(); err != nil {
+		return nil, err
+	}
+
+	return ioutil.ReadFile(sstFile)
 }
 
-func (rdb *rocksDB) PutSnapshot(snap storage.Snapshot) error {
-	return nil
+func (rdb *rocksDB) PutSnapshot(snap []byte) error {
+	if snap == nil || len(snap) == 0 {
+		return nil
+	}
+
+	sstFile, err := storage.CreateTempFile(tempFilePrefix)
+	if err != nil {
+		return err
+	}
+
+	defer os.Remove(sstFile)
+	err = ioutil.WriteFile(sstFile, snap, 0644)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Check any option needs to be set
+	ingestOpts := gorocksdb.NewDefaultIngestExternalFileOptions()
+	defer ingestOpts.Destroy()
+
+	err = rdb.db.IngestExternalFile([]string{sstFile}, ingestOpts)
+	return err
 }
 
 func (rdb *rocksDB) BackupTo(folder string) error {
@@ -166,7 +213,7 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 	return be.CreateNewBackupFlush(rdb.db, true)
 }
 
-const tempDirPrefx = "rocksdb-restore-"
+const tempDirPrefix = "rocksdb-restore-"
 
 func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
 	// 1. Prevent any other backups or restores
@@ -202,7 +249,7 @@ func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
 	defer be.Close()
 
 	// 6. Create temp folder for the restored data
-	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
+	restoreFolder, err := storage.CreateTempFolder(tempDirPrefix)
 	if err != nil {
 		return err
 	}

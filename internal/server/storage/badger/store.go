@@ -2,8 +2,10 @@ package badger
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"os"
 	"path"
@@ -96,22 +98,40 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 	return results, err
 }
 
-func (bdb *badgerDB) GetSnapshot() (storage.Snapshot, error) {
+func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()
-	snap := make(storage.Snapshot)
+	snap := make(map[string][]byte)
 	strm.Send = func(list *badger_pb.KVList) error {
 		for _, kv := range list.Kv {
 			snap[string(kv.Key)] = kv.Value
 		}
 		return nil
 	}
-	err := strm.Orchestrate(context.Background())
-	return snap, err
+	if err := strm.Orchestrate(context.Background()); err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	err := gob.NewEncoder(&buf).Encode(snap)
+	return buf.Bytes(), err
 }
 
-func (bdb *badgerDB) PutSnapshot(snap storage.Snapshot) error {
-	return nil
+func (bdb *badgerDB) PutSnapshot(snap []byte) error {
+	buf := bytes.NewBuffer(snap)
+	data := make(map[string][]byte)
+	if err := gob.NewDecoder(buf).Decode(&data); err != nil {
+		return err
+	}
+
+	return bdb.db.Update(func(txn *badger.Txn) error {
+		for key, val := range data {
+			if err := txn.Set([]byte(key), val); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 const backupBufSize = 64 << 20

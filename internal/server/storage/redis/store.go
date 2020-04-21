@@ -52,11 +52,11 @@ func (rdb *redisDBStore) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
-func (rdb *redisDBStore) GetSnapshot() (storage.Snapshot, error) {
+func (rdb *redisDBStore) GetSnapshot() ([]byte, error) {
 	return nil, nil
 }
 
-func (rdb *redisDBStore) PutSnapshot(snap storage.Snapshot) error {
+func (rdb *redisDBStore) PutSnapshot(snap []byte) error {
 	return nil
 }
 
