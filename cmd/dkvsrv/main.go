@@ -89,6 +89,7 @@ func main() {
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
 			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs))
+			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
 			dkvSvc = master.NewStandaloneService(kvs, cp, br)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
