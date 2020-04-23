@@ -39,6 +39,7 @@ var (
 )
 
 func TestDistributedService(t *testing.T) {
+	resetRaftStateDirs(t)
 	initDKVServers()
 	sleepInSecs(3)
 	initDKVClients()
@@ -47,7 +48,7 @@ func TestDistributedService(t *testing.T) {
 
 	t.Run("testDistributedPut", testDistributedPut)
 	t.Run("testRestore", testRestore)
-	t.Run("testNewDKVNodeJoining", testNewDKVNodeJoining)
+	t.Run("testNewDKVNodeJoiningAndLeaving", testNewDKVNodeJoiningAndLeaving)
 }
 
 func testDistributedPut(t *testing.T) {
@@ -81,10 +82,9 @@ func testRestore(t *testing.T) {
 	}
 }
 
-func testNewDKVNodeJoining(t *testing.T) {
-	// Add new DKV node through an other DKV node (1)
-	dkvPeer := dkvSvcs[1].(*distributedService)
-	if err := dkvPeer.raftRepl.AddMember(context.Background(), newNodeID, newNodeURL); err != nil {
+func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
+	// Add new DKV node through the client of any other DKV node (1)
+	if err := dkvClis[1].AddNode(newNodeID, newNodeURL); err != nil {
 		t.Fatal(err)
 	}
 	<-time.After(3 * time.Second)
@@ -110,6 +110,11 @@ func testNewDKVNodeJoining(t *testing.T) {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
 			}
 		}
+		// Remove new DKV node through the client of any other DKV Node (2)
+		if err := dkvClis[2].RemoveNode(newNodeID); err != nil {
+			t.Fatal(err)
+		}
+		<-time.After(3 * time.Second)
 	}
 }
 
@@ -121,6 +126,21 @@ func initDKVClients(ids ...int) {
 		} else {
 			dkvClis[id] = client
 		}
+	}
+}
+
+func resetRaftStateDirs(t *testing.T) {
+	if err := exec.Command("rm", "-rf", logDir).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("mkdir", "-p", logDir).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("rm", "-rf", snapDir).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("mkdir", "-p", snapDir).Run(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -179,6 +199,7 @@ func newDistributedDKVNode(id int, join bool, clusUrl string) (DKVService, *grpc
 	distSrv := NewDistributedService(kvs, cp, br, dkvRepl)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
+	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
 	return distSrv, grpcSrv
 }
 

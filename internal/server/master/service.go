@@ -100,6 +100,11 @@ func (ss *standaloneService) Close() error {
 	return nil
 }
 
+type DKVClusterService interface {
+	DKVService
+	serverpb.DKVClusterServer
+}
+
 type distributedService struct {
 	DKVService
 	raftRepl nexus_api.RaftReplicator
@@ -107,7 +112,7 @@ type distributedService struct {
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
-func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, raftRepl nexus_api.RaftReplicator) DKVService {
+func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, raftRepl nexus_api.RaftReplicator) DKVClusterService {
 	return &distributedService{NewStandaloneService(kvs, cp, br), raftRepl}
 }
 
@@ -137,6 +142,21 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 func (ds *distributedService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {
 	err := errors.New("Current DKV instance does not support restores")
 	return newErrorStatus(err), err
+}
+
+func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNodeRequest) (*serverpb.Status, error) {
+	// TODO: We can include any relevant checks on the joining node - like reachability, storage engine compatibility, etc.
+	if err := ds.raftRepl.AddMember(ctx, int(req.NodeId), req.NodeUrl); err != nil {
+		return newErrorStatus(err), err
+	}
+	return newEmptyStatus(), nil
+}
+
+func (ds *distributedService) RemoveNode(ctx context.Context, req *serverpb.RemoveNodeRequest) (*serverpb.Status, error) {
+	if err := ds.raftRepl.RemoveMember(ctx, int(req.NodeId)); err != nil {
+		return newErrorStatus(err), err
+	}
+	return newEmptyStatus(), nil
 }
 
 func (ds *distributedService) Close() error {

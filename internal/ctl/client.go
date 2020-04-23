@@ -9,15 +9,16 @@ import (
 	"google.golang.org/grpc"
 )
 
-// A DKVClient instance is used to communicate with DKV service
-// over GRPC. It is an adapter to the underlying GRPC client that
-// exposes a simpler API to its users without having to deal with
+// A DKVClient instance is used to communicate with various DKV services
+// over GRPC. It is an adapter to the underlying GRPC clients that
+// exposes a simpler API to its users without having to deal with timeouts,
 // contexts and other GRPC semantics.
 type DKVClient struct {
 	cliConn    *grpc.ClientConn
 	dkvCli     serverpb.DKVClient
 	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
+	dkvClusCli serverpb.DKVClusterClient
 }
 
 // TODO: Should these be paramterised ?
@@ -36,7 +37,8 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli}
+		dkvClusCli := serverpb.NewDKVClusterClient(conn)
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli}
 	}
 	return dkvClnt, err
 }
@@ -100,6 +102,26 @@ func (dkvClnt *DKVClient) Restore(path string) error {
 	defer cancel()
 	restoreReq := &serverpb.RestoreRequest{RestorePath: path}
 	res, err := dkvClnt.dkvBRCli.Restore(ctx, restoreReq)
+	return errorFromStatus(res, err)
+}
+
+// AddNode adds the node with the given identifier and Nexus URL to
+// the Nexus cluster of which the current node is a member of.
+func (dkvClnt *DKVClient) AddNode(nodeId uint32, nodeUrl string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	addNodeReq := &serverpb.AddNodeRequest{NodeId: nodeId, NodeUrl: nodeUrl}
+	res, err := dkvClnt.dkvClusCli.AddNode(ctx, addNodeReq)
+	return errorFromStatus(res, err)
+}
+
+// RemoveNode removes the node with the given identifier from the
+// Nexus cluster of which the current node is a member of.
+func (dkvClnt *DKVClient) RemoveNode(nodeId uint32) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	remNodeReq := &serverpb.RemoveNodeRequest{NodeId: nodeId}
+	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
 	return errorFromStatus(res, err)
 }
 
