@@ -80,17 +80,17 @@ $ ./bin/dkvsrv \
 ```
 
 ```bash
-$ ./bin/dkvctl -dkvAddr <host:port> -set <key:value>
+$ ./bin/dkvctl -dkvAddr <host:port> -set <key> <value>
 $ ./bin/dkvctl -dkvAddr <host:port> -get <key>
 ```
 
 Example session:
 ```bash
 $ ./bin/dkvsrv -dbFolder /tmp/db -dkvSvcPort 8080 -storage rocksdb
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo:bar
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
 bar
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set hello:world
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set hello world
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
 world
 ```
@@ -118,9 +118,7 @@ $ ./bin/dkvsrv \
     -dbListenAddr <host:port> \
     -dbRole master \
     -nexusNodeId <node_id> \
-    -nexusClusterUrl <cluster_url> \
-    -nexusSnapDir <folder_path> \
-    -nexusLogDir <folder_path>
+    -nexusClusterUrl <cluster_url>
 ```
 
 All these 3 DKV instances form a database cluster each listening on separate ports for
@@ -141,6 +139,54 @@ Then the value for `nexusClusterUrl` must be:
 Note that same value must be used in each of the 3 commands used to launch the DKV cluster.
 Subsequently, `dkvctl` utility can be used to perform keyspace mutations against any one
 of the DKV instances which are then automatically replicated to the other 2 instances.
+
+Example session on local machine:
+
+Launch Node 1:
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder /tmp/dkvsrv/n1 \
+    -dbListenAddr 127.0.0.1:9081 \
+    -dbRole master \
+    -nexusNodeId 1 \
+    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+```
+
+Launch Node 2:
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder /tmp/dkvsrv/n2 \
+    -dbListenAddr 127.0.0.1:9082 \
+    -dbRole master \
+    -nexusNodeId 2 \
+    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+```
+
+Launch Node 3:
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder /tmp/dkvsrv/n3 \
+    -dbListenAddr 127.0.0.1:9083 \
+    -dbRole master \
+    -nexusNodeId 3 \
+    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+```
+
+Add a fourth node to the above 3 node cluster:
+```bash
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:9081 -addNode 4 "http://127.0.0.1:9024"
+```
+
+Launch Node 4:
+```bash
+$ ./bin/dkvsrv \
+    -dbFolder /tmp/dkvsrv/n4 \
+    -dbListenAddr 127.0.0.1:9084 \
+    -dbRole master \
+    -nexusNodeId 4 \
+    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023,http://127.0.0.1:9024" \
+    -nexusJoin
+```
 
 ### Launching the DKV server for asynchronous replication
 
@@ -173,7 +219,7 @@ $ ./bin/dkvsrv \
     -dbListenAddr <host:port> \
     -dbEngine <rocksdb|badger> \
     -dbRole slave \
-    -replMasterAddr <dkv_master_listen_addr> \
+    -replMasterAddr <dkv_master_listen_addr>
 ```
 
 Subsequently, any mutations performed on the master node's keyspace using `dkvctl`

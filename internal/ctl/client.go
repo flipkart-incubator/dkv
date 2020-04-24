@@ -9,15 +9,16 @@ import (
 	"google.golang.org/grpc"
 )
 
-// A DKVClient instance is used to communicate with DKV service
-// over GRPC. It is an adapter to the underlying GRPC client that
-// exposes a simpler API to its users without having to deal with
+// A DKVClient instance is used to communicate with various DKV services
+// over GRPC. It is an adapter to the underlying GRPC clients that
+// exposes a simpler API to its users without having to deal with timeouts,
 // contexts and other GRPC semantics.
 type DKVClient struct {
 	cliConn    *grpc.ClientConn
 	dkvCli     serverpb.DKVClient
 	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
+	dkvClusCli serverpb.DKVClusterClient
 }
 
 // TODO: Should these be paramterised ?
@@ -36,7 +37,8 @@ func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli}
+		dkvClusCli := serverpb.NewDKVClusterClient(conn)
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli}
 	}
 	return dkvClnt, err
 }
@@ -48,7 +50,11 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	defer cancel()
 	putReq := &serverpb.PutRequest{Key: key, Value: value}
 	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
-	return errorFromStatus(res.Status, err)
+	var status *serverpb.Status
+	if res != nil {
+		status = res.Status
+	}
+	return errorFromStatus(status, err)
 }
 
 // Get takes the key as byte array and invokes the
@@ -103,6 +109,26 @@ func (dkvClnt *DKVClient) Restore(path string) error {
 	return errorFromStatus(res, err)
 }
 
+// AddNode adds the node with the given identifier and Nexus URL to
+// the Nexus cluster of which the current node is a member of.
+func (dkvClnt *DKVClient) AddNode(nodeID uint32, nodeURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	addNodeReq := &serverpb.AddNodeRequest{NodeId: nodeID, NodeUrl: nodeURL}
+	res, err := dkvClnt.dkvClusCli.AddNode(ctx, addNodeReq)
+	return errorFromStatus(res, err)
+}
+
+// RemoveNode removes the node with the given identifier from the
+// Nexus cluster of which the current node is a member of.
+func (dkvClnt *DKVClient) RemoveNode(nodeID uint32) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	remNodeReq := &serverpb.RemoveNodeRequest{NodeId: nodeID}
+	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
+	return errorFromStatus(res, err)
+}
+
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
 	return dkvClnt.cliConn.Close()
@@ -112,7 +138,7 @@ func errorFromStatus(res *serverpb.Status, err error) error {
 	switch {
 	case err != nil:
 		return err
-	case res.Code != 0:
+	case res != nil && res.Code != 0:
 		return errors.New(res.Message)
 	default:
 		return nil

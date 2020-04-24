@@ -123,3 +123,28 @@ message RestoreRequest {
   string restorePath = 1;
 }
 
+service DKVCluster {
+  // AddNode adds the given DKV node to the cluster that the
+  // current node is a member of.
+  rpc AddNode (AddNodeRequest) returns (Status);
+  // RemoveNode removes the given DKV node from the cluster that
+  // the current node is a member of.
+  rpc RemoveNode (RemoveNodeRequest) returns (Status);
+}
+
+message AddNodeRequest {
+  // NodeId represents the identifier of the node that needs to
+  // be added to the cluster.
+  uint32 nodeId = 1;
+  // NodeUrl represents the URL for the Nexus service running on
+  // the node that needs to be added to the cluster. Other Nexus
+  // peers communicate with this node on this service.
+  string nodeUrl = 2;
+}
+
+message RemoveNodeRequest {
+  // NodeId represents the identifier of the node that needs to
+  // be removed from the cluster.
+  uint32 nodeId = 1;
+}
+

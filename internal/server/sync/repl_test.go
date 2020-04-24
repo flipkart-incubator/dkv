@@ -135,3 +135,14 @@ func (ms *memStore) Close() error {
 	ms.store = nil
 	return nil
 }
+
+func (ms *memStore) GetSnapshot() ([]byte, error) {
+	return gobEncode(ms.store)
+}
+
+func (ms *memStore) PutSnapshot(snap []byte) error {
+	data := make(map[string][]byte)
+	err := gob.NewDecoder(bytes.NewBuffer(snap)).Decode(data)
+	ms.store = data
+	return err
+}

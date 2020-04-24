@@ -2,7 +2,10 @@ package badger
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"os"
 	"path"
@@ -10,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger"
+	badger_pb "github.com/dgraph-io/badger/pb"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
@@ -92,6 +96,42 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 		return nil
 	})
 	return results, err
+}
+
+func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
+	// TODO: Check if any options need to be set on stream
+	strm := bdb.db.NewStream()
+	snap := make(map[string][]byte)
+	strm.Send = func(list *badger_pb.KVList) error {
+		for _, kv := range list.Kv {
+			snap[string(kv.Key)] = kv.Value
+		}
+		return nil
+	}
+	if err := strm.Orchestrate(context.Background()); err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	err := gob.NewEncoder(&buf).Encode(snap)
+	return buf.Bytes(), err
+}
+
+func (bdb *badgerDB) PutSnapshot(snap []byte) error {
+	buf := bytes.NewBuffer(snap)
+	data := make(map[string][]byte)
+	if err := gob.NewDecoder(buf).Decode(&data); err != nil {
+		return err
+	}
+
+	return bdb.db.Update(func(txn *badger.Txn) error {
+		for key, val := range data {
+			if err := txn.Set([]byte(key), val); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 const backupBufSize = 64 << 20
@@ -280,7 +320,7 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 	return appldChngNum, lastErr
 }
 
-var globalMutationError = errors.New("Another global keyspace mutation is in progress")
+var errGlobalMutation = errors.New("Another global keyspace mutation is in progress")
 
 func (bdb *badgerDB) hasGlobalMutation() bool {
 	return atomic.LoadUint32(&bdb.globalMutation) == 1
@@ -290,14 +330,14 @@ func (bdb *badgerDB) beginGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 0, 1) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func (bdb *badgerDB) endGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 1, 0) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func checksForBackup(bckpPath string) error {

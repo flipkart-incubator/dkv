@@ -1,13 +1,17 @@
 package badger
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/dgraph-io/badger"
+	badger_pb "github.com/dgraph-io/badger/pb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
@@ -173,6 +177,90 @@ func TestBackupAndRestore(t *testing.T) {
 	}
 }
 
+func TestGetPutSnapshot(t *testing.T) {
+	numTrxns := 100
+	keyPrefix1, valPrefix1, newValPrefix1 := "firSnapKey", "firSnapVal", "newFirSnapVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+
+	if snap, err := store.GetSnapshot(); err != nil {
+		t.Fatal(err)
+	} else {
+		putKeys(t, numTrxns, keyPrefix1, newValPrefix1)
+		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
+		putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+
+		if err := store.PutSnapshot(snap); err != nil {
+			t.Fatal(err)
+		} else {
+			getKeys(t, numTrxns, keyPrefix1, valPrefix1)
+			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+		}
+	}
+}
+
+func TestIterationUsingStream(t *testing.T) {
+	numTrxns := 100
+	keyPrefix, valPrefix := "firKey", "firVal"
+	putKeys(t, numTrxns, keyPrefix, valPrefix)
+
+	actCnt := 0
+	strm := store.db.NewStream()
+	strm.Send = func(list *badger_pb.KVList) error {
+		for _, kv := range list.Kv {
+			k, v := string(kv.Key), string(kv.Value)
+			if strings.HasPrefix(k, keyPrefix) && strings.HasPrefix(v, valPrefix) {
+				actCnt++
+			}
+		}
+		return nil
+	}
+
+	if err := strm.Orchestrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if actCnt != numTrxns {
+		t.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
+func TestIterationUsingIterator(t *testing.T) {
+	numTrxns := 100
+	keyPrefix1, valPrefix1 := "firKey", "firVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+
+	txn := store.db.NewTransaction(false)
+	defer txn.Discard()
+
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+
+	keyPrefix2, valPrefix2 := "secKey", "secVal"
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+
+	actCnt := 0
+	for it.Rewind(); it.Valid(); it.Next() {
+		item := it.Item()
+		k := string(item.Key())
+		if val, err := item.ValueCopy(nil); err != nil {
+			t.Fatal(err)
+		} else {
+			v := string(val)
+			if strings.HasPrefix(k, keyPrefix1) && strings.HasPrefix(v, valPrefix1) {
+				actCnt++
+			}
+
+			if strings.HasPrefix(k, keyPrefix2) || strings.HasPrefix(v, valPrefix2) {
+				t.Errorf("Did not expect snapshot iterator to give key: %s with value: %s", k, v)
+			}
+		}
+	}
+
+	if actCnt != numTrxns {
+		t.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
 func TestPreventParallelBackups(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
@@ -293,6 +381,67 @@ func BenchmarkGetMissingKey(b *testing.B) {
 	}
 }
 
+func BenchmarkStreamBasedIteration(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+	numTrxns := b.N
+	keyPrefix, valPrefix := "strmBenchKey", "strmBenchVal"
+	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	b.StartTimer()
+
+	actCnt := 0
+	strm := store.db.NewStream()
+	strm.Send = func(list *badger_pb.KVList) error {
+		for _, kv := range list.Kv {
+			k, v := string(kv.Key), string(kv.Value)
+			if expVal, present := data[k]; present && expVal == v {
+				actCnt++
+			}
+		}
+		return nil
+	}
+
+	if err := strm.Orchestrate(context.Background()); err != nil {
+		b.Fatal(err)
+	}
+
+	if actCnt != numTrxns {
+		b.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
+func BenchmarkIteratorBasedIteration(b *testing.B) {
+	b.StopTimer()
+	b.ResetTimer()
+	numTrxns := b.N
+	keyPrefix, valPrefix := "benchKey", "benchVal"
+	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	b.StartTimer()
+
+	txn := store.db.NewTransaction(false)
+	defer txn.Discard()
+
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+
+	actCnt := 0
+	for it.Rewind(); it.Valid(); it.Next() {
+		item := it.Item()
+		k := string(item.Key())
+		if val, err := item.ValueCopy(nil); err != nil {
+			b.Fatal(err)
+		} else {
+			if expVal, present := data[k]; present && expVal == string(val) {
+				actCnt++
+			}
+		}
+	}
+
+	if actCnt != numTrxns {
+		b.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
 func checkGetResults(t *testing.T, ks, expVs [][]byte) {
 	if results, err := store.Get(ks...); err != nil {
 		t.Error(err)
@@ -325,7 +474,8 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
-func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
+func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string) map[string]string {
+	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 		if err := store.Put([]byte(k), []byte(v)); err != nil {
@@ -335,9 +485,12 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 				t.Fatal(err)
 			} else if string(readResults[0]) != string(v) {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
+			} else {
+				data[k] = v
 			}
 		}
 	}
+	return data
 }
 
 func checkMissingGetResults(t *testing.T, ks [][]byte) {

@@ -2,6 +2,7 @@ package rocksdb
 
 import (
 	"errors"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -121,6 +122,76 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
 	}
 }
 
+const tempFilePrefix = "rocksdb-sstfile-"
+
+func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
+	snap := rdb.db.NewSnapshot()
+	defer rdb.db.ReleaseSnapshot(snap)
+
+	envOpts := gorocksdb.NewDefaultEnvOptions()
+	opts := gorocksdb.NewDefaultOptions()
+	sstWrtr := gorocksdb.NewSSTFileWriter(envOpts, opts)
+	defer sstWrtr.Destroy()
+
+	sstFile, err := storage.CreateTempFile(tempFilePrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	defer os.Remove(sstFile)
+	if err = sstWrtr.Open(sstFile); err != nil {
+		return nil, err
+	}
+
+	// TODO: Any options need to be set
+	readOpts := gorocksdb.NewDefaultReadOptions()
+	defer readOpts.Destroy()
+	readOpts.SetSnapshot(snap)
+
+	it := rdb.db.NewIterator(readOpts)
+	defer it.Close()
+	it.SeekToFirst()
+
+	if it.Valid() {
+		for it.Valid() {
+			sstWrtr.Add(it.Key().Data(), it.Value().Data())
+			it.Next()
+		}
+	} else {
+		return nil, nil
+	}
+
+	if err = sstWrtr.Finish(); err != nil {
+		return nil, err
+	}
+
+	return ioutil.ReadFile(sstFile)
+}
+
+func (rdb *rocksDB) PutSnapshot(snap []byte) error {
+	if snap == nil || len(snap) == 0 {
+		return nil
+	}
+
+	sstFile, err := storage.CreateTempFile(tempFilePrefix)
+	if err != nil {
+		return err
+	}
+
+	defer os.Remove(sstFile)
+	err = ioutil.WriteFile(sstFile, snap, 0644)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Check any option needs to be set
+	ingestOpts := gorocksdb.NewDefaultIngestExternalFileOptions()
+	defer ingestOpts.Destroy()
+
+	err = rdb.db.IngestExternalFile([]string{sstFile}, ingestOpts)
+	return err
+}
+
 func (rdb *rocksDB) BackupTo(folder string) error {
 	if err := checksForBackup(folder); err != nil {
 		return err
@@ -142,7 +213,7 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 	return be.CreateNewBackupFlush(rdb.db, true)
 }
 
-const tempDirPrefx = "rocksdb-restore-"
+const tempDirPrefix = "rocksdb-restore-"
 
 func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
 	// 1. Prevent any other backups or restores
@@ -178,7 +249,7 @@ func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
 	defer be.Close()
 
 	// 6. Create temp folder for the restored data
-	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
+	restoreFolder, err := storage.CreateTempFolder(tempDirPrefix)
 	if err != nil {
 		return err
 	}
@@ -307,7 +378,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	return results, nil
 }
 
-var globalMutationError = errors.New("Another global keyspace mutation is in progress")
+var errGlobalMutation = errors.New("Another global keyspace mutation is in progress")
 
 func (rdb *rocksDB) hasGlobalMutation() bool {
 	return atomic.LoadUint32(&rdb.globalMutation) == 1
@@ -317,14 +388,14 @@ func (rdb *rocksDB) beginGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func (rdb *rocksDB) endGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func checksForBackup(bckpPath string) error {
