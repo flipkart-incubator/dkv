@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 
@@ -29,6 +30,8 @@ var (
 	dbRole           string
 	replMasterAddr   string
 	replPollInterval uint
+
+	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 )
 
 func init() {
@@ -38,6 +41,7 @@ func init() {
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.UintVar(&replPollInterval, "replPollInterval", 5, "Interval (in seconds) used by the replication poller of this node")
+	initFlagsForNexusDirs()
 }
 
 type dkvSrvrRole string
@@ -48,33 +52,15 @@ const (
 	slaveRole              = "slave"
 )
 
-func toDKVSrvrRole(role string) dkvSrvrRole {
-	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
-}
-
-func (role dkvSrvrRole) PrintFlags() {
-	switch role {
-	case noRole:
-		printFlagsWithPrefix("db")
-	case masterRole:
-		if haveFlagsWithPrefix("nexus") {
-			printFlagsWithPrefix("db", "nexus")
-		} else {
-			printFlagsWithPrefix("db")
-		}
-	case slaveRole:
-		printFlagsWithPrefix("db", "repl")
-	}
-}
-
 func main() {
 	flag.Parse()
+	setFlagsForNexusDirs()
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
-	srvrRole.PrintFlags()
+	srvrRole.printFlags()
 
 	switch srvrRole {
 	case noRole:
@@ -154,24 +140,76 @@ func printFlagsWithPrefix(prefixes ...string) {
 	})
 }
 
+func toDKVSrvrRole(role string) dkvSrvrRole {
+	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
+}
+
+func (role dkvSrvrRole) printFlags() {
+	switch role {
+	case noRole:
+		printFlagsWithPrefix("db")
+	case masterRole:
+		if haveFlagsWithPrefix("nexus") {
+			printFlagsWithPrefix("db", "nexus")
+		} else {
+			printFlagsWithPrefix("db")
+		}
+	case slaveRole:
+		printFlagsWithPrefix("db", "repl")
+	}
+}
+
+func initFlagsForNexusDirs() {
+	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexusLogDir"), flag.Lookup("nexusSnapDir")
+	dbPath := flag.Lookup("dbFolder").DefValue
+	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
+	nexusLogDirFlag.Value.Set("")
+	nexusSnapDirFlag.Value.Set("")
+}
+
+func setFlagsForNexusDirs() {
+	if nexusLogDirFlag.Value.String() == "" {
+		nexusLogDirFlag.Value.Set(path.Join(dbFolder, "logs"))
+	}
+	if nexusSnapDirFlag.Value.String() == "" {
+		nexusSnapDirFlag.Value.Set(path.Join(dbFolder, "snap"))
+	}
+}
+
 const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
+	if err := os.MkdirAll(dbFolder, 0777); err != nil {
+		panic(err)
+	}
+
+	dbDir := path.Join(dbFolder, "data")
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
+		rocksDb := rocksdb.OpenDB(dbDir, cacheSize)
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb := badger.OpenDB(dbFolder)
+		badgerDb := badger.OpenDB(dbDir)
 		return badgerDb, nil, badgerDb, badgerDb
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
 	}
 }
 
+func mkdirNexusDirs() {
+	if err := os.MkdirAll(nexusLogDirFlag.Value.String(), 0777); err != nil {
+		panic(fmt.Sprintf("Unable to create Nexus logDir. Error: %v", err))
+	}
+	if err := os.MkdirAll(nexusSnapDirFlag.Value.String(), 0777); err != nil {
+		panic(fmt.Sprintf("Unable to create Nexus snapDir. Error: %v", err))
+	}
+}
+
 func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
+	mkdirNexusDirs()
 	replStore := sync.NewDKVReplStore(kvs)
-	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, nexus.OptionsFromFlags()...); err != nil {
+	nexusOpts := nexus.OptionsFromFlags()
+	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, nexusOpts...); err != nil {
 		panic(err)
 	} else {
 		nexusRepl.Start()
