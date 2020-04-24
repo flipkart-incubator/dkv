@@ -107,12 +107,13 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 var dkvAddr string
 
 func init() {
-	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "DKV server address - host:port")
+	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	for _, c := range cmds {
 		flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
 	}
 	flag.Usage = func() {
 		fmt.Printf("Usage of %s:\n", os.Args[0])
+		fmt.Printf("  -dkvAddr %s\n", flag.Lookup("dkvAddr").Usage)
 		for _, cmd := range cmds {
 			cmd.usage()
 		}
