@@ -80,11 +80,11 @@ func (c *cmd) addNode(client *ctl.DKVClient, args ...string) {
 	if len(args) != 2 {
 		c.usage()
 	} else {
-		if nodeId, err := strconv.ParseUint(args[0], 10, 32); err != nil {
+		if nodeID, err := strconv.ParseUint(args[0], 10, 32); err != nil {
 			fmt.Printf("Unable to convert %s into an unsigned 32-bit integer\n", args[0])
 		} else {
-			if err := client.AddNode(uint32(nodeId), args[1]); err != nil {
-				fmt.Printf("Unable to add node with ID: %d and URL: %s\n", nodeId, args[1])
+			if err := client.AddNode(uint32(nodeID), args[1]); err != nil {
+				fmt.Printf("Unable to add node with ID: %d and URL: %s\n", nodeID, args[1])
 			}
 		}
 	}
@@ -94,11 +94,11 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
-		if nodeId, err := strconv.ParseUint(args[0], 10, 32); err != nil {
+		if nodeID, err := strconv.ParseUint(args[0], 10, 32); err != nil {
 			fmt.Printf("Unable to convert %s into an unsigned 32-bit integer\n", args[0])
 		} else {
-			if err := client.RemoveNode(uint32(nodeId)); err != nil {
-				fmt.Printf("Unable to remove node with ID: %d\n", nodeId)
+			if err := client.RemoveNode(uint32(nodeID)); err != nil {
+				fmt.Printf("Unable to remove node with ID: %d\n", nodeID)
 			}
 		}
 	}

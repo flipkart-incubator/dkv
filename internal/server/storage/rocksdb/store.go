@@ -378,7 +378,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	return results, nil
 }
 
-var globalMutationError = errors.New("Another global keyspace mutation is in progress")
+var errGlobalMutation = errors.New("Another global keyspace mutation is in progress")
 
 func (rdb *rocksDB) hasGlobalMutation() bool {
 	return atomic.LoadUint32(&rdb.globalMutation) == 1
@@ -388,14 +388,14 @@ func (rdb *rocksDB) beginGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 0, 1) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func (rdb *rocksDB) endGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&rdb.globalMutation, 1, 0) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func checksForBackup(bckpPath string) error {

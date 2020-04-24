@@ -320,7 +320,7 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 	return appldChngNum, lastErr
 }
 
-var globalMutationError = errors.New("Another global keyspace mutation is in progress")
+var errGlobalMutation = errors.New("Another global keyspace mutation is in progress")
 
 func (bdb *badgerDB) hasGlobalMutation() bool {
 	return atomic.LoadUint32(&bdb.globalMutation) == 1
@@ -330,14 +330,14 @@ func (bdb *badgerDB) beginGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 0, 1) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func (bdb *badgerDB) endGlobalMutation() error {
 	if atomic.CompareAndSwapUint32(&bdb.globalMutation, 1, 0) {
 		return nil
 	}
-	return globalMutationError
+	return errGlobalMutation
 }
 
 func checksForBackup(bckpPath string) error {

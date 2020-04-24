@@ -111,20 +111,20 @@ func (dkvClnt *DKVClient) Restore(path string) error {
 
 // AddNode adds the node with the given identifier and Nexus URL to
 // the Nexus cluster of which the current node is a member of.
-func (dkvClnt *DKVClient) AddNode(nodeId uint32, nodeUrl string) error {
+func (dkvClnt *DKVClient) AddNode(nodeID uint32, nodeURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	addNodeReq := &serverpb.AddNodeRequest{NodeId: nodeId, NodeUrl: nodeUrl}
+	addNodeReq := &serverpb.AddNodeRequest{NodeId: nodeID, NodeUrl: nodeURL}
 	res, err := dkvClnt.dkvClusCli.AddNode(ctx, addNodeReq)
 	return errorFromStatus(res, err)
 }
 
 // RemoveNode removes the node with the given identifier from the
 // Nexus cluster of which the current node is a member of.
-func (dkvClnt *DKVClient) RemoveNode(nodeId uint32) error {
+func (dkvClnt *DKVClient) RemoveNode(nodeID uint32) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	remNodeReq := &serverpb.RemoveNodeRequest{NodeId: nodeId}
+	remNodeReq := &serverpb.RemoveNodeRequest{NodeId: nodeID}
 	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
 	return errorFromStatus(res, err)
 }

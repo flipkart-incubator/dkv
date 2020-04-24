@@ -219,7 +219,7 @@ $ ./bin/dkvsrv \
     -dbListenAddr <host:port> \
     -dbEngine <rocksdb|badger> \
     -dbRole slave \
-    -replMasterAddr <dkv_master_listen_addr> \
+    -replMasterAddr <dkv_master_listen_addr>
 ```
 
 Subsequently, any mutations performed on the master node's keyspace using `dkvctl`

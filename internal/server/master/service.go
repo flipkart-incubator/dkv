@@ -100,6 +100,10 @@ func (ss *standaloneService) Close() error {
 	return nil
 }
 
+// A DKVClusterService represents a service for serving key value data
+// along with exposing all mutations as a replication stream. Moreover
+// it also provides means to add and remove DKV nodes onto the current
+// cluster.
 type DKVClusterService interface {
 	DKVService
 	serverpb.DKVClusterServer
