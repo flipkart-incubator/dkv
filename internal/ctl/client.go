@@ -50,7 +50,11 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	defer cancel()
 	putReq := &serverpb.PutRequest{Key: key, Value: value}
 	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
-	return errorFromStatus(res.Status, err)
+	var status *serverpb.Status
+	if res != nil {
+		status = res.Status
+	}
+	return errorFromStatus(status, err)
 }
 
 // Get takes the key as byte array and invokes the
@@ -134,7 +138,7 @@ func errorFromStatus(res *serverpb.Status, err error) error {
 	switch {
 	case err != nil:
 		return err
-	case res.Code != 0:
+	case res != nil && res.Code != 0:
 		return errors.New(res.Message)
 	default:
 		return nil
