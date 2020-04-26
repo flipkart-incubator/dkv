@@ -13,9 +13,9 @@ RUN apt-get update && apt-get install --yes --allow-unauthenticated zlib1g-dev l
 RUN curl -fsSL https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar xz \
     && cd zstd-1.4.4 && make install
 
-# Install RocksDB v6.1.2
-RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v6.1.2.tar.gz | tar xz \
-    && cd rocksdb-6.1.2 && make install
+# Install RocksDB v6.5.3
+RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v6.5.3.tar.gz | tar xz \
+    && cd rocksdb-6.5.3 && make install
 
 # Install GoLang
 RUN curl -fsSL https://dl.google.com/go/go1.13.4.linux-amd64.tar.gz | tar xz \
