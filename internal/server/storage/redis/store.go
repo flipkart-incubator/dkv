@@ -60,6 +60,10 @@ func (rdb *redisDBStore) PutSnapshot(snap []byte) error {
 	return nil
 }
 
+func (rdb *redisDBStore) Iterate(iterOpts ...storage.IterationOption) (storage.Iterator, error) {
+	return nil, nil
+}
+
 func (rdb *redisDBStore) getSingleKey(key []byte) ([]byte, error) {
 	val, err := rdb.db.Get(string(key)).Result()
 	if err != nil && !strings.HasSuffix(err.Error(), "nil") {

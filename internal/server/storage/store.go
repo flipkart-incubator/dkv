@@ -27,6 +27,8 @@ type KVStore interface {
 	// into the current state. Any existing state will be discarded
 	// or replaced with the given state.
 	PutSnapshot([]byte) error
+
+	Iterate(...IterationOption) (Iterator, error)
 }
 
 // A Backupable represents the capability of the underlying store

@@ -320,6 +320,61 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 	return appldChngNum, lastErr
 }
 
+type iter struct {
+	itOpts  storage.IterationOptions
+	txn     *badger.Txn
+	it      *badger.Iterator
+	iterErr error
+}
+
+func (bdbIter *iter) HasNext() bool {
+	if bdbIter.itOpts.HasKeyPrefix() {
+		return bdbIter.it.ValidForPrefix(bdbIter.itOpts.KeyPrefix())
+	}
+	return bdbIter.it.Valid()
+}
+
+func (bdbIter *iter) Next() ([]byte, []byte) {
+	defer bdbIter.it.Next()
+	item := bdbIter.it.Item()
+	key := item.KeyCopy(nil)
+	val, err := item.ValueCopy(nil)
+	if err != nil {
+		bdbIter.iterErr = err
+	}
+	return key, val
+}
+
+func (bdbIter *iter) Err() error {
+	return bdbIter.iterErr
+}
+
+func (bdbIter *iter) Close() error {
+	bdbIter.it.Close()
+	bdbIter.txn.Discard()
+	return nil
+}
+
+func (bdb *badgerDB) newIter(itOpts storage.IterationOptions) *iter {
+	txn := bdb.db.NewTransaction(false)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+
+	if itOpts.HasStartKey() {
+		it.Seek(itOpts.StartKey())
+	} else {
+		it.Rewind()
+	}
+	return &iter{itOpts, txn, it, nil}
+}
+
+func (bdb *badgerDB) Iterate(iterOpts ...storage.IterationOption) (storage.Iterator, error) {
+	itOpts, err := storage.NewIteratorOptions(iterOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return bdb.newIter(itOpts), nil
+}
+
 var errGlobalMutation = errors.New("Another global keyspace mutation is in progress")
 
 func (bdb *badgerDB) hasGlobalMutation() bool {
