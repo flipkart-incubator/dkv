@@ -152,13 +152,14 @@ func TestIteratorPrefixScan(t *testing.T) {
 	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
 
 	prefix := []byte("bbPrefix")
-	it, err := store.Iterate(
+	itOpts, err := storage.NewIteratorOptions(
 		storage.IterationPrefixKey(prefix),
 		storage.IterationStartKey(prefix),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
+	it := store.Iterate(itOpts)
 	defer it.Close()
 
 	actCount := 0

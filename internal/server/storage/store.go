@@ -27,8 +27,10 @@ type KVStore interface {
 	// into the current state. Any existing state will be discarded
 	// or replaced with the given state.
 	PutSnapshot([]byte) error
-
-	Iterate(...IterationOption) (Iterator, error)
+	// Iterate iterates through the entire keyspace in no particular
+	// order. IterationOptions can be used to control where to begin
+	// iteration as well as what keys are iterated by their prefix.
+	Iterate(IterationOptions) Iterator
 }
 
 // A Backupable represents the capability of the underlying store

@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -127,6 +128,36 @@ func (dkvClnt *DKVClient) RemoveNode(nodeID uint32) error {
 	remNodeReq := &serverpb.RemoveNodeRequest{NodeId: nodeID}
 	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
 	return errorFromStatus(res, err)
+}
+
+// KVPair is convenience wrapper that captures a key and its value.
+type KVPair struct {
+	Key, Val []byte
+}
+
+// Iterate invokes the underlying GRPC method for iterating through the
+// entire keyspace in no particular order. `keyPrefix` can be used to
+// select only the keys matching the given prefix and `startKey` can
+// be used to set the lower bound for the iteration.
+func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, error) {
+	iterReq := &serverpb.IterateRequest{KeyPrefix: keyPrefix, StartKey: startKey}
+	kvStrm, err := dkvClnt.dkvCli.Iterate(context.Background(), iterReq)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan *KVPair)
+	go func() {
+		defer close(ch)
+		for {
+			itRes, err := kvStrm.Recv()
+			if err == io.EOF || itRes == nil {
+				break
+			} else {
+				ch <- &KVPair{itRes.Key, itRes.Value}
+			}
+		}
+	}()
+	return ch, nil
 }
 
 // Close closes the underlying GRPC client connection to DKV service

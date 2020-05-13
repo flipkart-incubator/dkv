@@ -351,12 +351,8 @@ func (rdbIter *iter) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) Iterate(iterOpts ...storage.IterationOption) (storage.Iterator, error) {
-	itOpts, err := storage.NewIteratorOptions(iterOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return rdb.newIter(itOpts), nil
+func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
+	return rdb.newIter(iterOpts)
 }
 
 func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {

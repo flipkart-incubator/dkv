@@ -60,8 +60,8 @@ func (rdb *redisDBStore) PutSnapshot(snap []byte) error {
 	return nil
 }
 
-func (rdb *redisDBStore) Iterate(iterOpts ...storage.IterationOption) (storage.Iterator, error) {
-	return nil, nil
+func (rdb *redisDBStore) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
+	return nil
 }
 
 func (rdb *redisDBStore) getSingleKey(key []byte) ([]byte, error) {

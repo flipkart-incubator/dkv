@@ -367,12 +367,8 @@ func (bdb *badgerDB) newIter(itOpts storage.IterationOptions) *iter {
 	return &iter{itOpts, txn, it, nil}
 }
 
-func (bdb *badgerDB) Iterate(iterOpts ...storage.IterationOption) (storage.Iterator, error) {
-	itOpts, err := storage.NewIteratorOptions(iterOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return bdb.newIter(itOpts), nil
+func (bdb *badgerDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
+	return bdb.newIter(iterOpts)
 }
 
 var errGlobalMutation = errors.New("Another global keyspace mutation is in progress")

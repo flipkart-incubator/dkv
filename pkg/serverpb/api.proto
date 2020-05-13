@@ -9,8 +9,28 @@ service DKV {
   // Get gets the value associated with the given key from the key value store
   rpc Get (GetRequest) returns (GetResponse);
 
-  // MultiGet gets all the values associated with the given keys from the key value store
+  // MultiGet gets the values associated with given keys from the key value store
   rpc MultiGet (MultiGetRequest) returns (MultiGetResponse);
+
+  // Iterate iterates through the entire keyspace in no particular order and
+  // returns the results as a stream of key value pairs
+  rpc Iterate (IterateRequest) returns (stream IterateResponse);
+}
+
+message IterateRequest {
+  // KeyPrefix can be used to iterate through keys that have this prefix.
+  bytes keyPrefix = 1;
+  // StartKey can be used to begin the iteration from the specified key.
+  bytes startKey = 2;
+}
+
+message IterateResponse {
+  // Status captures any errors with the current iteration.
+  Status status = 1;
+  // Key of the current iteration.
+  bytes key = 2;
+  // Value of the current iteration.
+  bytes value = 3;
 }
 
 message Status {

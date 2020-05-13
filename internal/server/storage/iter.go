@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"strings"
+
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
 type IterationOptions interface {
@@ -14,7 +15,7 @@ type IterationOptions interface {
 	StartKey() []byte
 }
 
-type IterationOption func(*iterOpts) error
+type IterationOption func(*iterOpts)
 
 type iterOpts struct {
 	keyPrefix []byte
@@ -53,31 +54,21 @@ func (io *iterOpts) validate() error {
 func NewIteratorOptions(opts ...IterationOption) (IterationOptions, error) {
 	itOpts := new(iterOpts)
 	for _, opt := range opts {
-		if err := opt(itOpts); err != nil {
-			return nil, err
-		}
+		opt(itOpts)
 	}
 
 	return itOpts, itOpts.validate()
 }
 
 func IterationPrefixKey(prefix []byte) IterationOption {
-	return func(opts *iterOpts) error {
-		if prefix == nil || strings.TrimSpace(string(prefix)) == "" {
-			return errors.New("invalid key prefix for iteration")
-		}
+	return func(opts *iterOpts) {
 		opts.keyPrefix = prefix
-		return nil
 	}
 }
 
 func IterationStartKey(start []byte) IterationOption {
-	return func(opts *iterOpts) error {
-		if start == nil || strings.TrimSpace(string(start)) == "" {
-			return errors.New("invalid start key for iteration")
-		}
+	return func(opts *iterOpts) {
 		opts.startKey = start
-		return nil
 	}
 }
 
@@ -86,4 +77,33 @@ type Iterator interface {
 	HasNext() bool
 	Next() ([]byte, []byte)
 	Err() error
+}
+
+type Iteration interface {
+	ForEach(func([]byte, []byte) error) error
+}
+
+type iteration struct {
+	kvs  KVStore
+	opts *iterOpts
+}
+
+func (iter *iteration) ForEach(hndlr func([]byte, []byte) error) error {
+	if err := iter.opts.validate(); err != nil {
+		return err
+	}
+
+	itrtr := iter.kvs.Iterate(iter.opts)
+	defer itrtr.Close()
+	for itrtr.HasNext() {
+		if err := hndlr(itrtr.Next()); err != nil {
+			return err
+		}
+	}
+	return itrtr.Err()
+}
+
+func NewIteration(kvs KVStore, iterReq *serverpb.IterateRequest) Iteration {
+	itOpts := &iterOpts{iterReq.KeyPrefix, iterReq.StartKey}
+	return &iteration{kvs, itOpts}
 }

@@ -148,6 +148,6 @@ func (ms *memStore) PutSnapshot(snap []byte) error {
 	return err
 }
 
-func (ms *memStore) Iterate(iterOpts ...storage.IterationOption) (storage.Iterator, error) {
-	return nil, nil
+func (ms *memStore) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
+	return nil
 }
