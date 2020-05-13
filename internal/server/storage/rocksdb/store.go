@@ -319,8 +319,8 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 	readOpts := gorocksdb.NewDefaultReadOptions()
 	it := rdb.db.NewIterator(readOpts)
 
-	if iterOpts.HasStartKey() {
-		it.Seek(iterOpts.StartKey())
+	if sk, prsnt := iterOpts.StartKey(); prsnt {
+		it.Seek(sk)
 	} else {
 		it.SeekToFirst()
 	}
@@ -328,8 +328,8 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 }
 
 func (rdbIter *iter) HasNext() bool {
-	if rdbIter.iterOpts.HasKeyPrefix() {
-		return rdbIter.rdbIter.ValidForPrefix(rdbIter.iterOpts.KeyPrefix())
+	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
+		return rdbIter.rdbIter.ValidForPrefix(kp)
 	}
 	return rdbIter.rdbIter.Valid()
 }

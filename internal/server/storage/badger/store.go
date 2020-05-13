@@ -328,8 +328,8 @@ type iter struct {
 }
 
 func (bdbIter *iter) HasNext() bool {
-	if bdbIter.itOpts.HasKeyPrefix() {
-		return bdbIter.it.ValidForPrefix(bdbIter.itOpts.KeyPrefix())
+	if kp, prsnt := bdbIter.itOpts.KeyPrefix(); prsnt {
+		return bdbIter.it.ValidForPrefix(kp)
 	}
 	return bdbIter.it.Valid()
 }
@@ -359,8 +359,8 @@ func (bdb *badgerDB) newIter(itOpts storage.IterationOptions) *iter {
 	txn := bdb.db.NewTransaction(false)
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 
-	if itOpts.HasStartKey() {
-		it.Seek(itOpts.StartKey())
+	if sk, prsnt := itOpts.StartKey(); prsnt {
+		it.Seek(sk)
 	} else {
 		it.Rewind()
 	}

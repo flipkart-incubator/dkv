@@ -9,10 +9,8 @@ import (
 )
 
 type IterationOptions interface {
-	HasKeyPrefix() bool
-	KeyPrefix() []byte
-	HasStartKey() bool
-	StartKey() []byte
+	KeyPrefix() ([]byte, bool)
+	StartKey() ([]byte, bool)
 }
 
 type IterationOption func(*iterOpts)
@@ -22,26 +20,18 @@ type iterOpts struct {
 	startKey  []byte
 }
 
-func (io *iterOpts) HasKeyPrefix() bool {
-	return io.keyPrefix != nil && len(io.keyPrefix) > 0
+func (io *iterOpts) KeyPrefix() ([]byte, bool) {
+	return io.keyPrefix, io.keyPrefix != nil && len(io.keyPrefix) > 0
 }
 
-func (io *iterOpts) KeyPrefix() []byte {
-	return io.keyPrefix
-}
-
-func (io *iterOpts) HasStartKey() bool {
-	return io.startKey != nil && len(io.startKey) > 0
-}
-
-func (io *iterOpts) StartKey() []byte {
-	return io.startKey
+func (io *iterOpts) StartKey() ([]byte, bool) {
+	return io.startKey, io.startKey != nil && len(io.startKey) > 0
 }
 
 func (io *iterOpts) validate() error {
-	if io.HasKeyPrefix() {
-		if io.HasStartKey() {
-			if !bytes.HasPrefix(io.StartKey(), io.KeyPrefix()) {
+	if kp, kpPrsnt := io.KeyPrefix(); kpPrsnt {
+		if sk, skPrsnt := io.StartKey(); skPrsnt {
+			if !bytes.HasPrefix(sk, kp) {
 				return errors.New("IterationStartKey must have the same prefix as IterationPrefixKey")
 			}
 		} else {
