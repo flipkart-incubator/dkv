@@ -76,6 +76,19 @@ func (dss *dkvSlaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.
 	return res, err
 }
 
+func (dss *dkvSlaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
+	iteration := storage.NewIteration(dss.store, iterReq)
+	err := iteration.ForEach(func(k, v []byte) error {
+		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: k, Value: v}
+		return dkvIterSrvr.Send(itRes)
+	})
+	if err != nil {
+		itRes := &serverpb.IterateResponse{Status: newErrorStatus(err)}
+		return dkvIterSrvr.Send(itRes)
+	}
+	return nil
+}
+
 func (dss *dkvSlaveService) Close() error {
 	dss.replStop <- struct{}{}
 	dss.replTckr.Stop()

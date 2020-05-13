@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 )
@@ -20,6 +21,7 @@ type cmd struct {
 var cmds = []*cmd{
 	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, ""},
 	{"get", "<key>", "Get value for the given key", (*cmd).get, ""},
+	{"iter", "[<prefix>]:[<startKey>]", "Iterate through the keyspace", (*cmd).iter, ""},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
 	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
@@ -36,6 +38,8 @@ func (c *cmd) set(client *ctl.DKVClient, args ...string) {
 	} else {
 		if err := client.Put([]byte(args[0]), []byte(args[1])); err != nil {
 			fmt.Printf("Unable to perform SET. Error: %v\n", err)
+		} else {
+			fmt.Println("OK")
 		}
 	}
 }
@@ -48,6 +52,28 @@ func (c *cmd) get(client *ctl.DKVClient, args ...string) {
 			fmt.Printf("Unable to perform GET. Error: %v\n", err)
 		} else {
 			fmt.Println(string(res.Value))
+		}
+	}
+}
+
+func (c *cmd) iter(client *ctl.DKVClient, args ...string) {
+	var kyPrfx, strtKy string
+	if len(args) > 0 {
+		comps := strings.Split(args[0], ":")
+		kyPrfx, strtKy = comps[0], comps[0]
+		if len(comps) > 1 {
+			strtKy = comps[1]
+		}
+	}
+	if ch, err := client.Iterate([]byte(kyPrfx), []byte(strtKy)); err != nil {
+		fmt.Printf("Unable to perform iteration. Error: %v\n", err)
+	} else {
+		for kvp := range ch {
+			if kvp.ErrMsg != "" {
+				fmt.Printf("Error: %s\n", kvp.ErrMsg)
+			} else {
+				fmt.Printf("%s => %s\n", kvp.Key, kvp.Val)
+			}
 		}
 	}
 }
@@ -111,29 +137,45 @@ func init() {
 	for _, c := range cmds {
 		flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
 	}
-	flag.Usage = func() {
-		fmt.Printf("Usage of %s:\n", os.Args[0])
-		fmt.Printf("  -dkvAddr %s\n", flag.Lookup("dkvAddr").Usage)
-		for _, cmd := range cmds {
-			cmd.usage()
-		}
+	flag.Usage = usage
+}
+
+func usage() {
+	fmt.Printf("Usage of %s:\n", os.Args[0])
+	dkvAddrFlag := flag.Lookup("dkvAddr")
+	fmt.Printf("  -dkvAddr %s (default: %s)\n", dkvAddrFlag.Usage, dkvAddrFlag.DefValue)
+	for _, cmd := range cmds {
+		cmd.usage()
 	}
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		usage()
+		return
+	}
+
 	flag.Parse()
+	fmt.Printf("Connecting to DKV service at %s...", dkvAddr)
 	client, err := ctl.NewInSecureDKVClient(dkvAddr)
 	if err != nil {
-		fmt.Printf("Unable to create DKV client. Error: %v\n", err)
+		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
+		return
 	}
+	fmt.Println("DONE")
 	defer client.Close()
 
+	var validCmd bool
 	for _, c := range cmds {
 		if c.value != "" {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)
 			c.fn(c, client, args...)
+			validCmd = true
 			break
 		}
+	}
+	if !validCmd {
+		usage()
 	}
 }

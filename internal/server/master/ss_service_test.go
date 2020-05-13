@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,8 @@ const (
 	cacheSize  = 3 << 30
 	dkvSvcPort = 8080
 	dkvSvcHost = "localhost"
-	engine     = "rocksdb" // or "badger"
+	engine     = "rocksdb"
+	// engine = "badger"
 )
 
 var (
@@ -40,6 +42,7 @@ func TestStandaloneService(t *testing.T) {
 		defer dkvSvc.Close()
 		t.Run("testPutAndGet", testPutAndGet)
 		t.Run("testMultiGet", testMultiGet)
+		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
 		t.Run("testBackupRestore", testBackupRestore)
@@ -84,12 +87,30 @@ func testMultiGet(t *testing.T) {
 	}
 }
 
+func testIteration(t *testing.T) {
+	numKeys, keyPrefix, valPrefix := 10, "IterK", "IterV"
+	putKeys(t, numKeys, keyPrefix, valPrefix)
+
+	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
+		t.Fatal(err)
+	} else {
+		for kvp := range ch {
+			k, v := string(kvp.Key), string(kvp.Val)
+			if strings.HasPrefix(k, keyPrefix) {
+				suffix := k[len(keyPrefix):]
+				expVal := valPrefix + suffix
+				if v != expVal {
+					t.Errorf("Expected value to be %s. Actual %s.", expVal, v)
+				}
+			}
+		}
+	}
+}
+
 func testMissingGet(t *testing.T) {
-	key, expectedValue := "MissingKey", ""
-	if val, err := dkvCli.Get([]byte(key)); err != nil {
-		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
-	} else if string(val.Value) != "" {
-		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, val)
+	key := "MissingKey"
+	if val, _ := dkvCli.Get([]byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}
 }
 

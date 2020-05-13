@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -23,16 +24,19 @@ type DKVClient struct {
 
 // TODO: Should these be paramterised ?
 const (
-	ReadBufSize  = 10 << 30
-	WriteBufSize = 10 << 30
-	Timeout      = 5 * time.Second
+	ReadBufSize    = 10 << 30
+	WriteBufSize   = 10 << 30
+	Timeout        = 5 * time.Second
+	ConnectTimeout = 10 * time.Second
 )
 
 // NewInSecureDKVClient creates an insecure GRPC client against the
 // given DKV service address.
 func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 	var dkvClnt *DKVClient
-	conn, err := grpc.Dial(svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize))
+	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize))
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
@@ -129,9 +133,43 @@ func (dkvClnt *DKVClient) RemoveNode(nodeID uint32) error {
 	return errorFromStatus(res, err)
 }
 
+// KVPair is convenience wrapper that captures a key and its value.
+type KVPair struct {
+	Key, Val []byte
+	ErrMsg   string
+}
+
+// Iterate invokes the underlying GRPC method for iterating through the
+// entire keyspace in no particular order. `keyPrefix` can be used to
+// select only the keys matching the given prefix and `startKey` can
+// be used to set the lower bound for the iteration.
+func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, error) {
+	iterReq := &serverpb.IterateRequest{KeyPrefix: keyPrefix, StartKey: startKey}
+	kvStrm, err := dkvClnt.dkvCli.Iterate(context.Background(), iterReq)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan *KVPair)
+	go func() {
+		defer close(ch)
+		for {
+			itRes, err := kvStrm.Recv()
+			if err == io.EOF || itRes == nil {
+				break
+			} else {
+				ch <- &KVPair{itRes.Key, itRes.Value, itRes.Status.Message}
+			}
+		}
+	}()
+	return ch, nil
+}
+
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
-	return dkvClnt.cliConn.Close()
+	if dkvClnt.cliConn != nil {
+		return dkvClnt.cliConn.Close()
+	}
+	return nil
 }
 
 func errorFromStatus(res *serverpb.Status, err error) error {

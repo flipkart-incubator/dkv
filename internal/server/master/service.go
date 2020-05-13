@@ -95,6 +95,19 @@ func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.R
 	return newEmptyStatus(), nil
 }
 
+func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
+	iteration := storage.NewIteration(ss.store, iterReq)
+	err := iteration.ForEach(func(k, v []byte) error {
+		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: k, Value: v}
+		return dkvIterSrvr.Send(itRes)
+	})
+	if err != nil {
+		itRes := &serverpb.IterateResponse{Status: newErrorStatus(err)}
+		return dkvIterSrvr.Send(itRes)
+	}
+	return nil
+}
+
 func (ss *standaloneService) Close() error {
 	ss.store.Close()
 	return nil
@@ -141,6 +154,10 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
 	return ds.DKVService.MultiGet(ctx, multiGetReq)
+}
+
+func (ds *distributedService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
+	return ds.DKVService.Iterate(iterReq, dkvIterSrvr)
 }
 
 func (ds *distributedService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {

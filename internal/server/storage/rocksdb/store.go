@@ -309,6 +309,52 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 	return appldChngNum, nil
 }
 
+type iter struct {
+	iterOpts storage.IterationOptions
+	readOpts *gorocksdb.ReadOptions
+	rdbIter  *gorocksdb.Iterator
+}
+
+func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
+	readOpts := gorocksdb.NewDefaultReadOptions()
+	it := rdb.db.NewIterator(readOpts)
+
+	if sk, prsnt := iterOpts.StartKey(); prsnt {
+		it.Seek(sk)
+	} else {
+		it.SeekToFirst()
+	}
+	return &iter{iterOpts, readOpts, it}
+}
+
+func (rdbIter *iter) HasNext() bool {
+	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
+		return rdbIter.rdbIter.ValidForPrefix(kp)
+	}
+	return rdbIter.rdbIter.Valid()
+}
+
+func (rdbIter *iter) Next() ([]byte, []byte) {
+	defer rdbIter.rdbIter.Next()
+	key := toByteArray(rdbIter.rdbIter.Key())
+	val := toByteArray(rdbIter.rdbIter.Value())
+	return key, val
+}
+
+func (rdbIter *iter) Err() error {
+	return rdbIter.rdbIter.Err()
+}
+
+func (rdbIter *iter) Close() error {
+	rdbIter.readOpts.Destroy()
+	rdbIter.rdbIter.Close()
+	return nil
+}
+
+func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
+	return rdb.newIter(iterOpts)
+}
+
 func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
 	chngRec := &serverpb.ChangeRecord{}
 	chngRec.ChangeNumber = changeNum

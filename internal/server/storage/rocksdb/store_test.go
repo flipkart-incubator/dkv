@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
 )
@@ -138,6 +139,46 @@ func TestSaveChanges(t *testing.T) {
 		}
 		getKeys(t, numTrxns, wbPutKeyPrefix, wbPutValPrefix)
 		noKeys(t, numTrxns, putKeyPrefix)
+	}
+}
+
+func TestIteratorPrefixScan(t *testing.T) {
+	numTrxns := 3
+	keyPrefix1, valPrefix1 := "aaPrefixKey", "aaPrefixVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	keyPrefix2, valPrefix2 := "bbPrefixKey", "bbPrefixVal"
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	keyPrefix3, valPrefix3 := "ccPrefixKey", "ccPrefixVal"
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+
+	prefix := []byte("bbPrefix")
+	itOpts, err := storage.NewIteratorOptions(
+		storage.IterationPrefixKey(prefix),
+		storage.IterationStartKey(prefix),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := store.Iterate(itOpts)
+	defer it.Close()
+
+	actCount := 0
+	for it.HasNext() {
+		key, val := it.Next()
+		actCount++
+		if strings.HasPrefix(string(key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", key, val)
+		} else {
+			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+		}
+	}
+
+	if err := it.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if numTrxns != actCount {
+		t.Errorf("Expected %d records with prefix: %s. But got %d records.", numTrxns, prefix, actCount)
 	}
 }
 
