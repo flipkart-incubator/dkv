@@ -24,16 +24,19 @@ type DKVClient struct {
 
 // TODO: Should these be paramterised ?
 const (
-	ReadBufSize  = 10 << 30
-	WriteBufSize = 10 << 30
-	Timeout      = 5 * time.Second
+	ReadBufSize    = 10 << 30
+	WriteBufSize   = 10 << 30
+	Timeout        = 5 * time.Second
+	ConnectTimeout = 10 * time.Second
 )
 
 // NewInSecureDKVClient creates an insecure GRPC client against the
 // given DKV service address.
 func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
 	var dkvClnt *DKVClient
-	conn, err := grpc.Dial(svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize))
+	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize))
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
@@ -133,6 +136,7 @@ func (dkvClnt *DKVClient) RemoveNode(nodeID uint32) error {
 // KVPair is convenience wrapper that captures a key and its value.
 type KVPair struct {
 	Key, Val []byte
+	ErrMsg   string
 }
 
 // Iterate invokes the underlying GRPC method for iterating through the
@@ -153,7 +157,7 @@ func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, e
 			if err == io.EOF || itRes == nil {
 				break
 			} else {
-				ch <- &KVPair{itRes.Key, itRes.Value}
+				ch <- &KVPair{itRes.Key, itRes.Value, itRes.Status.Message}
 			}
 		}
 	}()
@@ -162,7 +166,10 @@ func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, e
 
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
-	return dkvClnt.cliConn.Close()
+	if dkvClnt.cliConn != nil {
+		return dkvClnt.cliConn.Close()
+	}
+	return nil
 }
 
 func errorFromStatus(res *serverpb.Status, err error) error {

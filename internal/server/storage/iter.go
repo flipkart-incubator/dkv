@@ -32,10 +32,10 @@ func (io *iterOpts) validate() error {
 	if kp, kpPrsnt := io.KeyPrefix(); kpPrsnt {
 		if sk, skPrsnt := io.StartKey(); skPrsnt {
 			if !bytes.HasPrefix(sk, kp) {
-				return errors.New("IterationStartKey must have the same prefix as IterationPrefixKey")
+				return errors.New("StartKey must have the same prefix as PrefixKey")
 			}
 		} else {
-			return errors.New("IterationStartKey must be provided when IterationPrefixKey is used")
+			return errors.New("StartKey must be provided when PrefixKey is used")
 		}
 	}
 	return nil
