@@ -139,7 +139,7 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		if _, err = ds.raftRepl.Replicate(ctx, reqBts); err != nil {
+		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
 			res.Status = newErrorStatus(err)
 		}
 	}
