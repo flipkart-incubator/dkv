@@ -55,7 +55,7 @@ func testPutAndGet(t *testing.T) {
 
 	for i := 1; i <= numKeys; i++ {
 		key, expectedValue := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
-		if actualValue, err := dkvCli.Get([]byte(key)); err != nil {
+		if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(actualValue.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
@@ -76,7 +76,7 @@ func testMultiGet(t *testing.T) {
 		}
 	}
 
-	if results, err := dkvCli.MultiGet(keys...); err != nil {
+	if results, err := dkvCli.MultiGet(rc, keys...); err != nil {
 		t.Fatalf("Unable to MultiGet. Error: %v", err)
 	} else {
 		for i, result := range results {
@@ -109,7 +109,7 @@ func testIteration(t *testing.T) {
 
 func testMissingGet(t *testing.T) {
 	key := "MissingKey"
-	if val, _ := dkvCli.Get([]byte(key)); val != nil && string(val.Value) != "" {
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
 		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}
 }
@@ -212,7 +212,7 @@ func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 func noKeys(t *testing.T, numKeys int, keyPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key := fmt.Sprintf("%s_%d", keyPrefix, i)
-		if res, err := dkvCli.Get([]byte(key)); err != nil {
+		if res, err := dkvCli.Get(rc, []byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(res.Value) != "" {
 			t.Errorf("Expected missing for key: %s. But found it with value: %s", key, res.Value)
@@ -223,7 +223,7 @@ func noKeys(t *testing.T, numKeys int, keyPrefix string) {
 func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if res, err := dkvCli.Get([]byte(key)); err != nil {
+		if res, err := dkvCli.Get(rc, []byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(res.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, res.Value)

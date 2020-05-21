@@ -1,8 +1,11 @@
 package master
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -147,13 +150,52 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 }
 
 func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	// TODO: Check for consistency level of GetRequest and process this either via local state or RAFT
-	return ds.DKVService.Get(ctx, getReq)
+	switch getReq.ReadConsistency {
+	case serverpb.ReadConsistency_SEQUENTIAL:
+		return ds.DKVService.Get(ctx, getReq)
+	case serverpb.ReadConsistency_LINEARIZABLE:
+		reqBts, _ := proto.Marshal(&raftpb.InternalRaftRequest{Get: getReq})
+		res := &serverpb.GetResponse{Status: newEmptyStatus()}
+		var loadError error
+		if val, err := ds.raftRepl.Load(ctx, reqBts); err != nil {
+			res.Status = newErrorStatus(err)
+			loadError = err
+		} else {
+			res.Value = val
+		}
+		return res, loadError
+	default:
+		return nil, fmt.Errorf("Unknown read consistency level: %d", getReq.ReadConsistency)
+	}
 }
 
 func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	// TODO: Check for consistency level of MultiGetRequest and process this either via local state or RAFT
-	return ds.DKVService.MultiGet(ctx, multiGetReq)
+	switch multiGetReq.ReadConsistency {
+	case serverpb.ReadConsistency_SEQUENTIAL:
+		return ds.DKVService.MultiGet(ctx, multiGetReq)
+	case serverpb.ReadConsistency_LINEARIZABLE:
+		reqBts, _ := proto.Marshal(&raftpb.InternalRaftRequest{MultiGet: multiGetReq})
+		res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}
+		var readError error
+		if val, err := ds.raftRepl.Load(ctx, reqBts); err != nil {
+			res.Status = newErrorStatus(err)
+			readError = err
+		} else {
+			res.Values, readError = gobDecodeAs2DByteArray(val)
+		}
+		return res, readError
+	default:
+		return nil, fmt.Errorf("Unknown read consistency level: %d", multiGetReq.ReadConsistency)
+	}
+}
+
+func gobDecodeAs2DByteArray(val []byte) ([][]byte, error) {
+	buf := bytes.NewBuffer(val)
+	res := new([][]byte)
+	if err := gob.NewDecoder(buf).Decode(res); err != nil {
+		return nil, err
+	}
+	return *res, nil
 }
 
 func (ds *distributedService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {

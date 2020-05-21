@@ -36,6 +36,7 @@ var (
 	dkvClis  = make(map[int]*ctl.DKVClient)
 	dkvSvcs  = make(map[int]DKVService)
 	mutex    = sync.Mutex{}
+	rc       = serverpb.ReadConsistency_SEQUENTIAL
 )
 
 func TestDistributedService(t *testing.T) {
@@ -47,6 +48,7 @@ func TestDistributedService(t *testing.T) {
 	defer stopServers()
 
 	t.Run("testDistributedPut", testDistributedPut)
+	t.Run("testLinearizableGet", testLinearizableGet)
 	t.Run("testRestore", testRestore)
 	t.Run("testNewDKVNodeJoiningAndLeaving", testNewDKVNodeJoiningAndLeaving)
 }
@@ -61,13 +63,37 @@ func testDistributedPut(t *testing.T) {
 	sleepInSecs(3)
 	for i := 1; i <= clusterSize; i++ {
 		key, expectedValue := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
-		for _, dkvCli := range dkvClis {
-			if actualValue, err := dkvCli.Get([]byte(key)); err != nil {
-				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
+		for j, dkvCli := range dkvClis {
+			if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
+				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", j, key, err)
 			} else if string(actualValue.Value) != expectedValue {
-				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
+				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", j, key, expectedValue, actualValue)
 			}
 		}
+	}
+}
+
+func testLinearizableGet(t *testing.T) {
+	getRC := serverpb.ReadConsistency_LINEARIZABLE
+	kp, vp := "LGK", "LGV"
+	for i := 1; i <= clusterSize; i++ {
+		key, value := fmt.Sprintf("%s%d", kp, i), fmt.Sprintf("%s%d", vp, i)
+		if err := dkvClis[i].Put([]byte(key), []byte(value)); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+		wg := sync.WaitGroup{}
+		for j, dkvCli := range dkvClis {
+			wg.Add(1)
+			go func(idx int, dkvClnt *ctl.DKVClient) {
+				defer wg.Done()
+				if actualValue, err := dkvClnt.Get(getRC, []byte(key)); err != nil {
+					t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", idx, key, err)
+				} else if string(actualValue.Value) != value {
+					t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", idx, key, value, actualValue)
+				}
+			}(j, dkvCli)
+		}
+		wg.Wait()
 	}
 }
 
@@ -104,7 +130,7 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 		// Expect to find all data in the new DKV node
 		for i := 1; i <= clusterSize; i++ {
 			key, expectedValue := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
-			if actualValue, err := dkvCli.Get([]byte(key)); err != nil {
+			if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
 				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
 			} else if string(actualValue.Value) != expectedValue {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
@@ -159,6 +185,7 @@ func newReplicator(id int, kvs storage.KVStore, joining bool, clusterURL string)
 		nexus.ClusterUrl(clusterURL),
 		nexus.ReplicationTimeout(replTimeout),
 		nexus.Join(joining),
+		//nexus.LeaseBasedReads(),
 	}
 	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, opts...); err != nil {
 		panic(err)

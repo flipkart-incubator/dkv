@@ -109,9 +109,10 @@ func putKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPre
 }
 
 func getKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPrefix string) {
+	rc := serverpb.ReadConsistency_SEQUENTIAL
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
-		if res, err := dkvCli.Get([]byte(key)); err != nil {
+		if res, err := dkvCli.Get(rc, []byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(res.Value) != value {
 			t.Errorf("GET value mismatch for Key: %s, Expected: %s, Actual: %s", key, value, res.Value)

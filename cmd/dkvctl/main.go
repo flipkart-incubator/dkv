@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
 type cmd struct {
@@ -48,7 +49,9 @@ func (c *cmd) get(client *ctl.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
-		if res, err := client.Get([]byte(args[0])); err != nil {
+		// TODO: Must be based on user preference
+		rc := serverpb.ReadConsistency_SEQUENTIAL
+		if res, err := client.Get(rc, []byte(args[0])); err != nil {
 			fmt.Printf("Unable to perform GET. Error: %v\n", err)
 		} else {
 			fmt.Println(string(res.Value))
