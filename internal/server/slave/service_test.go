@@ -78,7 +78,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	backupFolder := fmt.Sprintf("%s/backup", masterDBFolder)
 	if err := masterBU.BackupTo(backupFolder); err != nil {
-		t.Fatal(err)
+		t.Fatalf("An error occurred while backing up. Error: %v", err)
 	}
 
 	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
@@ -89,7 +89,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 
 	if err := masterBU.RestoreFrom(backupFolder); err != nil {
-		t.Fatal(err)
+		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 
 	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(); err == nil {
