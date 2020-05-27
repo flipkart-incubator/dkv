@@ -62,7 +62,7 @@ func testGet(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if val, err := dkvRepl.Save(reqBts); err != nil {
+		if val, err := dkvRepl.Load(reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if kvsVals, err := kvs.Get(key); err != nil {
@@ -80,7 +80,7 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if vals, err := dkvRepl.Save(reqBts); err != nil {
+		if vals, err := dkvRepl.Load(reqBts); err != nil {
 			t.Error(err)
 		} else {
 			readResults := make([][]byte, len(keys))

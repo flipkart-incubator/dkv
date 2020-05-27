@@ -61,21 +61,21 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	return errorFromStatus(status, err)
 }
 
-// Get takes the key as byte array and invokes the
-// GRPC Get method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) Get(key []byte) (*serverpb.GetResponse, error) {
+// Get takes the key as byte array along with the consistency
+// level and invokes the GRPC Get method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverpb.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	getReq := &serverpb.GetRequest{Key: key}
+	getReq := &serverpb.GetRequest{Key: key, ReadConsistency: rc}
 	return dkvClnt.dkvCli.Get(ctx, getReq)
 }
 
-// MultiGet takes the keys as byte arrays and invokes the
-// GRPC MultiGet method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) MultiGet(keys ...[]byte) ([][]byte, error) {
+// MultiGet takes the keys as byte arrays along with the consistency
+// level and invokes the GRPC MultiGet method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) ([][]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	multiGetReq := &serverpb.MultiGetRequest{Keys: keys}
+	multiGetReq := &serverpb.MultiGetRequest{Keys: keys, ReadConsistency: rc}
 	res, err := dkvClnt.dkvCli.MultiGet(ctx, multiGetReq)
 	return res.Values, err
 }

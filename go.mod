@@ -13,7 +13,7 @@ require (
 	github.com/facebookgo/ensure v0.0.0-20160127193407-b4ab57deab51 // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
-	github.com/flipkart-incubator/nexus v0.0.0-20200421114201-642f32a54ea2
+	github.com/flipkart-incubator/nexus v0.0.0-20200527111056-675efe2181e6
 	github.com/go-redis/redis v6.15.7+incompatible
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5

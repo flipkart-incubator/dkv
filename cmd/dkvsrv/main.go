@@ -41,7 +41,7 @@ func init() {
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.UintVar(&replPollInterval, "replPollInterval", 5, "Interval (in seconds) used by the replication poller of this node")
-	initFlagsForNexusDirs()
+	setDKVDefaultsForNexusDirs()
 }
 
 type dkvSrvrRole string
@@ -159,7 +159,7 @@ func (role dkvSrvrRole) printFlags() {
 	}
 }
 
-func initFlagsForNexusDirs() {
+func setDKVDefaultsForNexusDirs() {
 	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexusLogDir"), flag.Lookup("nexusSnapDir")
 	dbPath := flag.Lookup("dbFolder").DefValue
 	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")

@@ -31,12 +31,23 @@ func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
 	switch {
 	case intReq.Put != nil:
 		return dr.put(intReq.Put)
+	default:
+		return nil, errors.New("Unknown Save request in dkv")
+	}
+}
+
+func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
+	intReq := new(raftpb.InternalRaftRequest)
+	if err := proto.Unmarshal(req, intReq); err != nil {
+		return nil, err
+	}
+	switch {
 	case intReq.Get != nil:
 		return dr.get(intReq.Get)
 	case intReq.MultiGet != nil:
 		return dr.multiGet(intReq.MultiGet)
 	default:
-		return nil, errors.New("Unknown request to Save in dkv")
+		return nil, errors.New("Unknown Load request in dkv")
 	}
 }
 

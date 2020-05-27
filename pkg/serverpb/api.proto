@@ -53,9 +53,20 @@ message PutResponse {
   Status status = 1;
 }
 
+// ReadConsistency indicates the desired level of consistency for read requests.
+enum ReadConsistency {
+  // Sequential or timeline consistency - fetches results from local node storage.
+  SEQUENTIAL = 0;
+  // Linearizable consistency - fetches results from local node storage only after
+  // ensuring quorum with other DKV nodes.
+  LINEARIZABLE = 1;
+}
+
 message GetRequest {
   // Key is the key, in bytes, whose associated value is loaded from the key value store.
   bytes key = 1;
+  // Desired read consistency level for this GET request.
+  ReadConsistency readConsistency = 2;
 }
 
 message GetResponse {
@@ -68,6 +79,8 @@ message GetResponse {
 message MultiGetRequest {
   // Keys is the collection of keys whose values are returned from the bulk Get operation.
   repeated bytes keys = 1;
+  // Desired read consistency level for this MultiGet request.
+  ReadConsistency readConsistency = 2;
 }
 
 message MultiGetResponse {
