@@ -49,8 +49,7 @@ func (c *cmd) get(client *ctl.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
-		// TODO: Must be based on user preference
-		rc := serverpb.ReadConsistency_SEQUENTIAL
+		rc := serverpb.ReadConsistency_LINEARIZABLE
 		if res, err := client.Get(rc, []byte(args[0])); err != nil {
 			fmt.Printf("Unable to perform GET. Error: %v\n", err)
 		} else {
