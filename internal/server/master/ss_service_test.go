@@ -90,18 +90,24 @@ func testMultiGet(t *testing.T) {
 func testIteration(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "IterK", "IterV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
+	numNewKeys, newKeyPrefix, newValPrefix := 10, "NewIterK", "NewIterV"
 
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
 	} else {
+		// insert after iterator creation
+		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
-			if strings.HasPrefix(k, keyPrefix) {
+			switch {
+			case strings.HasPrefix(k, keyPrefix):
 				suffix := k[len(keyPrefix):]
 				expVal := valPrefix + suffix
 				if v != expVal {
 					t.Errorf("Expected value to be %s. Actual %s.", expVal, v)
 				}
+			case strings.HasPrefix(k, newKeyPrefix):
+				t.Errorf("Did not expect the key %s in this iteration.", k)
 			}
 		}
 	}
