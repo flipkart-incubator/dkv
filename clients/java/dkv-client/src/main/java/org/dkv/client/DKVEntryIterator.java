@@ -4,7 +4,7 @@ import dkv.serverpb.Api;
 
 import java.util.Iterator;
 
-public class DKVEntryIterator implements Iterator<DKVEntry> {
+class DKVEntryIterator implements Iterator<DKVEntry> {
     private final Iterator<Api.IterateResponse> iterRes;
 
     public DKVEntryIterator(Iterator<Api.IterateResponse> iterRes) {

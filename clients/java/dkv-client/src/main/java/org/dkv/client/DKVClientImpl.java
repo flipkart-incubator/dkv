@@ -10,9 +10,34 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * An implementation of the {@link DKVClient} interface. It provides a convenient
+ * wrapper around the underlying GRPC stubs for interacting with the DKV database.
+ * All methods are invoked synchronously over the underlying GRPC channel and hence
+ * are blocking. Users must wrap these calls around {@link DKVException} if they
+ * wish to handle failures.
+ *
+ * This implementation has no non-final state and hence its instances are thread safe
+ * for concurrent access.
+ *
+ * @see DKVClient
+ * @see DKVException
+ */
 public class DKVClientImpl implements DKVClient {
     private final DKVGrpc.DKVBlockingStub blockingStub;
 
+    /**
+     * Creates an instance with the underlying GRPC conduit to the DKV database
+     * running on the specified <tt>dkvHost</tt> and <tt>dkPort</tt>. Currently
+     * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
+     * implementations will support additional options for securing these exchanges.
+     *
+     * @param dkvHost host on which DKV database is running
+     * @param dkvPort port the DKV database is listening on
+     * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
+     * is invalid
+     * @throws RuntimeException in case of any connection failures
+     */
     public DKVClientImpl(String dkvHost, int dkvPort) {
         if (dkvHost == null || dkvHost.trim().length() == 0) {
             throw new IllegalArgumentException("Valid DKV hostname must be provided");
@@ -46,7 +71,7 @@ public class DKVClientImpl implements DKVClient {
     }
 
     public String[] multiGet(Api.ReadConsistency consistency, String[] keys) {
-        LinkedList<ByteString> keyByteStrs = new LinkedList<ByteString>();
+        LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (String key : keys) {
             keyByteStrs.add(ByteString.copyFromUtf8(key));
         }
@@ -60,7 +85,7 @@ public class DKVClientImpl implements DKVClient {
     }
 
     public byte[][] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
-        LinkedList<ByteString> keyByteStrs = new LinkedList<ByteString>();
+        LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (byte[] key : keys) {
             keyByteStrs.add(ByteString.copyFrom(key));
         }
@@ -145,5 +170,4 @@ public class DKVClientImpl implements DKVClient {
         }
         return multiGetRes.getValuesList();
     }
-
 }
