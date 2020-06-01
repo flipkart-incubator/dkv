@@ -7,6 +7,8 @@ CGO_LDFLAGS ?= "-lrocksdb -lm -lzstd -lz -lbz2 -lsnappy"
 BUILD_TAGS ?=
 VERSION ?=
 BIN_EXT ?=
+JAVA_CLI_PATH = ./clients/java
+CLI_NAME = dkv-client
 
 GO := GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) GO111MODULE=on go
 
@@ -115,3 +117,8 @@ clean:
 	rm -rf ./bin
 	rm -rf ./data
 	rm -rf ./dist
+	rm -rf ${JAVA_CLI_PATH}/${CLI_NAME}/target
+
+.PHONY: java-client
+java-client:
+	(cd ${JAVA_CLI_PATH}/${CLI_NAME}; mvn clean install -DskipTests)
