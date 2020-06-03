@@ -7,7 +7,7 @@ import java.util.Iterator;
 class DKVEntryIterator implements Iterator<DKVEntry> {
     private final Iterator<Api.IterateResponse> iterRes;
 
-    public DKVEntryIterator(Iterator<Api.IterateResponse> iterRes) {
+    DKVEntryIterator(Iterator<Api.IterateResponse> iterRes) {
         this.iterRes = iterRes;
     }
 

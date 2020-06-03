@@ -19,7 +19,7 @@ public class DKVException extends RuntimeException {
     private final String rpcName;
     private final Object[] params;
 
-    public DKVException(Api.Status status, String rpcName, Object[] params) {
+    DKVException(Api.Status status, String rpcName, Object[] params) {
         this.status = status;
         this.rpcName = rpcName;
         this.params = params;
