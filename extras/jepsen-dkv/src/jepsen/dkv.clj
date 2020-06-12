@@ -4,11 +4,14 @@
     [clojure.string :as str]
     [dkv-client.core :as dkvcli]
     [jepsen [cli :as cli]
+     [checker :as checker]
      [control :as c]
      [client :as client]
      [db :as db]
      [generator :as gen]
      [tests :as tests]]
+    [knossos.model :as model]
+    [slingshot.slingshot :refer [try+]]
     [jepsen.control.util :as cu]
     [jepsen.os.debian :as debian]))
 
@@ -20,6 +23,7 @@
 (def logfile (str dir "/dkvsrv.log"))
 (def pidfile (str dir "/dkvsrv.pid"))
 (def initTime 10000)
+(def replTimeout 30)
 
 (defn node-url
   ([node port] (str (name node) ":" port))
@@ -57,11 +61,12 @@
            :pidfile pidfile
            :chdir   dir}
           binary
-          :-dbFolder        dbDir
-          :-dbListenAddr    (client-url node)
-          :-dbRole          "master"
-          :-nexusNodeId     (-> test :nodes (.indexOf node) inc)
-          :-nexusClusterUrl (nexus-url test))
+          :-dbFolder         dbDir
+          :-dbListenAddr     (client-url node)
+          :-dbRole           "master"
+          :-nexusNodeId      (-> test :nodes (.indexOf node) inc)
+          :-nexusReplTimeout replTimeout
+          :-nexusClusterUrl  (nexus-url test))
 
         (Thread/sleep initTime)))
 
@@ -89,7 +94,6 @@
 
 (defn r   [_ _] {:type :invoke, :f :read, :value nil})
 (defn w   [_ _] {:type :invoke, :f :write, :value (rand-int 5)})
-(defn cas [_ _] {:type :invoke, :f :cas, :value [(rand-int 5) (rand-int 5)]})
 
 (defn dkv-test
   [opts]
@@ -98,6 +102,7 @@
           :os debian/os
           :db (db "1.0.0")
           :client (Client. nil)
+          :checker (checker/linearizable {:model (model/register) :algorithm :linear})
           :generator (->> (gen/mix [r w])
                           (gen/stagger 1)
                           (gen/nemesis nil)
