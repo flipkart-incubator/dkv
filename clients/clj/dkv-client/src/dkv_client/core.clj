@@ -3,13 +3,15 @@
             [dkv.serverpb.DKV.client :as cli]
             [clojure.core.async :refer [<!! >!! <! >! go go-loop] :as async]))
 
-(def idle-timeout 10000)
+(def default-idle-timeout 10000)
 
 (defn connect
   "Establishes a GRPC connection to the DKV server
   listening on the given host and port."
-  [host port]
-  @(grpc.http2/connect {:uri (format "http://%s:%d" host port) :idle-timeout idle-timeout}))
+  ([host port]
+   (connect host port default-idle-timeout))
+  ([host port idle-timeout]
+   @(grpc.http2/connect {:uri (format "http://%s:%d" host port) :idle-timeout idle-timeout})))
 
 (defn getValue
   "Retrieves the value(s) associated with the given key(s)."

@@ -8,9 +8,9 @@
   :dependencies [[org.clojure/clojure "1.10.1"]
                    ;; -- PROTOC-GEN-CLOJURE --
                    [org.ow2.asm/asm "7.0"]
-                 [protojure "1.2.0"]
+                 [protojure "1.5.2"]
                  [protojure/google.protobuf "0.9.1"]
-                 [com.google.protobuf/protobuf-java "3.11.1"]
+                 [com.google.protobuf/protobuf-java "3.11.4"]
                  ;; -- PROTOC-GEN-CLOJURE HTTP/2 Client Lib Dependency --
-                 [org.eclipse.jetty.http2/http2-client "9.4.17.v20190418"]]
+                 [org.eclipse.jetty.http2/http2-client "9.4.28.v20200408"]]
   )
