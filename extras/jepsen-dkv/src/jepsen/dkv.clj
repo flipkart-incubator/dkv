@@ -2,9 +2,12 @@
   (:require 
     [clojure.tools.logging :refer :all]
     [clojure.string :as str]
+    [dkv-client.core :as dkvcli]
     [jepsen [cli :as cli]
      [control :as c]
+     [client :as client]
      [db :as db]
+     [generator :as gen]
      [tests :as tests]]
     [jepsen.control.util :as cu]
     [jepsen.os.debian :as debian]))
@@ -33,6 +36,11 @@
 (defn nexus-url
   [test]
   (subs (reduce (fn [acc node] (str acc "," (peer-url node))) "" (:nodes test)) 1))
+
+(defn parse-long
+  "Parses a string to a Long. Passes through `nil`."
+  [s]
+  (when (and s (not (empty? (.trim s)))) (Long/parseLong (.trim s))))
 
 (defn db
   "DKV DB for a particular version."
@@ -63,12 +71,37 @@
         (cu/stop-daemon! binary pidfile)
         (c/exec :rm :-rf dbDir)))))
 
+(defrecord Client [conn]
+  client/Client
+  (open! [this test node]
+    (assoc this :conn (dkvcli/connect node client-port)))
+
+  (setup! [this test])
+
+  (invoke! [_ test op]
+    (case (:f op)
+      :read (assoc op :type :ok, :value (parse-long (dkvcli/getValue conn "jepsen_key")))
+      :write (do (dkvcli/putKV conn "jepsen_key" (str (:value op))) (assoc op :type :ok))))
+
+  (teardown! [this test])
+
+  (close! [_ test]))
+
+(defn r   [_ _] {:type :invoke, :f :read, :value nil})
+(defn w   [_ _] {:type :invoke, :f :write, :value (rand-int 5)})
+(defn cas [_ _] {:type :invoke, :f :cas, :value [(rand-int 5) (rand-int 5)]})
+
 (defn dkv-test
   [opts]
   (merge tests/noop-test opts
          {:name "dkv"
           :os debian/os
-          :db (db "1.0.0")}))
+          :db (db "1.0.0")
+          :client (Client. nil)
+          :generator (->> (gen/mix [r w])
+                          (gen/stagger 1)
+                          (gen/nemesis nil)
+                          (gen/time-limit 15))}))
 
 (defn -main
   [& args]

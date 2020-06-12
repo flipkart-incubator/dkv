@@ -7,4 +7,5 @@
   :main jepsen.dkv
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [jepsen "0.1.13"]
+                 [org.eclipse.jetty.http2/http2-client "9.4.28.v20200408"]
                  [dkv-client "0.1.0-SNAPSHOT"]])
