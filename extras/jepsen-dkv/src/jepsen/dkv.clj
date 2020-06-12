@@ -16,7 +16,7 @@
 (def binary "dkvsrv")
 (def logfile (str dir "/dkvsrv.log"))
 (def pidfile (str dir "/dkvsrv.pid"))
-(def nodeID (atom 0))
+(def initTime 10000)
 
 (defn node-url
   ([node port] (str (name node) ":" port))
@@ -41,6 +41,9 @@
     (setup! [_ test node]
       (info node "starting dkv" version)
       (c/su
+        ;DKV launcher creates the `dbDir` automatically if missing
+        ;(c/exec :mkdir :-p dbDir)
+        ;(c/exec :chmod :a+x :-R dbDir)
         (cu/start-daemon!
           {:logfile logfile
            :pidfile pidfile
@@ -49,16 +52,16 @@
           :-dbFolder        dbDir
           :-dbListenAddr    (client-url node)
           :-dbRole          "master"
-          :-nexusNodeId     (swap! nodeID inc)
+          :-nexusNodeId     (-> test :nodes (.indexOf node) inc)
           :-nexusClusterUrl (nexus-url test))
 
-        (Thread/sleep 10000)))
+        (Thread/sleep initTime)))
 
     (teardown! [_ test node]
       (info node "shutting down dkv")
       (c/su
         (cu/stop-daemon! binary pidfile)
-        (c/su (c/exec :rm :-rf dbDir))))))
+        (c/exec :rm :-rf dbDir)))))
 
 (defn dkv-test
   [opts]
