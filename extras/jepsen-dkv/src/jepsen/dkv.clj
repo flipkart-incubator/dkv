@@ -12,6 +12,7 @@
      [tests :as tests]]
     [knossos.model :as model]
     [slingshot.slingshot :refer [try+]]
+    [jepsen.checker.timeline :as timeline]
     [jepsen.control.util :as cu]
     [jepsen.os.debian :as debian]))
 
@@ -102,7 +103,11 @@
           :os debian/os
           :db (db "1.0.0")
           :client (Client. nil)
-          :checker (checker/linearizable {:model (model/register) :algorithm :linear})
+          :checker (checker/compose
+                     {:perf   (checker/perf)
+                      :linear (checker/linearizable {:model     (model/register)
+                                                     :algorithm :linear})
+                      :timeline (timeline/html)})
           :generator (->> (gen/mix [r w])
                           (gen/stagger 1)
                           (gen/nemesis nil)
