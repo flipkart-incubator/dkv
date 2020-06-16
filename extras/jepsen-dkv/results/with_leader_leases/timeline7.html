@@ -1,0 +1,579 @@
+<html><head><style>.ops        { position: absolute; }
+.op         { position: absolute; padding: 2px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); transition: all 0.3s cubic-bezier(.25,.8,.25,1); }
+.op.invoke  { background: #eeeeee; }
+.op.ok      { background: #6DB6FE; }
+.op.info    { background: #FFAA26; }
+.op.fail    { background: #FEB5DA; }
+.op:target  { box-shadow: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22); }
+</style></head><body><div><a href="/">jepsen</a> / <a href="/files/dkv">dkv</a> / <a href="/files/dkv/20200615T132303.000+0530">20200615T132303.000+0530</a> / <a href="/files/dkv/20200615T132303.000+0530/">independent</a> / <a href="/files/dkv/20200615T132303.000+0530/independent/"></a></div><h1>dkv key </h1><div class="ops"><a href="#i1"><div class="op ok" id="i1" style="width:100;left:318;top:0;height:16" title="Dur: 125 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:03.573Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value nil,
+ :process 2,
+ :time 573565343,
+ :index 1,
+ :sub-index 1}
+">2 :read </div></a><a href="#i3"><div class="op ok" id="i3" style="width:100;left:106;top:32;height:16" title="Dur: 136 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:03.739Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 4,
+ :process 0,
+ :time 739018047,
+ :index 3,
+ :sub-index 3}
+">0 :write 4</div></a><a href="#i5"><div class="op ok" id="i5" style="width:100;left:212;top:64;height:16" title="Dur: 112 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:03.994Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 0,
+ :process 1,
+ :time 994474540,
+ :index 5,
+ :sub-index 5}
+">1 :write 0</div></a><a href="#i7"><div class="op ok" id="i7" style="width:100;left:212;top:96;height:16" title="Dur: 79 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:04.113Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 0,
+ :process 1,
+ :time 1113580495,
+ :index 7,
+ :sub-index 7}
+">1 :read 0</div></a><a href="#i10"><div class="op ok" id="i10" style="width:100;left:318;top:128;height:32" title="Dur: 118 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:05.038Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 2,
+ :time 2038348218,
+ :index 10,
+ :sub-index 10}
+">2 :write 1</div></a><a href="#i11"><div class="op ok" id="i11" style="width:100;left:106;top:144;height:32" title="Dur: 250 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:05.220Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 0,
+ :time 2220889643,
+ :index 11,
+ :sub-index 11}
+">0 :write 1</div></a><a href="#i13"><div class="op ok" id="i13" style="width:100;left:318;top:192;height:16" title="Dur: 52 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:05.479Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 2,
+ :time 2479301588,
+ :index 13,
+ :sub-index 13}
+">2 :read 1</div></a><a href="#i15"><div class="op ok" id="i15" style="width:100;left:212;top:224;height:16" title="Dur: 124 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:06.150Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 3,
+ :process 1,
+ :time 3150277691,
+ :index 15,
+ :sub-index 15}
+">1 :write 3</div></a><a href="#i18"><div class="op ok" id="i18" style="width:100;left:318;top:256;height:32" title="Dur: 57 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:07.147Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 3,
+ :process 2,
+ :time 4147373686,
+ :index 18,
+ :sub-index 18}
+">2 :read 3</div></a><a href="#i19"><div class="op ok" id="i19" style="width:100;left:106;top:272;height:32" title="Dur: 52 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:07.147Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 3,
+ :process 0,
+ :time 4147403404,
+ :index 19,
+ :sub-index 19}
+">0 :read 3</div></a><a href="#i21"><div class="op ok" id="i21" style="width:100;left:106;top:320;height:16" title="Dur: 158 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:07.545Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 3,
+ :process 0,
+ :time 4545736472,
+ :index 21,
+ :sub-index 21}
+">0 :write 3</div></a><a href="#i23"><div class="op ok" id="i23" style="width:100;left:212;top:352;height:16" title="Dur: 118 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:07.979Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 4,
+ :process 1,
+ :time 4979116543,
+ :index 23,
+ :sub-index 23}
+">1 :write 4</div></a><a href="#i26"><div class="op ok" id="i26" style="width:100;left:318;top:400;height:16" title="Dur: 99 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:08.203Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 4,
+ :process 2,
+ :time 5203588116,
+ :index 26,
+ :sub-index 26}
+">2 :read 4</div></a><a href="#i27"><div class="op ok" id="i27" style="width:100;left:212;top:384;height:48" title="Dur: 175 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:08.278Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 1,
+ :time 5278583730,
+ :index 27,
+ :sub-index 27}
+">1 :write 1</div></a><a href="#i28"><div class="op info" id="i28" style="width:100;left:0;top:448;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:08.317Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 5317053462,
+ :index 28,
+ :sub-index 28}
+">:nemesis :start </div></a><a href="#i30"><div class="op ok" id="i30" style="width:100;left:212;top:464;height:16" title="Dur: 51 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:08.707Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 1,
+ :time 5707054258,
+ :index 30,
+ :sub-index 30}
+">1 :read 1</div></a><a href="#i31"><div class="op info" id="i31" style="width:100;left:0;top:496;height:16" title="Msg: [:isolated {&quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot; &quot;10.33.2.231&quot;}, &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot;}, &quot;10.33.2.231&quot; #{&quot;10.33.74.72&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:08.778Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 5778575470,
+ :value [:isolated
+         {&quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot; &quot;10.33.2.231&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot;},
+          &quot;10.33.2.231&quot; #{&quot;10.33.74.72&quot;}}],
+ :index 31,
+ :sub-index 31}
+">:nemesis :start <br /></div></a><a href="#i33"><div class="op ok" id="i33" style="width:100;left:212;top:512;height:16" title="Dur: 139 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:09.172Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 3,
+ :process 1,
+ :time 6172208919,
+ :index 33,
+ :sub-index 33}
+">1 :write 3</div></a><a href="#i36"><div class="op ok" id="i36" style="width:100;left:318;top:560;height:16" title="Dur: 50 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:09.636Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 3,
+ :process 2,
+ :time 6636830798,
+ :index 36,
+ :sub-index 36}
+">2 :read 3</div></a><a href="#i38"><div class="op ok" id="i38" style="width:100;left:212;top:592;height:16" title="Dur: 134 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:10.243Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 1,
+ :time 7243806946,
+ :index 38,
+ :sub-index 38}
+">1 :write 1</div></a><a href="#i40"><div class="op ok" id="i40" style="width:100;left:318;top:624;height:16" title="Dur: 57 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:11.418Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 2,
+ :time 8418822344,
+ :index 40,
+ :sub-index 40}
+">2 :read 1</div></a><a href="#i42"><div class="op ok" id="i42" style="width:100;left:212;top:656;height:16" title="Dur: 51 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:11.715Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 1,
+ :time 8715348668,
+ :index 42,
+ :sub-index 42}
+">1 :read 1</div></a><a href="#i44"><div class="op ok" id="i44" style="width:100;left:318;top:688;height:16" title="Dur: 132 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:12.750Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 2,
+ :time 9750067340,
+ :index 44,
+ :sub-index 44}
+">2 :write 1</div></a><a href="#i46"><div class="op ok" id="i46" style="width:100;left:212;top:720;height:16" title="Dur: 52 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:13.432Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 1,
+ :time 10432499939,
+ :index 46,
+ :sub-index 46}
+">1 :read 1</div></a><a href="#i47"><div class="op info" id="i47" style="width:100;left:0;top:752;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:13.780Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 10780747561,
+ :index 47,
+ :sub-index 47}
+">:nemesis :stop </div></a><a href="#i49"><div class="op ok" id="i49" style="width:100;left:212;top:768;height:16" title="Dur: 168 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:14.034Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 0,
+ :process 1,
+ :time 11034923544,
+ :index 49,
+ :sub-index 49}
+">1 :write 0</div></a><a href="#i50"><div class="op info" id="i50" style="width:100;left:0;top:800;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:14.080Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 11080658418,
+ :value :network-healed,
+ :index 50,
+ :sub-index 50}
+">:nemesis :stop <br /></div></a><a href="#i52"><div class="op ok" id="i52" style="width:100;left:318;top:816;height:16" title="Dur: 53 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:14.319Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 0,
+ :process 2,
+ :time 11319379773,
+ :index 52,
+ :sub-index 52}
+">2 :read 0</div></a><a href="#i55"><div class="op ok" id="i55" style="width:100;left:318;top:848;height:32" title="Dur: 408 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:15.009Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 2,
+ :time 12009091440,
+ :index 55,
+ :sub-index 55}
+">2 :write 1</div></a><a href="#i56"><div class="op ok" id="i56" style="width:100;left:212;top:864;height:32" title="Dur: 233 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:15.009Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 1,
+ :time 12009317236,
+ :index 56,
+ :sub-index 56}
+">1 :write 1</div></a><a href="#i58"><div class="op ok" id="i58" style="width:100;left:318;top:912;height:16" title="Dur: 286 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:15.496Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 0,
+ :process 2,
+ :time 12496350688,
+ :index 58,
+ :sub-index 58}
+">2 :write 0</div></a><a href="#i60"><div class="op ok" id="i60" style="width:100;left:212;top:944;height:16" title="Dur: 671 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:16.896Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 0,
+ :process 1,
+ :time 13896606361,
+ :index 60,
+ :sub-index 60}
+">1 :write 0</div></a><a href="#i62"><div class="op ok" id="i62" style="width:100;left:318;top:976;height:16" title="Dur: 57 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:17.129Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 0,
+ :process 2,
+ :time 14129213885,
+ :index 62,
+ :sub-index 62}
+">2 :read 0</div></a><a href="#i64"><div class="op ok" id="i64" style="width:100;left:318;top:1008;height:16" title="Dur: 58 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:17.550Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 0,
+ :process 2,
+ :time 14550981160,
+ :index 64,
+ :sub-index 64}
+">2 :read 0</div></a><a href="#i66"><div class="op ok" id="i66" style="width:100;left:212;top:1040;height:16" title="Dur: 125 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:17.892Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 4,
+ :process 1,
+ :time 14892256444,
+ :index 66,
+ :sub-index 66}
+">1 :write 4</div></a><a href="#i69"><div class="op ok" id="i69" style="width:100;left:318;top:1072;height:32" title="Dur: 139 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:18.373Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 2,
+ :process 2,
+ :time 15373057716,
+ :index 69,
+ :sub-index 69}
+">2 :write 2</div></a><a href="#i70"><div class="op ok" id="i70" style="width:100;left:212;top:1088;height:32" title="Dur: 70 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:18.397Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 2,
+ :process 1,
+ :time 15397339100,
+ :index 70,
+ :sub-index 70}
+">1 :read 2</div></a><a href="#i71"><div class="op info" id="i71" style="width:100;left:0;top:1136;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:19.081Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 16081885106,
+ :index 71,
+ :sub-index 71}
+">:nemesis :start </div></a><a href="#i73"><div class="op ok" id="i73" style="width:100;left:212;top:1152;height:16" title="Dur: 56 ms
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:19.140Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 2,
+ :process 1,
+ :time 16140676141,
+ :index 73,
+ :sub-index 73}
+">1 :read 2</div></a><a href="#i74"><div class="op info" id="i74" style="width:100;left:0;top:1184;height:16" title="Msg: [:isolated {&quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.33.2.231&quot;}, &quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot;}, &quot;10.33.2.231&quot; #{&quot;10.33.74.73&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:19.239Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 16239177097,
+ :value [:isolated
+         {&quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.33.2.231&quot;},
+          &quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot;},
+          &quot;10.33.2.231&quot; #{&quot;10.33.74.73&quot;}}],
+ :index 74,
+ :sub-index 74}
+">:nemesis :start <br /></div></a><a href="#i77"><div class="op info" id="i77" style="width:100;left:0;top:1232;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:24.239Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 21239905709,
+ :index 77,
+ :sub-index 77}
+">:nemesis :stop </div></a><a href="#i78"><div class="op info" id="i78" style="width:100;left:0;top:1248;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:24.542Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 21542885827,
+ :value :network-healed,
+ :index 78,
+ :sub-index 78}
+">:nemesis :stop <br /></div></a><a href="#i79"><div class="op info" id="i79" style="width:100;left:0;top:1264;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:29.545Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 26545663359,
+ :index 79,
+ :sub-index 79}
+">:nemesis :start </div></a><a href="#i80"><div class="op info" id="i80" style="width:100;left:0;top:1280;height:16" title="Msg: [:isolated {&quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot; &quot;10.33.2.231&quot;}, &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot;}, &quot;10.33.2.231&quot; #{&quot;10.33.74.72&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-15T07:53:29.702Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 26702773158,
+ :value [:isolated
+         {&quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot; &quot;10.33.2.231&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot;},
+          &quot;10.33.2.231&quot; #{&quot;10.33.74.72&quot;}}],
+ :index 80,
+ :sub-index 80}
+">:nemesis :start <br /></div></a><a href="#i81"><div class="op info" id="i81" style="width:100;left:106;top:544;height:816" title="Dur: 60058 ms
+Err: &quot;indeterminate: bad grpc-status response&quot;
+Wall-clock Time: 2020-06-15T07:54:09.369Z
+
+Op:
+{:type :info,
+ :f :write,
+ :value 0,
+ :process 0,
+ :time 66369930571,
+ :error &quot;indeterminate: bad grpc-status response&quot;,
+ :index 81,
+ :sub-index 81}
+">0 :write 0</div></a><a href="#i82"><div class="op info" id="i82" style="width:100;left:318;top:1200;height:160" title="Dur: 60050 ms
+Err: &quot;indeterminate: bad grpc-status response&quot;
+Wall-clock Time: 2020-06-15T07:54:19.417Z
+
+Op:
+{:type :info,
+ :f :write,
+ :value 3,
+ :process 2,
+ :time 76417618782,
+ :error &quot;indeterminate: bad grpc-status response&quot;,
+ :index 82,
+ :sub-index 82}
+">2 :write 3</div></a><a href="#i83"><div class="op info" id="i83" style="width:100;left:212;top:1216;height:144" title="Dur: 60050 ms
+Err: &quot;indeterminate: bad grpc-status response&quot;
+Wall-clock Time: 2020-06-15T07:54:19.550Z
+
+Op:
+{:type :info,
+ :f :read,
+ :value nil,
+ :process 1,
+ :time 76550870181,
+ :error &quot;indeterminate: bad grpc-status response&quot;,
+ :index 83,
+ :sub-index 83}
+">1 :read </div></a></div></body></html>
