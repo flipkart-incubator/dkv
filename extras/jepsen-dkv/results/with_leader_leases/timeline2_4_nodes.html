@@ -1,0 +1,1296 @@
+<html><head><style>.ops        { position: absolute; }
+.op         { position: absolute; padding: 2px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); transition: all 0.3s cubic-bezier(.25,.8,.25,1); }
+.op.invoke  { background: #eeeeee; }
+.op.ok      { background: #6DB6FE; }
+.op.info    { background: #FFAA26; }
+.op.fail    { background: #FEB5DA; }
+.op:target  { box-shadow: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22); }
+</style></head><body><div><a href="/">jepsen</a> / <a href="/files/dkv">dkv</a> / <a href="/files/dkv/20200616T131157.000+0530">20200616T131157.000+0530</a> / <a href="/files/dkv/20200616T131157.000+0530/">independent</a> / <a href="/files/dkv/20200616T131157.000+0530/independent/"></a></div><h1>dkv key </h1><div class="ops"><a href="#i1"><div class="op ok" id="i1" style="width:100;left:318;top:0;height:16" title="Dur: 417 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:41:58.201Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 2,
+ :time 1201899417,
+ :index 1,
+ :sub-index 1}
+">2 :write 1</div></a><a href="#i3"><div class="op ok" id="i3" style="width:100;left:106;top:32;height:16" title="Dur: 218 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:41:58.532Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 0,
+ :time 1532720631,
+ :index 3,
+ :sub-index 3}
+">0 :read 1</div></a><a href="#i5"><div class="op ok" id="i5" style="width:100;left:106;top:64;height:16" title="Dur: 60 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:41:59.091Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 0,
+ :time 2091136953,
+ :index 5,
+ :sub-index 5}
+">0 :read 1</div></a><a href="#i9"><div class="op ok" id="i9" style="width:100;left:212;top:96;height:48" title="Dur: 133 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:41:59.422Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 3,
+ :process 1,
+ :time 2422259769,
+ :index 9,
+ :sub-index 9}
+">1 :write 3</div></a><a href="#i10"><div class="op ok" id="i10" style="width:100;left:318;top:112;height:48" title="Dur: 216 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:41:59.572Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 4,
+ :process 2,
+ :time 2572408492,
+ :index 10,
+ :sub-index 10}
+">2 :write 4</div></a><a href="#i13"><div class="op info" id="i13" style="width:100;left:106;top:192;height:2704" title="Dur: 5 ms
+Err: :timeout
+Wall-clock Time: 2020-06-16T07:42:00.214Z
+
+Op:
+{:type :info,
+ :f :write,
+ :value 1,
+ :process 0,
+ :time 3214645064,
+ :error :timeout,
+ :index 13,
+ :sub-index 13}
+">0 :write 1</div></a><a href="#i15"><div class="op fail" id="i15" style="width:100;left:530;top:224;height:16" title="Dur: 93 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:00.601Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 3601541637,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 15,
+ :sub-index 15}
+">4 :read </div></a><a href="#i17"><div class="op ok" id="i17" style="width:100;left:212;top:256;height:16" title="Dur: 283 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:01.703Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 4,
+ :process 1,
+ :time 4703727118,
+ :index 17,
+ :sub-index 17}
+">1 :read 4</div></a><a href="#i19"><div class="op fail" id="i19" style="width:100;left:530;top:288;height:16" title="Dur: 58 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:01.814Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 1,
+ :process 4,
+ :time 4814573751,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 19,
+ :sub-index 19}
+">4 :write 1</div></a><a href="#i21"><div class="op ok" id="i21" style="width:100;left:212;top:320;height:16" title="Dur: 75 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:02.003Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 4,
+ :process 1,
+ :time 5003861100,
+ :index 21,
+ :sub-index 21}
+">1 :read 4</div></a><a href="#i23"><div class="op info" id="i23" style="width:100;left:0;top:368;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:02.388Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 5388010535,
+ :index 23,
+ :sub-index 23}
+">:nemesis :start </div></a><a href="#i24"><div class="op ok" id="i24" style="width:100;left:212;top:352;height:32" title="Dur: 133 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:02.413Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 2,
+ :process 1,
+ :time 5413296791,
+ :index 24,
+ :sub-index 24}
+">1 :write 2</div></a><a href="#i26"><div class="op fail" id="i26" style="width:100;left:530;top:400;height:16" title="Dur: 63 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:02.758Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 0,
+ :process 4,
+ :time 5758181771,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 26,
+ :sub-index 26}
+">4 :write 0</div></a><a href="#i27"><div class="op info" id="i27" style="width:100;left:0;top:432;height:16" title="Msg: [:isolated {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;}, &quot;10.51.83.79&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:03.164Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 6164389708,
+ :value [:isolated
+         {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;},
+          &quot;10.51.83.79&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;}}],
+ :index 27,
+ :sub-index 27}
+">:nemesis :start <br /></div></a><a href="#i29"><div class="op fail" id="i29" style="width:100;left:530;top:448;height:16" title="Dur: 61 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:03.645Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 6645076732,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 29,
+ :sub-index 29}
+">4 :write 4</div></a><a href="#i32"><div class="op fail" id="i32" style="width:100;left:530;top:496;height:16" title="Dur: 52 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:05.323Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 3,
+ :process 4,
+ :time 8323458804,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 32,
+ :sub-index 32}
+">4 :write 3</div></a><a href="#i34"><div class="op fail" id="i34" style="width:100;left:530;top:528;height:16" title="Dur: 70 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:06.129Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 2,
+ :process 4,
+ :time 9129282283,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 34,
+ :sub-index 34}
+">4 :write 2</div></a><a href="#i36"><div class="op fail" id="i36" style="width:100;left:530;top:560;height:16" title="Dur: 102 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:06.409Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 9409420771,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 36,
+ :sub-index 36}
+">4 :write 4</div></a><a href="#i38"><div class="op fail" id="i38" style="width:100;left:530;top:592;height:16" title="Dur: 48 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:06.736Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 1,
+ :process 4,
+ :time 9736435481,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 38,
+ :sub-index 38}
+">4 :write 1</div></a><a href="#i40"><div class="op fail" id="i40" style="width:100;left:530;top:624;height:16" title="Dur: 49 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:06.819Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 9819762321,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 40,
+ :sub-index 40}
+">4 :read </div></a><a href="#i42"><div class="op fail" id="i42" style="width:100;left:530;top:656;height:16" title="Dur: 80 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:08.069Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 11069410645,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 42,
+ :sub-index 42}
+">4 :write 4</div></a><a href="#i43"><div class="op info" id="i43" style="width:100;left:0;top:688;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:08.166Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 11166033903,
+ :index 43,
+ :sub-index 43}
+">:nemesis :stop </div></a><a href="#i44"><div class="op info" id="i44" style="width:100;left:0;top:704;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:08.679Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 11679264537,
+ :value :network-healed,
+ :index 44,
+ :sub-index 44}
+">:nemesis :stop <br /></div></a><a href="#i46"><div class="op fail" id="i46" style="width:100;left:530;top:720;height:16" title="Dur: 140 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:09.832Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 0,
+ :process 4,
+ :time 12832776001,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 46,
+ :sub-index 46}
+">4 :write 0</div></a><a href="#i48"><div class="op fail" id="i48" style="width:100;left:530;top:752;height:16" title="Dur: 67 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:11.184Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 1,
+ :process 4,
+ :time 14184569066,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 48,
+ :sub-index 48}
+">4 :write 1</div></a><a href="#i50"><div class="op fail" id="i50" style="width:100;left:530;top:784;height:16" title="Dur: 89 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:12.144Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 15144549519,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 50,
+ :sub-index 50}
+">4 :read </div></a><a href="#i51"><div class="op info" id="i51" style="width:100;left:0;top:816;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:13.683Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 16683273757,
+ :index 51,
+ :sub-index 51}
+">:nemesis :start </div></a><a href="#i53"><div class="op fail" id="i53" style="width:100;left:530;top:832;height:16" title="Dur: 117 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:13.736Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 16736420150,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 53,
+ :sub-index 53}
+">4 :write 4</div></a><a href="#i54"><div class="op info" id="i54" style="width:100;left:0;top:864;height:16" title="Msg: [:isolated {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}, &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}, &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.73&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:14.059Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 17059779146,
+ :value [:isolated
+         {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;},
+          &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;},
+          &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}}],
+ :index 54,
+ :sub-index 54}
+">:nemesis :start <br /></div></a><a href="#i56"><div class="op fail" id="i56" style="width:100;left:530;top:880;height:16" title="Dur: 91 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:15.753Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 18753381390,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 56,
+ :sub-index 56}
+">4 :write 4</div></a><a href="#i58"><div class="op fail" id="i58" style="width:100;left:530;top:912;height:16" title="Dur: 60 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:16.764Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 19764445469,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 58,
+ :sub-index 58}
+">4 :read </div></a><a href="#i60"><div class="op fail" id="i60" style="width:100;left:530;top:944;height:16" title="Dur: 55 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:17.398Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 1,
+ :process 4,
+ :time 20398277561,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 60,
+ :sub-index 60}
+">4 :write 1</div></a><a href="#i62"><div class="op fail" id="i62" style="width:100;left:530;top:976;height:16" title="Dur: 98 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:18.383Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 21383957179,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 62,
+ :sub-index 62}
+">4 :write 4</div></a><a href="#i63"><div class="op info" id="i63" style="width:100;left:0;top:1008;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:19.063Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 22063049829,
+ :index 63,
+ :sub-index 63}
+">:nemesis :stop </div></a><a href="#i65"><div class="op fail" id="i65" style="width:100;left:530;top:1024;height:16" title="Dur: 50 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:19.267Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 22267931628,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 65,
+ :sub-index 65}
+">4 :read </div></a><a href="#i66"><div class="op info" id="i66" style="width:100;left:0;top:1056;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:19.376Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 22376469426,
+ :value :network-healed,
+ :index 66,
+ :sub-index 66}
+">:nemesis :stop <br /></div></a><a href="#i68"><div class="op fail" id="i68" style="width:100;left:530;top:1072;height:16" title="Dur: 48 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:21.047Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 24047072492,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 68,
+ :sub-index 68}
+">4 :write 4</div></a><a href="#i70"><div class="op fail" id="i70" style="width:100;left:530;top:1104;height:16" title="Dur: 47 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:22.417Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 3,
+ :process 4,
+ :time 25417247243,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 70,
+ :sub-index 70}
+">4 :write 3</div></a><a href="#i72"><div class="op fail" id="i72" style="width:100;left:530;top:1136;height:16" title="Dur: 100 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:22.568Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 25568028384,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 72,
+ :sub-index 72}
+">4 :read </div></a><a href="#i74"><div class="op fail" id="i74" style="width:100;left:530;top:1168;height:16" title="Dur: 185 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:23.471Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 26471532902,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 74,
+ :sub-index 74}
+">4 :write 4</div></a><a href="#i76"><div class="op fail" id="i76" style="width:100;left:530;top:1200;height:16" title="Dur: 107 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:24.358Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 27358509409,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 76,
+ :sub-index 76}
+">4 :read </div></a><a href="#i77"><div class="op info" id="i77" style="width:100;left:0;top:1232;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:24.380Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 27380095084,
+ :index 77,
+ :sub-index 77}
+">:nemesis :start </div></a><a href="#i78"><div class="op info" id="i78" style="width:100;left:0;top:1248;height:16" title="Msg: [:isolated {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;}, &quot;10.51.83.79&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:24.547Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 27547934149,
+ :value [:isolated
+         {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;},
+          &quot;10.51.83.79&quot; #{&quot;10.49.115.47&quot; &quot;10.33.74.73&quot;}}],
+ :index 78,
+ :sub-index 78}
+">:nemesis :start <br /></div></a><a href="#i80"><div class="op fail" id="i80" style="width:100;left:530;top:1264;height:16" title="Dur: 47 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:25.017Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 28017347470,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 80,
+ :sub-index 80}
+">4 :read </div></a><a href="#i82"><div class="op fail" id="i82" style="width:100;left:530;top:1296;height:16" title="Dur: 59 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:25.570Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 28570033914,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 82,
+ :sub-index 82}
+">4 :read </div></a><a href="#i84"><div class="op fail" id="i84" style="width:100;left:530;top:1328;height:16" title="Dur: 80 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:27.512Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 30512496823,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 84,
+ :sub-index 84}
+">4 :read </div></a><a href="#i86"><div class="op fail" id="i86" style="width:100;left:530;top:1360;height:16" title="Dur: 72 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:28.288Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 31288898187,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 86,
+ :sub-index 86}
+">4 :read </div></a><a href="#i88"><div class="op fail" id="i88" style="width:100;left:530;top:1392;height:16" title="Dur: 51 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:28.378Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 31378613848,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 88,
+ :sub-index 88}
+">4 :read </div></a><a href="#i89"><div class="op info" id="i89" style="width:100;left:424;top:128;height:2768" title="Dur: 30010 ms
+Err: &quot;indeterminate: Unexpected disconnect receiving response&quot;
+Wall-clock Time: 2020-06-16T07:42:29.401Z
+
+Op:
+{:type :info,
+ :f :read,
+ :value nil,
+ :process 3,
+ :time 32401739811,
+ :error &quot;indeterminate: Unexpected disconnect receiving response&quot;,
+ :index 89,
+ :sub-index 89}
+">3 :read </div></a><a href="#i90"><div class="op info" id="i90" style="width:100;left:0;top:1440;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:29.550Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 32550133745,
+ :index 90,
+ :sub-index 90}
+">:nemesis :stop </div></a><a href="#i91"><div class="op info" id="i91" style="width:100;left:318;top:176;height:2720" title="Dur: 30008 ms
+Err: &quot;indeterminate: Unexpected disconnect receiving response&quot;
+Wall-clock Time: 2020-06-16T07:42:29.790Z
+
+Op:
+{:type :info,
+ :f :read,
+ :value nil,
+ :process 2,
+ :time 32790802815,
+ :error &quot;indeterminate: Unexpected disconnect receiving response&quot;,
+ :index 91,
+ :sub-index 91}
+">2 :read </div></a><a href="#i92"><div class="op info" id="i92" style="width:100;left:0;top:1472;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:29.914Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 32914586732,
+ :value :network-healed,
+ :index 92,
+ :sub-index 92}
+">:nemesis :stop <br /></div></a><a href="#i94"><div class="op fail" id="i94" style="width:100;left:530;top:1488;height:16" title="Dur: 46 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:29.950Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 32950685670,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 94,
+ :sub-index 94}
+">4 :read </div></a><a href="#i97"><div class="op fail" id="i97" style="width:100;left:530;top:1536;height:16" title="Dur: 56 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:31.209Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 34209552658,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 97,
+ :sub-index 97}
+">4 :read </div></a><a href="#i99"><div class="op ok" id="i99" style="width:100;left:848;top:1568;height:16" title="Dur: 500 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:31.626Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 1,
+ :process 7,
+ :time 34626896748,
+ :index 99,
+ :sub-index 99}
+">7 :write 1</div></a><a href="#i100"><div class="op ok" id="i100" style="width:100;left:742;top:1520;height:80" title="Dur: 1410 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:31.634Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 4,
+ :process 6,
+ :time 34634394997,
+ :index 100,
+ :sub-index 100}
+">6 :write 4</div></a><a href="#i103"><div class="op fail" id="i103" style="width:100;left:530;top:1632;height:16" title="Dur: 86 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:32.706Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 35706911063,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 103,
+ :sub-index 103}
+">4 :read </div></a><a href="#i104"><div class="op ok" id="i104" style="width:100;left:848;top:1616;height:48" title="Dur: 156 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:32.741Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 7,
+ :time 35741371265,
+ :index 104,
+ :sub-index 104}
+">7 :read 1</div></a><a href="#i106"><div class="op ok" id="i106" style="width:100;left:742;top:1680;height:16" title="Dur: 78 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:33.133Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 6,
+ :time 36133032937,
+ :index 106,
+ :sub-index 106}
+">6 :read 1</div></a><a href="#i108"><div class="op info" id="i108" style="width:100;left:212;top:480;height:2416" title="Dur: 30008 ms
+Err: &quot;indeterminate: Unexpected disconnect receiving response&quot;
+Wall-clock Time: 2020-06-16T07:42:34.250Z
+
+Op:
+{:type :info,
+ :f :write,
+ :value 3,
+ :process 1,
+ :time 37250643485,
+ :error &quot;indeterminate: Unexpected disconnect receiving response&quot;,
+ :index 108,
+ :sub-index 108}
+">1 :write 3</div></a><a href="#i109"><div class="op ok" id="i109" style="width:100;left:848;top:1712;height:32" title="Dur: 99 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:34.283Z
+
+Op:
+{:type :ok,
+ :f :read,
+ :value 1,
+ :process 7,
+ :time 37283985319,
+ :index 109,
+ :sub-index 109}
+">7 :read 1</div></a><a href="#i111"><div class="op ok" id="i111" style="width:100;left:848;top:1760;height:16" title="Dur: 205 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:34.763Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 3,
+ :process 7,
+ :time 37763688169,
+ :index 111,
+ :sub-index 111}
+">7 :write 3</div></a><a href="#i113"><div class="op fail" id="i113" style="width:100;left:530;top:1792;height:16" title="Dur: 199 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:34.885Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 37885697058,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 113,
+ :sub-index 113}
+">4 :read </div></a><a href="#i114"><div class="op info" id="i114" style="width:100;left:0;top:1824;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:34.918Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 37918367308,
+ :index 114,
+ :sub-index 114}
+">:nemesis :start </div></a><a href="#i119"><div class="op fail" id="i119" style="width:100;left:530;top:1888;height:16" title="Dur: 508 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:35.455Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 38455487067,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 119,
+ :sub-index 119}
+">4 :read </div></a><a href="#i120"><div class="op ok" id="i120" style="width:100;left:742;top:1840;height:80" title="Dur: 593 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:35.524Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 2,
+ :process 6,
+ :time 38524339055,
+ :index 120,
+ :sub-index 120}
+">6 :write 2</div></a><a href="#i121"><div class="op ok" id="i121" style="width:100;left:848;top:1856;height:80" title="Dur: 386 ms
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:35.533Z
+
+Op:
+{:type :ok,
+ :f :write,
+ :value 4,
+ :process 7,
+ :time 38533194491,
+ :index 121,
+ :sub-index 121}
+">7 :write 4</div></a><a href="#i122"><div class="op info" id="i122" style="width:100;left:0;top:1952;height:16" title="Msg: [:isolated {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}, &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}, &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.73&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:35.663Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 38663228364,
+ :value [:isolated
+         {&quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;},
+          &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;},
+          &quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}}],
+ :index 122,
+ :sub-index 122}
+">:nemesis :start <br /></div></a><a href="#i124"><div class="op fail" id="i124" style="width:100;left:530;top:1968;height:16" title="Dur: 59 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:36.337Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 39337191102,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 124,
+ :sub-index 124}
+">4 :read </div></a><a href="#i127"><div class="op fail" id="i127" style="width:100;left:530;top:2016;height:16" title="Dur: 81 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:37.244Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 40244499084,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 127,
+ :sub-index 127}
+">4 :read </div></a><a href="#i130"><div class="op fail" id="i130" style="width:100;left:530;top:2064;height:16" title="Dur: 47 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:37.503Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 2,
+ :process 4,
+ :time 40503586863,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 130,
+ :sub-index 130}
+">4 :write 2</div></a><a href="#i132"><div class="op fail" id="i132" style="width:100;left:530;top:2096;height:16" title="Dur: 91 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:38.236Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 1,
+ :process 4,
+ :time 41236352461,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 132,
+ :sub-index 132}
+">4 :write 1</div></a><a href="#i134"><div class="op fail" id="i134" style="width:100;left:530;top:2128;height:16" title="Dur: 53 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:40.070Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 43070199451,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 134,
+ :sub-index 134}
+">4 :read </div></a><a href="#i136"><div class="op fail" id="i136" style="width:100;left:530;top:2160;height:16" title="Dur: 57 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:40.634Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 0,
+ :process 4,
+ :time 43634222778,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 136,
+ :sub-index 136}
+">4 :write 0</div></a><a href="#i137"><div class="op info" id="i137" style="width:100;left:0;top:2192;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:40.665Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 43665046365,
+ :index 137,
+ :sub-index 137}
+">:nemesis :stop </div></a><a href="#i139"><div class="op fail" id="i139" style="width:100;left:530;top:2208;height:16" title="Dur: 44 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:40.785Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 2,
+ :process 4,
+ :time 43785847369,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 139,
+ :sub-index 139}
+">4 :write 2</div></a><a href="#i140"><div class="op info" id="i140" style="width:100;left:0;top:2240;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:40.979Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 43979500210,
+ :value :network-healed,
+ :index 140,
+ :sub-index 140}
+">:nemesis :stop <br /></div></a><a href="#i142"><div class="op fail" id="i142" style="width:100;left:530;top:2256;height:16" title="Dur: 48 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:42.350Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 0,
+ :process 4,
+ :time 45350583046,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 142,
+ :sub-index 142}
+">4 :write 0</div></a><a href="#i144"><div class="op fail" id="i144" style="width:100;left:530;top:2288;height:16" title="Dur: 46 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:44.276Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 47276302391,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 144,
+ :sub-index 144}
+">4 :read </div></a><a href="#i146"><div class="op fail" id="i146" style="width:100;left:530;top:2320;height:16" title="Dur: 50 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:45.906Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 48906402987,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 146,
+ :sub-index 146}
+">4 :write 4</div></a><a href="#i147"><div class="op info" id="i147" style="width:100;left:0;top:2352;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:45.984Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 48984235938,
+ :index 147,
+ :sub-index 147}
+">:nemesis :start </div></a><a href="#i149"><div class="op fail" id="i149" style="width:100;left:530;top:2368;height:16" title="Dur: 62 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:46.127Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 1,
+ :process 4,
+ :time 49127711617,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 149,
+ :sub-index 149}
+">4 :write 1</div></a><a href="#i150"><div class="op info" id="i150" style="width:100;left:0;top:2400;height:16" title="Msg: [:isolated {&quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}, &quot;10.33.74.73&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;}, &quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}, &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:46.156Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 49156241247,
+ :value [:isolated
+         {&quot;10.33.74.72&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;},
+          &quot;10.33.74.73&quot; #{&quot;10.49.115.47&quot; &quot;10.51.83.79&quot;},
+          &quot;10.49.115.47&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;},
+          &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.33.74.73&quot;}}],
+ :index 150,
+ :sub-index 150}
+">:nemesis :start <br /></div></a><a href="#i152"><div class="op fail" id="i152" style="width:100;left:530;top:2416;height:16" title="Dur: 48 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:47.257Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 3,
+ :process 4,
+ :time 50257317424,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 152,
+ :sub-index 152}
+">4 :write 3</div></a><a href="#i154"><div class="op fail" id="i154" style="width:100;left:530;top:2448;height:16" title="Dur: 64 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:47.400Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 50400766120,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 154,
+ :sub-index 154}
+">4 :write 4</div></a><a href="#i156"><div class="op fail" id="i156" style="width:100;left:530;top:2480;height:16" title="Dur: 46 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:48.542Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 4,
+ :process 4,
+ :time 51542607336,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 156,
+ :sub-index 156}
+">4 :write 4</div></a><a href="#i158"><div class="op fail" id="i158" style="width:100;left:530;top:2512;height:16" title="Dur: 66 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:48.812Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 0,
+ :process 4,
+ :time 51812939137,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 158,
+ :sub-index 158}
+">4 :write 0</div></a><a href="#i160"><div class="op fail" id="i160" style="width:100;left:530;top:2544;height:16" title="Dur: 59 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:50.006Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 0,
+ :process 4,
+ :time 53006197198,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 160,
+ :sub-index 160}
+">4 :write 0</div></a><a href="#i161"><div class="op info" id="i161" style="width:100;left:0;top:2576;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:51.160Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 54160499336,
+ :index 161,
+ :sub-index 161}
+">:nemesis :stop </div></a><a href="#i163"><div class="op fail" id="i163" style="width:100;left:530;top:2592;height:16" title="Dur: 77 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:51.872Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 54872335187,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 163,
+ :sub-index 163}
+">4 :read </div></a><a href="#i164"><div class="op info" id="i164" style="width:100;left:0;top:2624;height:16" title="Msg: :network-healed
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:52.059Z
+
+Op:
+{:type :info,
+ :f :stop,
+ :process :nemesis,
+ :time 55059553098,
+ :value :network-healed,
+ :index 164,
+ :sub-index 164}
+">:nemesis :stop <br /></div></a><a href="#i166"><div class="op fail" id="i166" style="width:100;left:530;top:2640;height:16" title="Dur: 46 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:52.193Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 55193689113,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 166,
+ :sub-index 166}
+">4 :read </div></a><a href="#i168"><div class="op fail" id="i168" style="width:100;left:530;top:2672;height:16" title="Dur: 59 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:53.334Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 56334971942,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 168,
+ :sub-index 168}
+">4 :read </div></a><a href="#i170"><div class="op fail" id="i170" style="width:100;left:530;top:2704;height:16" title="Dur: 77 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:54.979Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 57979525743,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 170,
+ :sub-index 170}
+">4 :read </div></a><a href="#i172"><div class="op fail" id="i172" style="width:100;left:530;top:2736;height:16" title="Dur: 93 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:55.256Z
+
+Op:
+{:type :fail,
+ :f :read,
+ :value nil,
+ :process 4,
+ :time 58256981529,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 172,
+ :sub-index 172}
+">4 :read </div></a><a href="#i174"><div class="op fail" id="i174" style="width:100;left:530;top:2768;height:16" title="Dur: 55 ms
+Err: [:no-client &quot;java.net.ConnectException: Connection refused&quot;]
+Wall-clock Time: 2020-06-16T07:42:56.032Z
+
+Op:
+{:type :fail,
+ :f :write,
+ :value 3,
+ :process 4,
+ :time 59032033467,
+ :error [:no-client &quot;java.net.ConnectException: Connection refused&quot;],
+ :index 174,
+ :sub-index 174}
+">4 :write 3</div></a><a href="#i175"><div class="op info" id="i175" style="width:100;left:0;top:2800;height:16" title="Msg: nil
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:57.063Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 60063130576,
+ :index 175,
+ :sub-index 175}
+">:nemesis :start </div></a><a href="#i176"><div class="op info" id="i176" style="width:100;left:0;top:2816;height:16" title="Msg: [:isolated {&quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.49.115.47&quot;}, &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.49.115.47&quot;}, &quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot; &quot;10.51.83.79&quot;}, &quot;10.49.115.47&quot; #{&quot;10.33.74.73&quot; &quot;10.51.83.79&quot;}}]
+Err: nil
+Wall-clock Time: 2020-06-16T07:42:57.442Z
+
+Op:
+{:type :info,
+ :f :start,
+ :process :nemesis,
+ :time 60442516328,
+ :value [:isolated
+         {&quot;10.33.74.73&quot; #{&quot;10.33.74.72&quot; &quot;10.49.115.47&quot;},
+          &quot;10.51.83.79&quot; #{&quot;10.33.74.72&quot; &quot;10.49.115.47&quot;},
+          &quot;10.33.74.72&quot; #{&quot;10.33.74.73&quot; &quot;10.51.83.79&quot;},
+          &quot;10.49.115.47&quot; #{&quot;10.33.74.73&quot; &quot;10.51.83.79&quot;}}],
+ :index 176,
+ :sub-index 176}
+">:nemesis :start <br /></div></a><a href="#i177"><div class="op info" id="i177" style="width:100;left:636;top:1872;height:1024" title="Dur: 30289 ms
+Err: &quot;indeterminate: Unexpected disconnect receiving response&quot;
+Wall-clock Time: 2020-06-16T07:43:05.164Z
+
+Op:
+{:type :info,
+ :f :read,
+ :value nil,
+ :process 5,
+ :time 68164314726,
+ :error &quot;indeterminate: Unexpected disconnect receiving response&quot;,
+ :index 177,
+ :sub-index 177}
+">5 :read </div></a><a href="#i178"><div class="op info" id="i178" style="width:100;left:742;top:2000;height:896" title="Dur: 30006 ms
+Err: &quot;indeterminate: Unexpected disconnect receiving response&quot;
+Wall-clock Time: 2020-06-16T07:43:06.922Z
+
+Op:
+{:type :info,
+ :f :read,
+ :value nil,
+ :process 6,
+ :time 69922836017,
+ :error &quot;indeterminate: Unexpected disconnect receiving response&quot;,
+ :index 178,
+ :sub-index 178}
+">6 :read </div></a><a href="#i179"><div class="op info" id="i179" style="width:100;left:848;top:2048;height:848" title="Dur: 30006 ms
+Err: &quot;indeterminate: Unexpected disconnect receiving response&quot;
+Wall-clock Time: 2020-06-16T07:43:07.374Z
+
+Op:
+{:type :info,
+ :f :read,
+ :value nil,
+ :process 7,
+ :time 70374736490,
+ :error &quot;indeterminate: Unexpected disconnect receiving response&quot;,
+ :index 179,
+ :sub-index 179}
+">7 :read </div></a></div></body></html>
