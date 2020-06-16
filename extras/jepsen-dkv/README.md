@@ -1,22 +1,36 @@
 # jepsen-dkv
 
-A Clojure library designed to ... well, that part is up to you.
+Jepsen test suite for validating the DKV guarantees around
+linearizability and durabiity.
+
+Operations being validated:
+- `get`
+- `put`
+
+Checkers:
+- Linearizability
+- Performance
+- Timeline
+
+Nemesis (failures):
+- Network partition at random halves
 
 ## Usage
 
-FIXME
+Assumptions:
+- DKV installed at `/opt/dkv`
+- DEBIAN based host
+- `sudo` access
+- DKV Clojure (client)[../../clients/clj/README.md] installed locally
+
+Command:
+```bash
+$ cd <dkv_project_dir>/extras/jepsen_dkv
+$ lein run test --nodes "node1_ip,node2_ip,node3_ip" --ssh-private-key <privake_key_path> --username <user_name> --time-limit 60
+```
+
+Alternatively, you can browse sample timelines located (here)[./results].
 
 ## License
 
-Copyright © 2020 FIXME
-
-This program and the accompanying materials are made available under the
-terms of the Eclipse Public License 2.0 which is available at
-http://www.eclipse.org/legal/epl-2.0.
-
-This Source Code may also be made available under the following Secondary
-Licenses when the conditions for such availability set forth in the Eclipse
-Public License, v. 2.0 are satisfied: GNU General Public License as published by
-the Free Software Foundation, either version 2 of the License, or (at your
-option) any later version, with the GNU Classpath Exception which is available
-at https://www.gnu.org/software/classpath/license.html.
+Copyright © 2020 Apache License 2.0
