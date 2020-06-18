@@ -22,7 +22,7 @@ ifeq ($(VERSION),)
 endif
 
 BUILD_TAGS = 'osusergo netgo static_build'
-LDFLAGS = -ldflags '-linkmode external -extldflags "-v -static" -X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
+LDFLAGS = -ldflags '-linkmode external -extldflags "-static" -X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
 
 ifeq ($(GOOS),darwin)
 	LDFLAGS = -ldflags '-X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
