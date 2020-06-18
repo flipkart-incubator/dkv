@@ -4,7 +4,6 @@ GOARCH ?= amd64
 CGO_ENABLED ?= 1
 CGO_CFLAGS ?=
 CGO_LDFLAGS ?= "-lrocksdb -lm -lzstd -lz -lbz2 -lsnappy"
-BUILD_TAGS ?=
 VERSION ?=
 BIN_EXT ?=
 JAVA_CLI_PATH = ./clients/java
@@ -21,7 +20,14 @@ TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname 
 ifeq ($(VERSION),)
   VERSION = latest
 endif
-LDFLAGS = -ldflags "-X \"github.com/flipkart-incubator/dkv/version.Version=$(VERSION)\""
+
+BUILD_TAGS = 'osusergo netgo static_build'
+LDFLAGS = -ldflags '-extldflags "-v -static" -X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
+
+ifeq ($(GOOS),darwin)
+	LDFLAGS = -ldflags '-X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
+	BUILD_TAGS = 'osusergo netgo'
+endif
 
 ifeq ($(GOOS),windows)
   BIN_EXT = .exe
