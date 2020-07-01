@@ -1,4 +1,5 @@
 (ns jepsen.dkv
+  (:gen-class)
   (:require 
     [clojure.tools.logging :refer :all]
     [clojure.string :as str]

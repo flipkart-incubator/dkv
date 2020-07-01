@@ -5,6 +5,8 @@
             :year 2020
             :key "apache-2.0"}
   :main jepsen.dkv
+  :profiles {:default []
+             :uberjar {:aot :all}}
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [jepsen "0.1.13"]
                  [org.eclipse.jetty.http2/http2-client "9.4.28.v20200408"]
