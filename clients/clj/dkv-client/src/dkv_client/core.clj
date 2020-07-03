@@ -1,9 +1,11 @@
 (ns dkv-client.core
+  (:gen-class)
   (:require [protojure.grpc.client.providers.http2 :as grpc.http2]
             [dkv.serverpb.DKV.client :as cli]
             [clojure.core.async :refer [<!! >!! <! >! go go-loop] :as async]))
 
 (def default-idle-timeout 10000)
+(def dkv-cli-usage "Usage: <program> <dkv_host> <dkv_port> <get|put> <args>")
 
 (defn connect
   "Establishes a GRPC connection to the DKV server
@@ -15,15 +17,15 @@
 
 (defn getValue
   "Retrieves the value(s) associated with the given key(s)."
-  ([conn req]
-   (let [getReq {:key (if (string? req) (.getBytes req) req) :readConsistency :linearizable}]
+  ([conn quorum? req]
+   (let [getReq {:key (if (string? req) (.getBytes req) req) :readConsistency (if quorum? :linearizable :sequential)}]
      (let [getRes @(cli/Get conn getReq)]
        (if (string? req)
          (->> getRes :value (map char) (apply str))   
          (:value getRes)))))
-  ([conn req & more]
+  ([conn quorum? req & more]
    (let [keysReq (if (string? req) (->> (cons req more) (map #(.getBytes %))) (cons req more))]
-     (let [multiGetRes @(cli/MultiGet conn {:keys keysReq :readConsistency :linearizable})]
+     (let [multiGetRes @(cli/MultiGet conn {:keys keysReq :readConsistency (if quorum? :linearizable :sequential)})]
        (if (string? req)
          (map #(->> % (map char) (apply str)) (:values multiGetRes))
          (:values multiGetRes))))))
@@ -50,3 +52,18 @@
          iterReq (if (nil? keyPrefix) skIterReq (merge skIterReq kpIterReq))]
      (cli/Iterate conn iterReq resChan)
      (delay (take-while some? (repeatedly #(<!! resChan)))))))
+
+(defn -main
+  [& args]
+  (if (< (count args) 4)
+    (throw (Exception. dkv-cli-usage))
+    (let [host (nth args 0)
+          port (read-string (nth args 1))
+          verb (nth args 2)
+          vargs (nthrest args 3)
+          conn (connect host port)]
+      (case (clojure.string/lower-case verb)
+        "put" (prn (putKV conn (first vargs) (second vargs)))
+        "get" (prn (getValue conn true (first vargs)))
+        (throw (Exception. dkv-cli-usage)))))
+  (System/exit 0))
