@@ -32,7 +32,7 @@ LICENSE file.
      <jackson.api.version>1.9.4</jackson.api.version>
   </properties>
 
-  <dependencies>	
+  <dependencies>
     <dependency>
       <groupId>org.apache.htrace</groupId>
       <artifactId>htrace-core4</artifactId>
