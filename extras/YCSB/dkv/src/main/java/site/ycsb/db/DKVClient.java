@@ -9,6 +9,9 @@ import java.util.*;
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+/**
+ * YCSB binding for DKV.
+ */
 public class DKVClient extends DB {
   private static final int DEFAULT_PORT = 8080;
   private static final String DEFAULT_HOST = "127.0.0.1";
@@ -68,7 +71,8 @@ public class DKVClient extends DB {
   }
 
   @Override
-  public Status scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
+  public Status scan(String table, String startkey, int recordcount, Set<String> fields,
+                     Vector<HashMap<String, ByteIterator>> result) {
     try {
       byte[] startKeyBytes = toDKVKey(table, startkey, PRIMARY_KEY);
       Iterator<DKVEntry> itrtr = dkvClient.iterate(startKeyBytes);
