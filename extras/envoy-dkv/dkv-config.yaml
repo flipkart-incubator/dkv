@@ -45,8 +45,6 @@ static_resources:
     lb_policy: ROUND_ROBIN
     http2_protocol_options: {}
     upstream_connection_options:
-      # configure a TCP keep-alive to detect and reconnect to the admin
-      # server in the event of a TCP socket half open connection
       tcp_keepalive: {}
     load_assignment:
       cluster_name: xds_cluster
@@ -57,14 +55,3 @@ static_resources:
               socket_address:
                 address: 127.0.0.1
                 port_value: 9090
-
-                #lb_policy: ROUND_ROBIN
-                #load_assignment:
-                #cluster_name: dkv
-                #endpoints:
-                #- lb_endpoints:
-                #- endpoint:
-                #address:
-                #socket_address:
-                #address: 127.0.0.1
-                #port_value: 8080
