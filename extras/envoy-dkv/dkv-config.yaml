@@ -29,17 +29,42 @@ static_resources:
   clusters:
   - name: dkv
     connect_timeout: 15s
-    http2_protocol_options:
-      initial_connection_window_size: 1048576
-      initial_stream_window_size: 65536
+    lb_policy: ROUND_ROBIN
+    http2_protocol_options: {}
+    type: EDS
+    eds_cluster_config:
+      eds_config:
+        api_config_source:
+          api_type: GRPC
+          grpc_services:
+            - envoy_grpc:
+                cluster_name: xds_cluster
+  - name: xds_cluster
+    connect_timeout: 0.25s
     type: STATIC
     lb_policy: ROUND_ROBIN
+    http2_protocol_options: {}
+    upstream_connection_options:
+      # configure a TCP keep-alive to detect and reconnect to the admin
+      # server in the event of a TCP socket half open connection
+      tcp_keepalive: {}
     load_assignment:
-      cluster_name: dkv
+      cluster_name: xds_cluster
       endpoints:
       - lb_endpoints:
         - endpoint:
             address:
               socket_address:
                 address: 127.0.0.1
-                port_value: 8080
+                port_value: 9090
+
+                #lb_policy: ROUND_ROBIN
+                #load_assignment:
+                #cluster_name: dkv
+                #endpoints:
+                #- lb_endpoints:
+                #- endpoint:
+                #address:
+                #socket_address:
+                #address: 127.0.0.1
+                #port_value: 8080
