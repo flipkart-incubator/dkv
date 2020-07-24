@@ -11,11 +11,11 @@ CLI_NAME = dkv-client
 
 GO := GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) GO111MODULE=on go
 
-PACKAGES = $(shell $(GO) list ./... | grep -v '/vendor/')
+PACKAGES = $(shell $(GO) list ./... | grep -v '/vendor/' | grep -v '/extras/')
 
-PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/)
+PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
 
-TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/)
+TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
 
 ifeq ($(VERSION),)
   VERSION = latest
