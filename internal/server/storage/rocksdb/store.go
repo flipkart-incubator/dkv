@@ -11,6 +11,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
+	"go.uber.org/zap"
 )
 
 // DB interface represents the capabilities exposed
@@ -25,6 +26,7 @@ type DB interface {
 type rocksDB struct {
 	db   *gorocksdb.DB
 	opts *Opts
+	lg   *zap.Logger
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
@@ -42,13 +44,21 @@ type Opts struct {
 
 // OpenDB initializes a new instance of RocksDB with default
 // options. It uses the given folder for storing the data files.
-func OpenDB(dbFolder string, cacheSize uint64) DB {
+func OpenDB(dbFolder string, cacheSize uint64) (DB, error) {
+	return OpenDBWithLogger(dbFolder, cacheSize, zap.NewNop())
+}
+
+// OpenDBWithLogger initializes a new instance of RocksDB with default
+// options. It uses the given folder for storing the data files and the
+// given logger for logs.
+func OpenDBWithLogger(dbFolder string, cacheSize uint64, lgr *zap.Logger) (DB, error) {
 	opts := NewOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := openStore(opts); err != nil {
-		panic(err)
+	if kvs, err := openStore(opts, lgr); err != nil {
+		lgr.Error("Unable to open RocksDB", zap.Error(err))
+		return nil, err
 	} else {
-		return kvs
+		return kvs, nil
 	}
 }
 
@@ -88,12 +98,12 @@ func (rdbOpts *Opts) destroy() {
 	rdbOpts.restoreOpts.Destroy()
 }
 
-func openStore(opts *Opts) (*rocksDB, error) {
+func openStore(opts *Opts, lgr *zap.Logger) (*rocksDB, error) {
 	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName)
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{db, opts, 0}, nil
+	return &rocksDB{db, opts, lgr, 0}, nil
 }
 
 func (rdb *rocksDB) Close() error {
@@ -228,7 +238,7 @@ func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
 
 	// 3. In any case, reopen the current DB
 	defer func() {
-		if finalDB, openErr := openStore(rdb.opts); openErr != nil {
+		if finalDB, openErr := openStore(rdb.opts, rdb.lg); openErr != nil {
 			err = openErr
 		} else {
 			*rdb = *finalDB

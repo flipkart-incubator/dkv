@@ -27,13 +27,18 @@ import (
 )
 
 var (
-	dbAccessLog      string
 	dbEngine         string
 	dbFolder         string
 	dbListenAddr     string
 	dbRole           string
 	replMasterAddr   string
 	replPollInterval uint
+
+	// Logging vars
+	dbAccessLog    string
+	verboseLogging bool
+	accessLogger   *zap.Logger
+	dkvLogger      *zap.Logger
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 )
@@ -46,6 +51,7 @@ func init() {
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.UintVar(&replPollInterval, "replPollInterval", 5, "Interval (in seconds) used by the replication poller of this node")
 	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
+	flag.BoolVar(&verboseLogging, "verbose", false, "Enable verbose logging. By default, only warnings and errors are logged.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -59,6 +65,8 @@ const (
 
 func main() {
 	flag.Parse()
+	setupDKVLogger()
+	setupAccessLogger()
 	setFlagsForNexusDirs()
 
 	kvs, cp, ca, br := newKVStore()
@@ -105,39 +113,77 @@ func main() {
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
 }
 
-var accessLoggerConfig = zap.Config{
-	Level: zap.NewAtomicLevelAt(zap.InfoLevel),
-
-	Development:   false,
-	Encoding:      "console",
-	DisableCaller: true,
-
-	EncoderConfig: zapcore.EncoderConfig{
-		TimeKey:        "ts",
-		LevelKey:       "level",
-		NameKey:        "logger",
-		CallerKey:      "caller",
-		MessageKey:     "msg",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.LowercaseLevelEncoder,
-		EncodeTime:     zapcore.ISO8601TimeEncoder,
-		EncodeDuration: zapcore.StringDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
-	},
-}
-
-func newGrpcServerListener() (*grpc.Server, net.Listener) {
-	accessLogger := zap.NewNop()
+func setupAccessLogger() {
+	accessLogger = zap.NewNop()
 	if dbAccessLog != "" {
-		accessLoggerConfig.OutputPaths = []string{dbAccessLog}
-		accessLoggerConfig.ErrorOutputPaths = []string{dbAccessLog}
+		accessLoggerConfig := zap.Config{
+			Level:         zap.NewAtomicLevelAt(zap.InfoLevel),
+			Development:   false,
+			Encoding:      "console",
+			DisableCaller: true,
+
+			EncoderConfig: zapcore.EncoderConfig{
+				TimeKey:        "ts",
+				LevelKey:       "level",
+				NameKey:        "logger",
+				CallerKey:      "caller",
+				MessageKey:     "msg",
+				StacktraceKey:  "stacktrace",
+				LineEnding:     zapcore.DefaultLineEnding,
+				EncodeLevel:    zapcore.LowercaseLevelEncoder,
+				EncodeTime:     zapcore.ISO8601TimeEncoder,
+				EncodeDuration: zapcore.StringDurationEncoder,
+				EncodeCaller:   zapcore.ShortCallerEncoder,
+			},
+
+			OutputPaths:      []string{dbAccessLog},
+			ErrorOutputPaths: []string{dbAccessLog},
+		}
 		if lg, err := accessLoggerConfig.Build(); err != nil {
 			panic(err)
 		} else {
 			accessLogger = lg
 		}
 	}
+}
+
+func setupDKVLogger() {
+	dkvLoggerConfig := zap.Config{
+		Development:   false,
+		Encoding:      "console",
+		DisableCaller: true,
+
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "ts",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "msg",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.StringDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+		OutputPaths:      []string{"stderr"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+
+	if verboseLogging {
+		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+		dkvLoggerConfig.EncoderConfig.StacktraceKey = "stacktrace"
+	} else {
+		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+	}
+
+	if lg, err := dkvLoggerConfig.Build(); err != nil {
+		panic(err)
+	} else {
+		dkvLogger = lg
+	}
+}
+
+func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	grpcSrvr := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
 		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
@@ -221,19 +267,29 @@ const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
 	if err := os.MkdirAll(dbFolder, 0777); err != nil {
-		panic(err)
+		dkvLogger.Fatal("Unable to create DB folder", zap.String("dbFolder", dbFolder), zap.Error(err))
 	}
 
 	dbDir := path.Join(dbFolder, "data")
+	slg := dkvLogger.Sugar()
+	defer slg.Sync()
+	slg.Infof("Using %s as data folder", dbDir)
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb := rocksdb.OpenDB(dbDir, cacheSize)
+		rocksDb, err := rocksdb.OpenDBWithLogger(dbDir, cacheSize, dkvLogger)
+		if err != nil {
+			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
+		}
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb := badger.OpenDB(dbDir)
+		badgerDb, err := badger.OpenDB(dbDir)
+		if err != nil {
+			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
+		}
 		return badgerDb, nil, badgerDb, badgerDb
 	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
+		slg.Panicf("Unknown storage engine: %s", dbEngine)
+		return nil, nil, nil, nil
 	}
 }
 

@@ -133,14 +133,22 @@ func newRocksDBStore(dbFolder string) rocksdb.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	return rocksdb.OpenDB(dbFolder, cacheSize)
+	store, err := rocksdb.OpenDB(dbFolder, cacheSize)
+	if err != nil {
+		panic(err)
+	}
+	return store
 }
 
 func newBadgerDBStore(dbFolder string) badger.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	return badger.OpenDB(dbFolder)
+	store, err := badger.OpenDB(dbFolder)
+	if err != nil {
+		panic(err)
+	}
+	return store
 }
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator) {

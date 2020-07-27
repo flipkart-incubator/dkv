@@ -16,6 +16,7 @@ import (
 	badger_pb "github.com/dgraph-io/badger/pb"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 )
 
 // DB interface represents the capabilities exposed
@@ -29,6 +30,7 @@ type DB interface {
 type badgerDB struct {
 	db   *badger.DB
 	opts *Opts
+	lg   *zap.Logger
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
@@ -43,12 +45,20 @@ type Opts struct {
 
 // OpenDB initializes a new instance of BadgerDB with default
 // options. It uses the given folder for storing the data files.
-func OpenDB(dbFolder string) DB {
+func OpenDB(dbFolder string) (DB, error) {
+	return OpenDBWithLogger(dbFolder, zap.NewNop())
+}
+
+// OpenDBWithLogger initializes a new instance of BadgerDB with default
+// options. It uses the given folder for storing the data files and
+// the given logger for logs.
+func OpenDBWithLogger(dbFolder string, lgr *zap.Logger) (DB, error) {
 	opts := NewOptions(dbFolder)
-	if kvs, err := openStore(opts); err != nil {
-		panic(err)
+	if kvs, err := openStore(opts, lgr); err != nil {
+		lgr.Error("Unable to open Badger", zap.Error(err))
+		return nil, err
 	} else {
-		return kvs
+		return kvs, nil
 	}
 }
 
@@ -60,12 +70,12 @@ func NewOptions(dbFolder string) *Opts {
 	return &Opts{opts}
 }
 
-func openStore(bdbOpts *Opts) (*badgerDB, error) {
+func openStore(bdbOpts *Opts, lgr *zap.Logger) (*badgerDB, error) {
 	db, err := badger.Open(bdbOpts.opts)
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts, 0}, nil
+	return &badgerDB{db, bdbOpts, lgr, 0}, nil
 }
 
 func (bdb *badgerDB) Close() error {
@@ -183,7 +193,7 @@ func (bdb *badgerDB) RestoreFrom(file string) (err error) {
 
 	// 3. In any case, reopen the current DB
 	defer func() {
-		if finalDB, openErr := openStore(bdb.opts); openErr != nil {
+		if finalDB, openErr := openStore(bdb.opts, bdb.lg); openErr != nil {
 			err = openErr
 		} else {
 			*bdb = *finalDB
@@ -210,7 +220,7 @@ func (bdb *badgerDB) RestoreFrom(file string) (err error) {
 	}
 
 	// 7. Create a temp badger DB pointing to the temp folder
-	restoredDB, err := openStore(NewOptions(restoreFolder))
+	restoredDB, err := openStore(NewOptions(restoreFolder), bdb.lg)
 	if err != nil {
 		return err
 	}
