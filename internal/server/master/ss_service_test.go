@@ -196,7 +196,8 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 }
 
 func serveStandaloneDKV() {
-	dkvSvc = NewStandaloneService(newKVStore())
+	kvs, cp, ba := newKVStore()
+	dkvSvc = NewStandaloneService(kvs, cp, ba, nil)
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

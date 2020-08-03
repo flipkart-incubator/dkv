@@ -153,7 +153,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, nil)
+	masterSvc = master.NewStandaloneService(store, cp, nil, nil)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -163,7 +163,7 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
-	if ss, err := NewService(store, ca, masterCli, replPollIntervalSecs); err != nil {
+	if ss, err := NewService(store, ca, masterCli, replPollIntervalSecs, nil); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss

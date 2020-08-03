@@ -77,7 +77,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -87,10 +87,10 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs))
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -101,7 +101,7 @@ func main() {
 			panic(err)
 		} else {
 			defer replCli.Close()
-			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval)
+			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger)
 			defer dkvSvc.Close()
 			serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		}
@@ -266,13 +266,14 @@ func setFlagsForNexusDirs() {
 const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
+	slg := dkvLogger.Sugar()
+	defer slg.Sync()
+
 	if err := os.MkdirAll(dbFolder, 0777); err != nil {
-		dkvLogger.Fatal("Unable to create DB folder", zap.String("dbFolder", dbFolder), zap.Error(err))
+		slg.Fatalf("Unable to create DB folder at %s. Error: %v.", dbFolder, err)
 	}
 
 	dbDir := path.Join(dbFolder, "data")
-	slg := dkvLogger.Sugar()
-	defer slg.Sync()
 	slg.Infof("Using %s as data folder", dbDir)
 	switch dbEngine {
 	case "rocksdb":

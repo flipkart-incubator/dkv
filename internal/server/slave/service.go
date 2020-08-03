@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 )
 
 // A DKVService represents a service for serving key value data.
@@ -21,6 +21,7 @@ type DKVService interface {
 type dkvSlaveService struct {
 	store       storage.KVStore
 	ca          storage.ChangeApplier
+	lg          *zap.Logger
 	replCli     *ctl.DKVClient
 	replTckr    *time.Ticker
 	replStop    chan struct{}
@@ -36,16 +37,19 @@ const maxNumChangesRepl = 100
 // for changes from master node and replicates them onto its local
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
-func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint) (DKVService, error) {
+func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint, lgr *zap.Logger) (DKVService, error) {
 	if replPollIntervalSecs == 0 || replCli == nil || store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca`, `replCli` and `replPollIntervalSecs` are all mandatory")
 	}
+	if lgr == nil {
+		lgr = zap.NewNop()
+	}
 	replPollInterval := time.Duration(replPollIntervalSecs) * time.Second
-	return newSlaveService(store, ca, replCli, replPollInterval), nil
+	return newSlaveService(store, ca, replCli, replPollInterval, lgr), nil
 }
 
-func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration) *dkvSlaveService {
-	dss := &dkvSlaveService{store: store, ca: ca, replCli: replCli}
+func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration, lgr *zap.Logger) *dkvSlaveService {
+	dss := &dkvSlaveService{store: store, ca: ca, replCli: replCli, lg: lgr}
 	dss.startReplication(pollInterval)
 	return dss
 }
@@ -103,6 +107,9 @@ func (dss *dkvSlaveService) startReplication(replPollInterval time.Duration) {
 	dss.fromChngNum = 1 + latestChngNum
 	dss.maxNumChngs = maxNumChangesRepl
 	dss.replStop = make(chan struct{})
+	slg := dss.lg.Sugar()
+	slg.Infof("Replicating changes from change number: %d and polling interval: %s", dss.fromChngNum, replPollInterval.String())
+	slg.Sync()
 	go dss.pollAndApplyChanges()
 }
 
@@ -110,16 +117,19 @@ func (dss *dkvSlaveService) pollAndApplyChanges() {
 	for {
 		select {
 		case <-dss.replTckr.C:
+			dss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", dss.replLag))
 			if err := dss.applyChangesFromMaster(); err != nil {
-				log.Fatal(err)
+				dss.lg.Fatal("Unable to retrieve changes from master", zap.Error(err))
 			}
 		case <-dss.replStop:
+			dss.lg.Info("Stopping the change poller")
 			break
 		}
 	}
 }
 
 func (dss *dkvSlaveService) applyChangesFromMaster() error {
+	dss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", dss.fromChngNum))
 	res, err := dss.replCli.GetChanges(dss.fromChngNum, dss.maxNumChngs)
 	if err == nil {
 		if res.Status.Code != 0 {
@@ -137,11 +147,14 @@ func (dss *dkvSlaveService) applyChangesFromMaster() error {
 
 func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) error {
 	if chngsRes.NumberOfChanges > 0 {
+		dss.lg.Info("Applying the changes received from master", zap.Uint32("NumberOfChanges", chngsRes.NumberOfChanges))
 		actChngNum, err := dss.ca.SaveChanges(chngsRes.Changes)
 		dss.fromChngNum = actChngNum + 1
+		dss.lg.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", dss.fromChngNum), zap.Error(err))
 		dss.replLag = chngsRes.MasterChangeNumber - actChngNum
 		return err
 	}
+	dss.lg.Warn("Not received any changes from master")
 	return nil
 }
 
