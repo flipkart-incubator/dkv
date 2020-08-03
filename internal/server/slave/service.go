@@ -31,7 +31,7 @@ type dkvSlaveService struct {
 }
 
 // TODO: check if this needs to be exposed as a flag
-const maxNumChangesRepl = 100
+const maxNumChangesRepl = 10000
 
 // NewService creates a slave DKVService that periodically polls
 // for changes from master node and replicates them onto its local
