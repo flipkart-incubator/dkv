@@ -14,6 +14,7 @@ import (
 	badger_pb "github.com/dgraph-io/badger/pb"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 )
 
 const dbFolder = "/tmp/badger_storage_test"
@@ -583,5 +584,5 @@ func openBadgerDB() (*badgerDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	return openStore(NewOptions(dbFolder))
+	return openStore(NewOptions(dbFolder), zap.NewNop())
 }

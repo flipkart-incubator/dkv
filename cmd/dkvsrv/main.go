@@ -20,6 +20,9 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
+	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 )
 
@@ -31,6 +34,12 @@ var (
 	replMasterAddr   string
 	replPollInterval uint
 
+	// Logging vars
+	dbAccessLog    string
+	verboseLogging bool
+	accessLogger   *zap.Logger
+	dkvLogger      *zap.Logger
+
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 )
 
@@ -41,6 +50,8 @@ func init() {
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.UintVar(&replPollInterval, "replPollInterval", 5, "Interval (in seconds) used by the replication poller of this node")
+	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
+	flag.BoolVar(&verboseLogging, "verbose", false, "Enable verbose logging. By default, only warnings and errors are logged.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -54,6 +65,8 @@ const (
 
 func main() {
 	flag.Parse()
+	setupDKVLogger()
+	setupAccessLogger()
 	setFlagsForNexusDirs()
 
 	kvs, cp, ca, br := newKVStore()
@@ -64,7 +77,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -74,10 +87,10 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs))
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -88,7 +101,7 @@ func main() {
 			panic(err)
 		} else {
 			defer replCli.Close()
-			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval)
+			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger)
 			defer dkvSvc.Close()
 			serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		}
@@ -100,8 +113,82 @@ func main() {
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
 }
 
+func setupAccessLogger() {
+	accessLogger = zap.NewNop()
+	if dbAccessLog != "" {
+		accessLoggerConfig := zap.Config{
+			Level:         zap.NewAtomicLevelAt(zap.InfoLevel),
+			Development:   false,
+			Encoding:      "console",
+			DisableCaller: true,
+
+			EncoderConfig: zapcore.EncoderConfig{
+				TimeKey:        "ts",
+				LevelKey:       "level",
+				NameKey:        "logger",
+				CallerKey:      "caller",
+				MessageKey:     "msg",
+				StacktraceKey:  "stacktrace",
+				LineEnding:     zapcore.DefaultLineEnding,
+				EncodeLevel:    zapcore.LowercaseLevelEncoder,
+				EncodeTime:     zapcore.ISO8601TimeEncoder,
+				EncodeDuration: zapcore.StringDurationEncoder,
+				EncodeCaller:   zapcore.ShortCallerEncoder,
+			},
+
+			OutputPaths:      []string{dbAccessLog},
+			ErrorOutputPaths: []string{dbAccessLog},
+		}
+		if lg, err := accessLoggerConfig.Build(); err != nil {
+			panic(err)
+		} else {
+			accessLogger = lg
+		}
+	}
+}
+
+func setupDKVLogger() {
+	dkvLoggerConfig := zap.Config{
+		Development:   false,
+		Encoding:      "console",
+		DisableCaller: true,
+
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "ts",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "msg",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.StringDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+		OutputPaths:      []string{"stderr"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+
+	if verboseLogging {
+		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+		dkvLoggerConfig.EncoderConfig.StacktraceKey = "stacktrace"
+	} else {
+		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+	}
+
+	if lg, err := dkvLoggerConfig.Build(); err != nil {
+		panic(err)
+	} else {
+		dkvLogger = lg
+	}
+}
+
 func newGrpcServerListener() (*grpc.Server, net.Listener) {
-	return grpc.NewServer(), newListener()
+	grpcSrvr := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
+		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
+	)
+	return grpcSrvr, newListener()
 }
 
 func newListener() net.Listener {
@@ -179,20 +266,31 @@ func setFlagsForNexusDirs() {
 const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
+	slg := dkvLogger.Sugar()
+	defer slg.Sync()
+
 	if err := os.MkdirAll(dbFolder, 0777); err != nil {
-		panic(err)
+		slg.Fatalf("Unable to create DB folder at %s. Error: %v.", dbFolder, err)
 	}
 
 	dbDir := path.Join(dbFolder, "data")
+	slg.Infof("Using %s as data folder", dbDir)
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb := rocksdb.OpenDB(dbDir, cacheSize)
+		rocksDb, err := rocksdb.OpenDBWithLogger(dbDir, cacheSize, dkvLogger)
+		if err != nil {
+			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
+		}
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb := badger.OpenDB(dbDir)
+		badgerDb, err := badger.OpenDB(dbDir)
+		if err != nil {
+			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
+		}
 		return badgerDb, nil, badgerDb, badgerDb
 	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", dbEngine))
+		slg.Panicf("Unknown storage engine: %s", dbEngine)
+		return nil, nil, nil, nil
 	}
 }
 

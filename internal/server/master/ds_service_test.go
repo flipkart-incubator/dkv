@@ -209,10 +209,16 @@ func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storag
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb := rocksdb.OpenDB(dbFolder, cacheSize)
+		rocksDb, err := rocksdb.OpenDB(dbFolder, cacheSize)
+		if err != nil {
+			panic(err)
+		}
 		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		bdgrDb := badger.OpenDB(dbFolder)
+		bdgrDb, err := badger.OpenDB(dbFolder)
+		if err != nil {
+			panic(err)
+		}
 		return bdgrDb, nil, bdgrDb
 	default:
 		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
@@ -223,7 +229,7 @@ func newDistributedDKVNode(id int, join bool, clusURL string) (DKVService, *grpc
 	kvs, cp, br := newKVStoreWithID(id)
 	dkvRepl := newReplicator(id, kvs, join, clusURL)
 	dkvRepl.Start()
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, nil)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

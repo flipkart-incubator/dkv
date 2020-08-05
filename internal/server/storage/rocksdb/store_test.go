@@ -12,6 +12,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
+	"go.uber.org/zap"
 )
 
 const (
@@ -578,5 +579,5 @@ func openRocksDB() (*rocksDB, error) {
 		return nil, err
 	}
 	opts := NewOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
-	return openStore(opts)
+	return openStore(opts, zap.NewNop())
 }
