@@ -88,7 +88,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 
-	if err := masterBU.RestoreFrom(backupFolder); err != nil {
+	if _, _, _, _, err := masterBU.RestoreFrom(backupFolder); err != nil {
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 

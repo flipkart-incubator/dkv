@@ -12,13 +12,11 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
-	"go.uber.org/zap"
 )
 
 const (
-	createDBFolderIfMissing = true
-	dbFolder                = "/tmp/rocksdb_storage_test"
-	cacheSize               = 3 << 30
+	dbFolder  = "/tmp/rocksdb_storage_test"
+	cacheSize = 3 << 30
 )
 
 var store *rocksDB
@@ -296,8 +294,7 @@ func TestRestoreFolderValidity(t *testing.T) {
 }
 
 func TestBackupAndRestore(t *testing.T) {
-	numTrxns := 500
-	keyPrefix, valPrefix := "brKey", "brVal"
+	numTrxns, keyPrefix, valPrefix := 5, "brKey", "brVal"
 	putKeys(t, numTrxns, keyPrefix, valPrefix)
 
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "backup")
@@ -306,9 +303,10 @@ func TestBackupAndRestore(t *testing.T) {
 	} else {
 		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
 		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
-		if err := store.RestoreFrom(backupPath); err != nil {
+		if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 			t.Fatal(err)
 		} else {
+			store = st.(*rocksDB)
 			getKeys(t, numTrxns, keyPrefix, valPrefix)
 			noKeys(t, numTrxns, missKeyPrefix)
 		}
@@ -423,10 +421,11 @@ func TestPreventParallelRestores(t *testing.T) {
 	for i := 1; i <= parallelism; i++ {
 		go func(n int) {
 			defer wg.Done()
-			if err := store.RestoreFrom(backupPath); err != nil {
+			if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 				atomic.AddUint32(&fail, 1)
 				t.Log(err)
 			} else {
+				store = st.(*rocksDB)
 				atomic.AddUint32(&succ, 1)
 			}
 		}(i)
@@ -578,6 +577,6 @@ func openRocksDB() (*rocksDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	opts := NewOptions().DBFolder(dbFolder).CreateDBFolderIfMissing(createDBFolderIfMissing).CacheSize(cacheSize)
-	return openStore(opts, zap.NewNop())
+	db, err := OpenDB(dbFolder, cacheSize)
+	return db.(*rocksDB), err
 }

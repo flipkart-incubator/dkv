@@ -48,7 +48,9 @@ type Backupable interface {
 	// implementation of this interface.
 	// Note that it is upto the implementation to interpret the
 	// provided path as a file or a folder.
-	RestoreFrom(path string) error
+	// Returns the various traits of the newly restored store upon
+	// successful restoration, else an error
+	RestoreFrom(path string) (KVStore, Backupable, ChangePropagator, ChangeApplier, error)
 }
 
 // A ChangePropagator represents the capability of the underlying

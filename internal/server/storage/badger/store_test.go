@@ -170,9 +170,10 @@ func TestBackupAndRestore(t *testing.T) {
 	} else {
 		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
 		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
-		if err := store.RestoreFrom(backupPath); err != nil {
+		if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 			t.Fatal(err)
 		} else {
+			store = st.(*badgerDB)
 			getKeys(t, numTrxns, keyPrefix, valPrefix)
 			noKeys(t, numTrxns, missKeyPrefix)
 		}
@@ -348,10 +349,11 @@ func TestPreventParallelRestores(t *testing.T) {
 	for i := 1; i <= parallelism; i++ {
 		go func(n int) {
 			defer wg.Done()
-			if err := store.RestoreFrom(backupPath); err != nil {
+			if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 				atomic.AddUint32(&fail, 1)
 				t.Log(err)
 			} else {
+				store = st.(*badgerDB)
 				atomic.AddUint32(&succ, 1)
 			}
 		}(i)

@@ -51,15 +51,13 @@ func OpenDB(dbFolder string, cacheSize uint64) (DB, error) {
 // OpenDBWithLogger initializes a new instance of RocksDB with default
 // options. It uses the given folder for storing the data files and the
 // given logger for logs.
-func OpenDBWithLogger(dbFolder string, cacheSize uint64, lgr *zap.Logger) (DB, error) {
+func OpenDBWithLogger(dbFolder string, cacheSize uint64, lgr *zap.Logger) (kvs DB, err error) {
 	opts := NewOptions()
 	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err := openStore(opts, lgr); err != nil {
+	if kvs, err = openStore(opts, lgr); err != nil {
 		lgr.Error("Unable to open RocksDB", zap.Error(err))
-		return nil, err
-	} else {
-		return kvs, nil
 	}
+	return
 }
 
 // NewOptions initializes an instance of RocksDB options with
@@ -225,11 +223,14 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 
 const tempDirPrefix = "rocksdb-restore-"
 
-func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
+func (rdb *rocksDB) RestoreFrom(folder string) (st storage.KVStore, ba storage.Backupable, cp storage.ChangePropagator, ca storage.ChangeApplier, err error) {
+	// Setup return vars
+	st, ba, cp, ca = rdb, rdb, rdb, rdb
+
 	// 1. Prevent any other backups or restores
 	err = rdb.beginGlobalMutation()
 	if err != nil {
-		return err
+		return
 	}
 	defer rdb.endGlobalMutation()
 
@@ -241,33 +242,33 @@ func (rdb *rocksDB) RestoreFrom(folder string) (err error) {
 		if finalDB, openErr := openStore(rdb.opts, rdb.lg); openErr != nil {
 			err = openErr
 		} else {
-			*rdb = *finalDB
+			st, ba, cp, ca = finalDB, finalDB, finalDB, finalDB
 		}
 	}()
 
 	// 4. Check for the given restore folder validity
 	err = checksForRestore(folder)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 5. Open the backup engine with the given restore folder
 	be, err := rdb.openBackupEngine(folder)
 	if err != nil {
-		return err
+		return
 	}
 	defer be.Close()
 
 	// 6. Create temp folder for the restored data
 	restoreFolder, err := storage.CreateTempFolder(tempDirPrefix)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 7. Restore DB onto the temp folder
 	err = be.RestoreDBFromLatestBackup(restoreFolder, restoreFolder, rdb.opts.restoreOpts)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 8. Move the temp folder to the original DB location

@@ -52,14 +52,12 @@ func OpenDB(dbFolder string) (DB, error) {
 // OpenDBWithLogger initializes a new instance of BadgerDB with default
 // options. It uses the given folder for storing the data files and
 // the given logger for logs.
-func OpenDBWithLogger(dbFolder string, lgr *zap.Logger) (DB, error) {
+func OpenDBWithLogger(dbFolder string, lgr *zap.Logger) (kvs DB, err error) {
 	opts := NewOptions(dbFolder)
-	if kvs, err := openStore(opts, lgr); err != nil {
+	if kvs, err = openStore(opts, lgr); err != nil {
 		lgr.Error("Unable to open Badger", zap.Error(err))
-		return nil, err
-	} else {
-		return kvs, nil
 	}
+	return
 }
 
 // NewOptions initializes an instance of BadgerDB options with
@@ -180,11 +178,14 @@ const (
 	maxPendingWrites = 256
 )
 
-func (bdb *badgerDB) RestoreFrom(file string) (err error) {
+func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Backupable, cp storage.ChangePropagator, ca storage.ChangeApplier, err error) {
+	// Setup return vars
+	st, ba, cp, ca = bdb, bdb, nil, bdb
+
 	// 1. Prevent any other backups or restores
 	err = bdb.beginGlobalMutation()
 	if err != nil {
-		return err
+		return
 	}
 	defer bdb.endGlobalMutation()
 
@@ -196,39 +197,39 @@ func (bdb *badgerDB) RestoreFrom(file string) (err error) {
 		if finalDB, openErr := openStore(bdb.opts, bdb.lg); openErr != nil {
 			err = openErr
 		} else {
-			*bdb = *finalDB
+			st, ba, cp, ca = finalDB, finalDB, nil, finalDB
 		}
 	}()
 
 	// 4. Check for the given restore file validity
 	err = checksForRestore(file)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 5. Open the given restore file
 	f, err := os.Open(file)
 	if err != nil {
-		return err
+		return
 	}
 	defer f.Close()
 
 	// 6. Create temp folder for the restored data
 	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 7. Create a temp badger DB pointing to the temp folder
 	restoredDB, err := openStore(NewOptions(restoreFolder), bdb.lg)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 8. Restore data in the file onto the temp badger DB
 	err = restoredDB.db.Load(f, maxPendingWrites)
 	if err != nil {
-		return err
+		return
 	}
 
 	// 9. Close the temp badger DB

@@ -106,10 +106,13 @@ func (ss *standaloneService) Backup(ctx context.Context, backupReq *serverpb.Bac
 
 func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {
 	rstrPath := restoreReq.RestorePath
-	if err := ss.br.RestoreFrom(rstrPath); err != nil {
+	st, ba, cp, _, err := ss.br.RestoreFrom(rstrPath)
+	if err != nil {
 		ss.lg.Error("Unable to perform restore", zap.Error(err))
 		return newErrorStatus(err), err
 	}
+	// TODO: Check if this needs locking before mutating references.
+	ss.store, ss.br, ss.cp = st, ba, cp
 	return newEmptyStatus(), nil
 }
 

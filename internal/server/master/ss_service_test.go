@@ -26,8 +26,9 @@ const (
 )
 
 var (
-	dkvCli *ctl.DKVClient
-	dkvSvc DKVService
+	dkvCli   *ctl.DKVClient
+	dkvSvc   DKVService
+	grpcSrvr *grpc.Server
 )
 
 func TestStandaloneService(t *testing.T) {
@@ -40,6 +41,7 @@ func TestStandaloneService(t *testing.T) {
 		dkvCli = client
 		defer dkvCli.Close()
 		defer dkvSvc.Close()
+		defer grpcSrvr.Stop()
 		t.Run("testPutAndGet", testPutAndGet)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testIteration", testIteration)
@@ -54,7 +56,7 @@ func testPutAndGet(t *testing.T) {
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 
 	for i := 1; i <= numKeys; i++ {
-		key, expectedValue := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
+		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 		if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(actualValue.Value) != expectedValue {
@@ -138,7 +140,7 @@ func testGetChanges(t *testing.T) {
 			// Loop from the back since changes sent in chronological order.
 			for i, j := numKeys, numChngs; i >= 1; i, j = i-1, j-1 {
 				chng := chngs[j-1]
-				expKey, expVal := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
+				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 				if chng.NumberOfTrxns != 1 {
 					t.Errorf("Expected one transaction, but found %d transactions.", chng.NumberOfTrxns)
 				} else {
@@ -157,7 +159,7 @@ func testGetChanges(t *testing.T) {
 }
 
 func testBackupRestore(t *testing.T) {
-	numKeys, keyPrefix, valPrefix := 500, "BRK", "BRV"
+	numKeys, keyPrefix, valPrefix := 5, "brKey", "brVal"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "backup")
@@ -169,6 +171,8 @@ func testBackupRestore(t *testing.T) {
 		if err := dkvCli.Restore(backupPath); err != nil {
 			t.Fatal(err)
 		} else {
+			getKeys(t, numKeys, keyPrefix, valPrefix)
+			noKeys(t, numKeys, missKeyPrefix)
 		}
 	}
 }
@@ -198,7 +202,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore()
 	dkvSvc = NewStandaloneService(kvs, cp, ba, nil)
-	grpcSrvr := grpc.NewServer()
+	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -215,7 +219,7 @@ func listenAndServe(grpcSrvr *grpc.Server, port int) {
 
 func putKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	for i := 1; i <= numKeys; i++ {
-		key, value := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
+		key, value := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}

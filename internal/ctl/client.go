@@ -26,7 +26,7 @@ type DKVClient struct {
 const (
 	ReadBufSize    = 10 << 20
 	WriteBufSize   = 10 << 20
-	Timeout        = 5 * time.Second
+	Timeout        = 10 * time.Second
 	ConnectTimeout = 10 * time.Second
 )
 
