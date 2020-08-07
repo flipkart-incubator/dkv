@@ -170,6 +170,7 @@ func TestBackupAndRestore(t *testing.T) {
 	} else {
 		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
 		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
+		store.Close()
 		if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 			t.Fatal(err)
 		} else {
@@ -346,6 +347,7 @@ func TestPreventParallelRestores(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(parallelism)
 
+	store.Close()
 	for i := 1; i <= parallelism; i++ {
 		go func(n int) {
 			defer wg.Done()

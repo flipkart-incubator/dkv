@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
@@ -29,7 +30,9 @@ type standaloneService struct {
 	store storage.KVStore
 	cp    storage.ChangePropagator
 	br    storage.Backupable
-	lg    *zap.Logger
+
+	rwl *sync.RWMutex
+	lg  *zap.Logger
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
@@ -38,10 +41,14 @@ func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br
 	if lgr == nil {
 		lgr = zap.NewNop()
 	}
-	return &standaloneService{store, cp, br, lgr}
+	rwl := &sync.RWMutex{}
+	return &standaloneService{store, cp, br, rwl, lgr}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
 	if err := ss.store.Put(putReq.Key, putReq.Value); err != nil {
 		ss.lg.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
@@ -50,6 +57,9 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 }
 
 func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
 	readResults, err := ss.store.Get(getReq.Key)
 	res := &serverpb.GetResponse{Status: newEmptyStatus()}
 	if err != nil {
@@ -62,6 +72,9 @@ func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetReques
 }
 
 func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
 	readResults, err := ss.store.Get(multiGetReq.Keys...)
 	res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}
 	if err != nil {
@@ -74,6 +87,9 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 }
 
 func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
 	latestChngNum, _ := ss.cp.GetLatestCommittedChangeNumber()
 	res := &serverpb.GetChangesResponse{Status: newEmptyStatus(), MasterChangeNumber: latestChngNum}
 	if getChngsReq.FromChangeNumber > latestChngNum {
@@ -96,6 +112,9 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 }
 
 func (ss *standaloneService) Backup(ctx context.Context, backupReq *serverpb.BackupRequest) (*serverpb.Status, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
 	bckpPath := backupReq.BackupPath
 	if err := ss.br.BackupTo(bckpPath); err != nil {
 		ss.lg.Error("Unable to perform backup", zap.Error(err))
@@ -105,18 +124,29 @@ func (ss *standaloneService) Backup(ctx context.Context, backupReq *serverpb.Bac
 }
 
 func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {
+	ss.lg.Info("Waiting for all other requests to complete")
+	ss.rwl.Lock()
+	defer ss.rwl.Unlock()
+
+	ss.lg.Info("Closing the current DB connection")
+	ss.store.Close()
+
 	rstrPath := restoreReq.RestorePath
+	ss.lg.Info("Beginning the restoration.", zap.String("RestorePath", rstrPath))
 	st, ba, cp, _, err := ss.br.RestoreFrom(rstrPath)
 	if err != nil {
-		ss.lg.Error("Unable to perform restore", zap.Error(err))
+		ss.lg.Error("Unable to perform restore, DKV must be restarted.", zap.Error(err))
 		return newErrorStatus(err), err
 	}
-	// TODO: Check if this needs locking before mutating references.
 	ss.store, ss.br, ss.cp = st, ba, cp
+	ss.lg.Info("Restoration completed")
 	return newEmptyStatus(), nil
 }
 
 func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
 	iteration := storage.NewIteration(ss.store, iterReq)
 	err := iteration.ForEach(func(k, v []byte) error {
 		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: k, Value: v}
@@ -254,6 +284,8 @@ func (ds *distributedService) RemoveNode(ctx context.Context, req *serverpb.Remo
 }
 
 func (ds *distributedService) Close() error {
+	// Do not invoke DKVService::Close here since `raftRepl` already
+	// closes the underlying storage connection.
 	ds.raftRepl.Stop()
 	return nil
 }

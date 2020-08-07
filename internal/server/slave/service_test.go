@@ -40,19 +40,19 @@ var (
 func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
-	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB, slaveRDB)
+	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
 func TestMasterRocksDBSlaveBadger(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newBadgerDBStore(slaveDBFolder)
-	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB, slaveRDB)
+	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
-func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU, slaveBU storage.Backupable) {
+func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go serveStandaloneDKVMaster(&wg, masterStore, cp)
+	go serveStandaloneDKVMaster(&wg, masterStore, cp, masterBU)
 	wg.Wait()
 
 	masterCli = newDKVClient(masterSvcPort)
@@ -77,7 +77,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 
 	backupFolder := fmt.Sprintf("%s/backup", masterDBFolder)
-	if err := masterBU.BackupTo(backupFolder); err != nil {
+	if err := masterCli.Backup(backupFolder); err != nil {
 		t.Fatalf("An error occurred while backing up. Error: %v", err)
 	}
 
@@ -88,7 +88,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 
-	if _, _, _, _, err := masterBU.RestoreFrom(backupFolder); err != nil {
+	if err := masterCli.Restore(backupFolder); err != nil {
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 
@@ -151,12 +151,13 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 	return store
 }
 
-func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator) {
+func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, nil, nil)
+	masterSvc = master.NewStandaloneService(store, cp, bu, nil)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
+	serverpb.RegisterDKVBackupRestoreServer(masterGrpcSrvr, masterSvc)
 	lis := listen(masterSvcPort)
 	wg.Done()
 	masterGrpcSrvr.Serve(lis)

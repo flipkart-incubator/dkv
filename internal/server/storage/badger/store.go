@@ -182,17 +182,14 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 	// Setup return vars
 	st, ba, cp, ca = bdb, bdb, nil, bdb
 
-	// 1. Prevent any other backups or restores
+	// Prevent any other backups or restores
 	err = bdb.beginGlobalMutation()
 	if err != nil {
 		return
 	}
 	defer bdb.endGlobalMutation()
 
-	// 2. Close the current DB to prevent further mutations
-	bdb.db.Close()
-
-	// 3. In any case, reopen the current DB
+	// In any case, reopen a new DB
 	defer func() {
 		if finalDB, openErr := openStore(bdb.opts, bdb.lg); openErr != nil {
 			err = openErr
@@ -201,41 +198,41 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 		}
 	}()
 
-	// 4. Check for the given restore file validity
+	// Check for the given restore file validity
 	err = checksForRestore(file)
 	if err != nil {
 		return
 	}
 
-	// 5. Open the given restore file
+	// Open the given restore file
 	f, err := os.Open(file)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
-	// 6. Create temp folder for the restored data
+	// Create temp folder for the restored data
 	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
 	if err != nil {
 		return
 	}
 
-	// 7. Create a temp badger DB pointing to the temp folder
+	// Create a temp badger DB pointing to the temp folder
 	restoredDB, err := openStore(NewOptions(restoreFolder), bdb.lg)
 	if err != nil {
 		return
 	}
 
-	// 8. Restore data in the file onto the temp badger DB
+	// Restore data in the file onto the temp badger DB
 	err = restoredDB.db.Load(f, maxPendingWrites)
 	if err != nil {
 		return
 	}
 
-	// 9. Close the temp badger DB
+	// Close the temp badger DB
 	restoredDB.db.Close()
 
-	// 10. Move the temp folders to the actual locations
+	// Move the temp folders to the actual locations
 	err = storage.RenameFolder(restoreFolder, bdb.opts.opts.Dir)
 
 	// Plain return due to defer function above

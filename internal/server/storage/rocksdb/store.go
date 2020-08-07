@@ -105,7 +105,7 @@ func openStore(opts *Opts, lgr *zap.Logger) (*rocksDB, error) {
 }
 
 func (rdb *rocksDB) Close() error {
-	rdb.opts.destroy()
+	//rdb.opts.destroy()
 	rdb.db.Close()
 	return nil
 }
@@ -224,20 +224,15 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 const tempDirPrefix = "rocksdb-restore-"
 
 func (rdb *rocksDB) RestoreFrom(folder string) (st storage.KVStore, ba storage.Backupable, cp storage.ChangePropagator, ca storage.ChangeApplier, err error) {
-	// Setup return vars
-	st, ba, cp, ca = rdb, rdb, rdb, rdb
 
-	// 1. Prevent any other backups or restores
+	// Prevent any other backups or restores
 	err = rdb.beginGlobalMutation()
 	if err != nil {
 		return
 	}
 	defer rdb.endGlobalMutation()
 
-	// 2. Close the current DB to prevent further mutations
-	rdb.db.Close()
-
-	// 3. In any case, reopen the current DB
+	// In any case, reopen a new DB
 	defer func() {
 		if finalDB, openErr := openStore(rdb.opts, rdb.lg); openErr != nil {
 			err = openErr
@@ -246,32 +241,32 @@ func (rdb *rocksDB) RestoreFrom(folder string) (st storage.KVStore, ba storage.B
 		}
 	}()
 
-	// 4. Check for the given restore folder validity
+	// Check for the given restore folder validity
 	err = checksForRestore(folder)
 	if err != nil {
 		return
 	}
 
-	// 5. Open the backup engine with the given restore folder
+	// Open the backup engine with the given restore folder
 	be, err := rdb.openBackupEngine(folder)
 	if err != nil {
 		return
 	}
 	defer be.Close()
 
-	// 6. Create temp folder for the restored data
+	// Create temp folder for the restored data
 	restoreFolder, err := storage.CreateTempFolder(tempDirPrefix)
 	if err != nil {
 		return
 	}
 
-	// 7. Restore DB onto the temp folder
+	// Restore DB onto the temp folder
 	err = be.RestoreDBFromLatestBackup(restoreFolder, restoreFolder, rdb.opts.restoreOpts)
 	if err != nil {
 		return
 	}
 
-	// 8. Move the temp folder to the original DB location
+	// Move the temp folder to the original DB location
 	err = storage.RenameFolder(restoreFolder, rdb.opts.folderName)
 
 	// Plain return due to defer function above
