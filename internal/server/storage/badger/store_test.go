@@ -51,6 +51,30 @@ func TestPutAndGet(t *testing.T) {
 	}
 }
 
+func TestPutEmptyValue(t *testing.T) {
+	key, val := "EmptyKey", ""
+	if err := store.Put([]byte(key), []byte(val)); err != nil {
+		t.Fatalf("Unable to PUT empty value. Key: %s", key)
+	}
+
+	if res, err := store.Get([]byte(key)); err != nil {
+		t.Fatalf("Unable to GET empty value. Key: %s", key)
+	} else {
+		t.Logf("Got value: '%s'", string(res[0]))
+	}
+
+	// update nil value for same key
+	if err := store.Put([]byte(key), nil); err != nil {
+		t.Fatalf("Unable to PUT empty value. Key: %s", key)
+	}
+
+	if res, err := store.Get([]byte(key)); err != nil {
+		t.Fatalf("Unable to GET empty value. Key: %s", key)
+	} else {
+		t.Logf("Got value: '%s'", string(res[0]))
+	}
+}
+
 func TestMultiGet(t *testing.T) {
 	numKeys := 10
 	keys, vals := make([][]byte, numKeys), make([][]byte, numKeys)
@@ -240,7 +264,6 @@ func TestIteratorPrefixScan(t *testing.T) {
 	prefix := []byte("bbPrefix")
 	itOpts, err := storage.NewIteratorOptions(
 		storage.IterationPrefixKey(prefix),
-		storage.IterationStartKey(prefix),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -262,7 +285,43 @@ func TestIteratorPrefixScan(t *testing.T) {
 	if numTrxns != actCount {
 		t.Errorf("Expected %d records with prefix: %s. But got %d records.", numTrxns, prefix, actCount)
 	}
+}
 
+func TestIteratorFromStartKey(t *testing.T) {
+	numTrxns := 3
+	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+
+	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
+	itOpts, err := storage.NewIteratorOptions(
+		storage.IterationPrefixKey(prefix),
+		storage.IterationStartKey(startKey),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := store.Iterate(itOpts)
+	defer it.Close()
+
+	actCount := 0
+	for it.HasNext() {
+		key, val := it.Next()
+		actCount++
+		if strings.HasPrefix(string(key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", key, val)
+		} else {
+			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+		}
+	}
+
+	expCount := 5
+	if expCount != actCount {
+		t.Errorf("Expected %d records with prefix: %s, start key: %s. But got %d records.", expCount, prefix, startKey, actCount)
+	}
 }
 
 func TestIterationUsingIterator(t *testing.T) {

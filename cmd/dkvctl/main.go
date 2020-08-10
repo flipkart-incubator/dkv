@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -22,11 +21,11 @@ type cmd struct {
 var cmds = []*cmd{
 	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, ""},
 	{"get", "<key>", "Get value for the given key", (*cmd).get, ""},
-	{"iter", "[<prefix>]:[<startKey>]", "Iterate through the keyspace", (*cmd).iter, ""},
+	{"iter", "<prefix> [<startKey>]", "Iterate the keyspace", (*cmd).iter, ""},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
 	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
-	{"removeNode", "<nodeId", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
+	{"removeNode", "<nodeId>", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
 }
 
 func (c *cmd) usage() {
@@ -59,13 +58,12 @@ func (c *cmd) get(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) iter(client *ctl.DKVClient, args ...string) {
-	var kyPrfx, strtKy string
-	if len(args) > 0 {
-		comps := strings.Split(args[0], ":")
-		kyPrfx, strtKy = comps[0], comps[0]
-		if len(comps) > 1 {
-			strtKy = comps[1]
-		}
+	strtKy, kyPrfx := "", ""
+	switch {
+	case len(args) == 1:
+		kyPrfx = args[0]
+	case len(args) == 2:
+		kyPrfx, strtKy = args[0], args[1]
 	}
 	if ch, err := client.Iterate([]byte(kyPrfx), []byte(strtKy)); err != nil {
 		fmt.Printf("Unable to perform iteration. Error: %v\n", err)

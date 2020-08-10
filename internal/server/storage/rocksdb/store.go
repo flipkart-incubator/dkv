@@ -335,7 +335,14 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 
 func (rdbIter *iter) HasNext() bool {
 	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
-		return rdbIter.rdbIter.ValidForPrefix(kp)
+		if rdbIter.rdbIter.ValidForPrefix(kp) {
+			return true
+		}
+		if rdbIter.rdbIter.Valid() {
+			rdbIter.rdbIter.Next()
+			return rdbIter.HasNext()
+		}
+		return false
 	}
 	return rdbIter.rdbIter.Valid()
 }

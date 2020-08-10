@@ -18,10 +18,8 @@ func TestIterationOptionsValidation(t *testing.T) {
 		t.Errorf("Expected key prefix to be set and equal to %s", expKeyPrefix)
 	}
 
-	if err := itOps.validate(); err == nil {
-		t.Errorf("Expected validation errors but got none")
-	} else {
-		t.Log(err)
+	if err := itOps.validate(); err != nil {
+		t.Errorf("Expected no validation errors but got %v", err)
 	}
 
 	expStartKey := "start"

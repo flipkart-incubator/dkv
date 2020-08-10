@@ -34,8 +34,6 @@ func (io *iterOpts) validate() error {
 			if !bytes.HasPrefix(sk, kp) {
 				return errors.New("StartKey must have the same prefix as PrefixKey")
 			}
-		} else {
-			return errors.New("StartKey must be provided when PrefixKey is used")
 		}
 	}
 	return nil

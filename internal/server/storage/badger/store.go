@@ -337,7 +337,14 @@ type iter struct {
 
 func (bdbIter *iter) HasNext() bool {
 	if kp, prsnt := bdbIter.itOpts.KeyPrefix(); prsnt {
-		return bdbIter.it.ValidForPrefix(kp)
+		if bdbIter.it.ValidForPrefix(kp) {
+			return true
+		}
+		if bdbIter.it.Valid() {
+			bdbIter.it.Next()
+			return bdbIter.HasNext()
+		}
+		return false
 	}
 	return bdbIter.it.Valid()
 }
