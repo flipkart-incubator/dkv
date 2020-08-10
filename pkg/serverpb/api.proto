@@ -2,18 +2,20 @@ syntax = "proto3";
 package dkv.serverpb;
 option go_package = "serverpb";
 
+import "google/protobuf/empty.proto";
+
 service DKV {
-  // Put puts the given key into the key value store
+  // Put puts the given key into the key value store.
   rpc Put (PutRequest) returns (PutResponse);
 
-  // Get gets the value associated with the given key from the key value store
+  // Get gets the value associated with the given key from the key value store.
   rpc Get (GetRequest) returns (GetResponse);
 
-  // MultiGet gets the values associated with given keys from the key value store
+  // MultiGet gets the values associated with given keys from the key value store.
   rpc MultiGet (MultiGetRequest) returns (MultiGetResponse);
 
   // Iterate iterates through the entire keyspace in no particular order and
-  // returns the results as a stream of key value pairs
+  // returns the results as a stream of key value pairs.
   rpc Iterate (IterateRequest) returns (stream IterateResponse);
 }
 
@@ -49,7 +51,7 @@ message PutRequest {
 }
 
 message PutResponse {
-  // Status indicates the result of the Put operation
+  // Status indicates the result of the Put operation.
   Status status = 1;
 }
 
@@ -70,7 +72,7 @@ message GetRequest {
 }
 
 message GetResponse {
-  // Status indicates the result of the Get operation
+  // Status indicates the result of the Get operation.
   Status status = 1;
   // Value is the value, in bytes, that is associated with the given key in the key value store.
   bytes value = 2;
@@ -84,43 +86,61 @@ message MultiGetRequest {
 }
 
 message MultiGetResponse {
-  // Status indicates the result of the bulk Get operation
+  // Status indicates the result of the bulk Get operation.
   Status status = 1;
   // Values are the individual responses of the bulk Get operation.
   repeated bytes values = 2;
 }
 
 service DKVReplication {
-  // GetChanges retrieves all changes from a given change number
+  // GetChanges retrieves all changes from a given change number.
   rpc GetChanges (GetChangesRequest) returns (GetChangesResponse);
+  // AddReplica registers a new replica with the current master.
+  rpc AddReplica (Replica) returns (Status);
+  // RemoveReplica deregisters given replica from the current master.
+  rpc RemoveReplica (Replica) returns (Status);
+  // GetReplicas retrieves all the replicas registered with the current master.
+  rpc GetReplicas (google.protobuf.Empty) returns (GetReplicasResponse);
+}
+
+message GetReplicasResponse {
+  // Replicas are all the replicas of the current master.
+  repeated Replica replicas = 1;
+}
+
+message Replica {
+  // Hostname of the replica.
+  string hostname = 1;
+  // GRPC port of the replica.
+  uint32 port = 2;
 }
 
 message GetChangesRequest {
-  // FromChangeNumber is the starting change number from which to retrieve changes
+  // FromChangeNumber is the starting change number from which to retrieve changes.
   uint64 fromChangeNumber = 1;
-  // MaxNumberOfChanges is the maximum number of changes to return from this invocation
+  // MaxNumberOfChanges is the maximum number of changes to return from this invocation.
   uint32 maxNumberOfChanges = 2;
 }
 
 message GetChangesResponse {
-  // Status indicates the result of the GetChanges operation
+  // Status indicates the result of the GetChanges operation.
   Status status = 1;
-  // MasterChangeNumber indicates the latest change number on master node
+  // MasterChangeNumber indicates the latest change number on master node.
   uint64 masterChangeNumber = 2;
-  // NumberOfChanges indicates the number of change records in the response
+  // NumberOfChanges indicates the number of change records in the response.
   uint32 numberOfChanges = 3;
-  // Changes is the collection of change records
+  // Changes is the collection of change records.
   repeated ChangeRecord changes = 4;
 }
 
 message ChangeRecord {
-  // SerialisedForm is the internal byte array representation of this change record
+  // SerialisedForm is the internal byte array representation of this change record.
   bytes serialisedForm = 1;
-  // ChangeNumber indicates the change number of this change record
+  // ChangeNumber indicates the change number of this change record.
   uint64 changeNumber = 2;
-  // NumberOfTrxns indicates the number of transactions associated with this change record
+  // NumberOfTrxns indicates the number of transactions associated with this change record.
   uint32 numberOfTrxns = 3;
-  // Trxns is the collection of transaction records associated with this change record
+  // Trxns is the collection of transaction records associated with this change record.
   repeated TrxnRecord trxns = 4;
 }
 
@@ -132,9 +152,9 @@ message TrxnRecord {
   }
   // Type indicates the type of this transaction - Put, Delete, etc.
   TrxnType type = 1;
-  // Key is the byte array representation of the key associated with this transaction
+  // Key is the byte array representation of the key associated with this transaction.
   bytes key = 2;
-  // Value is the byte array representation of the value associated with this transaction
+  // Value is the byte array representation of the value associated with this transaction.
   bytes value = 3;
 }
 

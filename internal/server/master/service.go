@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -14,6 +16,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
 )
 
@@ -109,6 +112,66 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 		res.Changes = chngs
 	}
 	return res, err
+}
+
+const (
+	dkvMetaReplicaPrefix = "_dkv_meta::Replica_"
+	replicaValueFormat   = "%s:%d"
+)
+
+func (ss *standaloneService) AddReplica(ctx context.Context, replica *serverpb.Replica) (*serverpb.Status, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	replicaValue := fmt.Sprintf(replicaValueFormat, replica.Hostname, replica.Port)
+	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
+	if err := ss.store.Put([]byte(replicaKey), []byte(replicaValue)); err != nil {
+		ss.lg.Error("Unable to add replica", zap.Error(err), zap.String("replica", replicaValue))
+		return newErrorStatus(err), err
+	}
+	ss.lg.Info("Successfully added replica", zap.String("replica", replicaValue))
+	return newEmptyStatus(), nil
+}
+
+func (ss *standaloneService) RemoveReplica(ctx context.Context, replica *serverpb.Replica) (*serverpb.Status, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	replicaValue := fmt.Sprintf(replicaValueFormat, replica.Hostname, replica.Port)
+	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
+	// We set the current replica key's value to empty - indicating a remove.
+	// Once storage layer exposes DEL primitives, this impl. needs to perhaps change.
+	if err := ss.store.Put([]byte(replicaKey), nil); err != nil {
+		ss.lg.Error("Unable to remove replica", zap.Error(err), zap.String("replica", replicaValue))
+		return newErrorStatus(err), err
+	}
+	ss.lg.Info("Successfully removed replica", zap.String("replica", replicaValue))
+	return newEmptyStatus(), nil
+}
+
+func (ss *standaloneService) GetReplicas(ctx context.Context, _ *empty.Empty) (*serverpb.GetReplicasResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	iterOpts, _ := storage.NewIteratorOptions(storage.IterationPrefixKey([]byte(dkvMetaReplicaPrefix)))
+	iter := ss.store.Iterate(iterOpts)
+	defer iter.Close()
+
+	var replicas []*serverpb.Replica
+	for iter.HasNext() {
+		key, val := iter.Next()
+		replicaKey, replicaVal := string(key), string(val)
+		replicaAddr := strings.TrimPrefix(replicaKey, dkvMetaReplicaPrefix)
+
+		// checking for valid replicas and not the removed ones whose values are empty
+		if replicaAddr == replicaVal {
+			comps := strings.Split(replicaVal, ":")
+			port, _ := strconv.ParseUint(comps[1], 10, 32)
+			replicas = append(replicas, &serverpb.Replica{Hostname: comps[0], Port: uint32(port)})
+		}
+	}
+
+	return &serverpb.GetReplicasResponse{Replicas: replicas}, nil
 }
 
 func (ss *standaloneService) Backup(ctx context.Context, backupReq *serverpb.BackupRequest) (*serverpb.Status, error) {

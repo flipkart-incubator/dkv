@@ -3,10 +3,14 @@ package ctl
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
 )
 
@@ -89,6 +93,53 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 	defer cancel()
 	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
 	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
+}
+
+var errInvalidReplica = errors.New("invalid replica address, must be host:port format")
+
+// AddReplica adds the given replica in host:port format using the
+// underlying GRPC AddReplica method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) AddReplica(replicaAddr string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	comps := strings.Split(replicaAddr, ":")
+	if len(comps) != 2 {
+		return errInvalidReplica
+	}
+	port, _ := strconv.ParseUint(comps[1], 10, 32)
+	addReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port)}
+	status, err := dkvClnt.dkvReplCli.AddReplica(ctx, addReplReq)
+	return errorFromStatus(status, err)
+}
+
+// RemoveReplica removes the given replica in host:port format using the
+// underlying GRPC RemoveReplica method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) RemoveReplica(replicaAddr string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	comps := strings.Split(replicaAddr, ":")
+	if len(comps) != 2 {
+		return errInvalidReplica
+	}
+	port, _ := strconv.ParseUint(comps[1], 10, 32)
+	remReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port)}
+	status, err := dkvClnt.dkvReplCli.RemoveReplica(ctx, remReplReq)
+	return errorFromStatus(status, err)
+}
+
+// GetReplicas retrieves all the replica from master in host:port
+// format using the underlying GRPC GetReplicas method. This is a
+// convenience wrapper.
+func (dkvClnt *DKVClient) GetReplicas() []string {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	res, _ := dkvClnt.dkvReplCli.GetReplicas(ctx, &empty.Empty{})
+	var replicas []string
+	for _, replica := range res.Replicas {
+		repl := fmt.Sprintf("%s:%d", replica.Hostname, replica.Port)
+		replicas = append(replicas, repl)
+	}
+	return replicas
 }
 
 // Backup backs up the entire keyspace into the given filesystem

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -21,11 +22,12 @@ type cmd struct {
 var cmds = []*cmd{
 	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, ""},
 	{"get", "<key>", "Get value for the given key", (*cmd).get, ""},
-	{"iter", "<prefix> [<startKey>]", "Iterate the keyspace", (*cmd).iter, ""},
+	{"iter", "<prefix> [<startKey>] | *", "Iterate the keyspace. Use * for all keys", (*cmd).iter, ""},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
 	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
 	{"removeNode", "<nodeId>", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
+	{"replicas", "<add> <host:port>|<remove> <host:port>|<list>", "Add, remove or list replicas", (*cmd).replicas, ""},
 }
 
 func (c *cmd) usage() {
@@ -61,7 +63,9 @@ func (c *cmd) iter(client *ctl.DKVClient, args ...string) {
 	strtKy, kyPrfx := "", ""
 	switch {
 	case len(args) == 1:
-		kyPrfx = args[0]
+		if strings.TrimSpace(args[0]) != "*" {
+			kyPrfx = args[0]
+		}
 	case len(args) == 2:
 		kyPrfx, strtKy = args[0], args[1]
 	}
@@ -130,6 +134,35 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	}
 }
 
+func (c *cmd) replicas(client *ctl.DKVClient, args ...string) {
+	switch {
+	case len(args) == 1 && trimLower(args[0]) == "list":
+		repls := client.GetReplicas()
+		for _, repl := range repls {
+			fmt.Println(repl)
+		}
+	case len(args) == 2:
+		cmd, repl := trimLower(args[0]), args[1]
+		if cmd == "add" {
+			if err := client.AddReplica(repl); err != nil {
+				fmt.Printf("Unable to add replica. Error: %v\n", err)
+			} else {
+				fmt.Println("OK")
+			}
+		} else if cmd == "remove" {
+			if err := client.RemoveReplica(repl); err != nil {
+				fmt.Printf("Unable to remove replica. Error: %v\n", err)
+			} else {
+				fmt.Println("OK")
+			}
+		} else {
+			c.usage()
+		}
+	default:
+		c.usage()
+	}
+}
+
 var dkvAddr string
 
 func init() {
@@ -147,6 +180,10 @@ func usage() {
 	for _, cmd := range cmds {
 		cmd.usage()
 	}
+}
+
+func trimLower(str string) string {
+	return strings.ToLower(strings.TrimSpace(str))
 }
 
 func main() {

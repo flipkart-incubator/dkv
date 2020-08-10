@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,7 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
+		t.Run("testAddRemoveReplicas", testAddRemoveReplicas)
 		t.Run("testBackupRestore", testBackupRestore)
 	}
 }
@@ -119,6 +121,40 @@ func testMissingGet(t *testing.T) {
 	key := "MissingKey"
 	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
 		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
+func testAddRemoveReplicas(t *testing.T) {
+	replicas := []string{"host1:1111", "host2:2222", "host3:3333"}
+	for _, replica := range replicas {
+		if err := dkvCli.AddReplica(replica); err != nil {
+			t.Fatalf("Unable to add replica %s. Error: %v", replica, err)
+		}
+	}
+	repls := dkvCli.GetReplicas()
+	if !reflect.DeepEqual(repls, replicas) {
+		t.Errorf("Expected %q replicas but got %q", replicas, repls)
+	}
+
+	if err := dkvCli.RemoveReplica(replicas[0]); err != nil {
+		t.Fatalf("Unable to remove replica %s. Error: %v", replicas[0], err)
+	}
+
+	repls = dkvCli.GetReplicas()
+	replicas = replicas[1:]
+	if !reflect.DeepEqual(repls, replicas) {
+		t.Errorf("Expected %q replicas but got %q", replicas, repls)
+	}
+
+	for _, replica := range replicas {
+		if err := dkvCli.RemoveReplica(replica); err != nil {
+			t.Fatalf("Unable to remove replica %s. Error: %v", replica, err)
+		}
+	}
+
+	repls = dkvCli.GetReplicas()
+	if len(repls) > 0 {
+		t.Errorf("Expected no replicas but got %q", repls)
 	}
 }
 
