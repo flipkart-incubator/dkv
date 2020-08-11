@@ -2,8 +2,6 @@ syntax = "proto3";
 package dkv.serverpb;
 option go_package = "serverpb";
 
-import "google/protobuf/empty.proto";
-
 service DKV {
   // Put puts the given key into the key value store.
   rpc Put (PutRequest) returns (PutResponse);
@@ -99,8 +97,13 @@ service DKVReplication {
   rpc AddReplica (Replica) returns (Status);
   // RemoveReplica deregisters given replica from the current master.
   rpc RemoveReplica (Replica) returns (Status);
-  // GetReplicas retrieves all the replicas registered with the current master.
-  rpc GetReplicas (google.protobuf.Empty) returns (GetReplicasResponse);
+  // GetReplicas retrieves all the replicas of the current master.
+  rpc GetReplicas (GetReplicasRequest) returns (GetReplicasResponse);
+}
+
+message GetReplicasRequest {
+  // Zone identifier to use for looking up replicas of the current master.
+  string zone = 1;
 }
 
 message GetReplicasResponse {
@@ -109,10 +112,12 @@ message GetReplicasResponse {
 }
 
 message Replica {
+  // Zone identifier of the replica.
+  string zone = 1;
   // Hostname of the replica.
-  string hostname = 1;
+  string hostname = 2;
   // GRPC port of the replica.
-  uint32 port = 2;
+  uint32 port = 3;
 }
 
 message GetChangesRequest {

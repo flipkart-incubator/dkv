@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
 )
 
@@ -99,7 +98,7 @@ var errInvalidReplica = errors.New("invalid replica address, must be host:port f
 
 // AddReplica adds the given replica in host:port format using the
 // underlying GRPC AddReplica method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) AddReplica(replicaAddr string) error {
+func (dkvClnt *DKVClient) AddReplica(replicaAddr, zone string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	comps := strings.Split(replicaAddr, ":")
@@ -107,14 +106,14 @@ func (dkvClnt *DKVClient) AddReplica(replicaAddr string) error {
 		return errInvalidReplica
 	}
 	port, _ := strconv.ParseUint(comps[1], 10, 32)
-	addReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port)}
+	addReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port), Zone: zone}
 	status, err := dkvClnt.dkvReplCli.AddReplica(ctx, addReplReq)
 	return errorFromStatus(status, err)
 }
 
 // RemoveReplica removes the given replica in host:port format using the
 // underlying GRPC RemoveReplica method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) RemoveReplica(replicaAddr string) error {
+func (dkvClnt *DKVClient) RemoveReplica(replicaAddr, zone string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	comps := strings.Split(replicaAddr, ":")
@@ -122,7 +121,7 @@ func (dkvClnt *DKVClient) RemoveReplica(replicaAddr string) error {
 		return errInvalidReplica
 	}
 	port, _ := strconv.ParseUint(comps[1], 10, 32)
-	remReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port)}
+	remReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port), Zone: zone}
 	status, err := dkvClnt.dkvReplCli.RemoveReplica(ctx, remReplReq)
 	return errorFromStatus(status, err)
 }
@@ -130,10 +129,10 @@ func (dkvClnt *DKVClient) RemoveReplica(replicaAddr string) error {
 // GetReplicas retrieves all the replica from master in host:port
 // format using the underlying GRPC GetReplicas method. This is a
 // convenience wrapper.
-func (dkvClnt *DKVClient) GetReplicas() []string {
+func (dkvClnt *DKVClient) GetReplicas(zone string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	res, _ := dkvClnt.dkvReplCli.GetReplicas(ctx, &empty.Empty{})
+	res, _ := dkvClnt.dkvReplCli.GetReplicas(ctx, &serverpb.GetReplicasRequest{Zone: zone})
 	var replicas []string
 	for _, replica := range res.Replicas {
 		repl := fmt.Sprintf("%s:%d", replica.Hostname, replica.Port)

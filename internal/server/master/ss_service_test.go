@@ -125,34 +125,39 @@ func testMissingGet(t *testing.T) {
 }
 
 func testAddRemoveReplicas(t *testing.T) {
-	replicas := []string{"host1:1111", "host2:2222", "host3:3333"}
+	verifyAddRemoveReplicas(t, "in-chennai-1", []string{"ch1:1111", "ch2:2222", "ch3:3333"})
+	verifyAddRemoveReplicas(t, "", []string{"host1:1111", "host2:2222", "host3:3333"})
+	verifyAddRemoveReplicas(t, "in-hyderabad-1", []string{"hy1:1111", "hy2:2222", "hy3:3333"})
+}
+
+func verifyAddRemoveReplicas(t *testing.T, zone string, replicas []string) {
 	for _, replica := range replicas {
-		if err := dkvCli.AddReplica(replica); err != nil {
+		if err := dkvCli.AddReplica(replica, zone); err != nil {
 			t.Fatalf("Unable to add replica %s. Error: %v", replica, err)
 		}
 	}
-	repls := dkvCli.GetReplicas()
+	repls := dkvCli.GetReplicas(zone)
 	if !reflect.DeepEqual(repls, replicas) {
 		t.Errorf("Expected %q replicas but got %q", replicas, repls)
 	}
 
-	if err := dkvCli.RemoveReplica(replicas[0]); err != nil {
+	if err := dkvCli.RemoveReplica(replicas[0], zone); err != nil {
 		t.Fatalf("Unable to remove replica %s. Error: %v", replicas[0], err)
 	}
 
-	repls = dkvCli.GetReplicas()
+	repls = dkvCli.GetReplicas(zone)
 	replicas = replicas[1:]
 	if !reflect.DeepEqual(repls, replicas) {
 		t.Errorf("Expected %q replicas but got %q", replicas, repls)
 	}
 
 	for _, replica := range replicas {
-		if err := dkvCli.RemoveReplica(replica); err != nil {
+		if err := dkvCli.RemoveReplica(replica, zone); err != nil {
 			t.Fatalf("Unable to remove replica %s. Error: %v", replica, err)
 		}
 	}
 
-	repls = dkvCli.GetReplicas()
+	repls = dkvCli.GetReplicas(zone)
 	if len(repls) > 0 {
 		t.Errorf("Expected no replicas but got %q", repls)
 	}

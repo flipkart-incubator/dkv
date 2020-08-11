@@ -27,7 +27,7 @@ var cmds = []*cmd{
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
 	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
 	{"removeNode", "<nodeId>", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
-	{"replicas", "<add> <host:port>|<remove> <host:port>|<list>", "Add, remove or list replicas", (*cmd).replicas, ""},
+	{"replicas", "<add> <host:port> [zone]|<remove> <host:port> [zone]|<list> [zone]", "Add, remove or list replicas", (*cmd).replicas, ""},
 }
 
 func (c *cmd) usage() {
@@ -135,28 +135,48 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) replicas(client *ctl.DKVClient, args ...string) {
-	switch {
-	case len(args) == 1 && trimLower(args[0]) == "list":
-		repls := client.GetReplicas()
+	cmd, cmdArgs := args[0], args[1:]
+	switch trimLower(cmd) {
+	case "add":
+		repl, zone := "", ""
+		switch len(cmdArgs) {
+		case 1:
+			repl = cmdArgs[0]
+		case 2:
+			repl, zone = cmdArgs[0], cmdArgs[1]
+		default:
+			c.usage()
+			return
+		}
+		if err := client.AddReplica(repl, zone); err != nil {
+			fmt.Printf("Unable to add replica. Error: %v\n", err)
+		} else {
+			fmt.Println("OK")
+		}
+	case "remove":
+		repl, zone := "", ""
+		switch len(cmdArgs) {
+		case 1:
+			repl = cmdArgs[0]
+		case 2:
+			repl, zone = cmdArgs[0], cmdArgs[1]
+		default:
+			c.usage()
+			return
+		}
+		if err := client.RemoveReplica(repl, zone); err != nil {
+			fmt.Printf("Unable to remove replica. Error: %v\n", err)
+		} else {
+			fmt.Println("OK")
+		}
+	case "list":
+		zone := ""
+		if len(cmdArgs) > 0 {
+			zone = cmdArgs[0]
+		}
+		repls := client.GetReplicas(zone)
 		for _, repl := range repls {
 			fmt.Println(repl)
-		}
-	case len(args) == 2:
-		cmd, repl := trimLower(args[0]), args[1]
-		if cmd == "add" {
-			if err := client.AddReplica(repl); err != nil {
-				fmt.Printf("Unable to add replica. Error: %v\n", err)
-			} else {
-				fmt.Println("OK")
-			}
-		} else if cmd == "remove" {
-			if err := client.RemoveReplica(repl); err != nil {
-				fmt.Printf("Unable to remove replica. Error: %v\n", err)
-			} else {
-				fmt.Println("OK")
-			}
-		} else {
-			c.usage()
 		}
 	default:
 		c.usage()
