@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/server/master"
 	"github.com/flipkart-incubator/dkv/internal/server/slave"
@@ -32,7 +33,7 @@ var (
 	dbListenAddr     string
 	dbRole           string
 	replMasterAddr   string
-	replPollInterval uint
+	replPollInterval time.Duration
 
 	// Logging vars
 	dbAccessLog    string
@@ -49,7 +50,7 @@ func init() {
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
-	flag.UintVar(&replPollInterval, "replPollInterval", 5, "Interval (in seconds) used by the replication poller of this node")
+	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
 	flag.BoolVar(&verboseLogging, "verbose", false, "Enable verbose logging. By default, only warnings and errors are logged.")
 	setDKVDefaultsForNexusDirs()

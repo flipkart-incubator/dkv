@@ -18,13 +18,13 @@ import (
 )
 
 const (
-	masterDBFolder       = "/tmp/dkv_test_db_master"
-	slaveDBFolder        = "/tmp/dkv_test_db_slave"
-	masterSvcPort        = 8181
-	slaveSvcPort         = 8282
-	dkvSvcHost           = "localhost"
-	cacheSize            = 3 << 30
-	replPollIntervalSecs = 1
+	masterDBFolder   = "/tmp/dkv_test_db_master"
+	slaveDBFolder    = "/tmp/dkv_test_db_slave"
+	masterSvcPort    = 8181
+	slaveSvcPort     = 8282
+	dkvSvcHost       = "localhost"
+	cacheSize        = 3 << 30
+	replPollInterval = 1 * time.Second
 )
 
 var (
@@ -71,8 +71,8 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	numKeys, keyPrefix, valPrefix := 10, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
-	// wait for atleast one replPollInterval to ensure slave replication
-	sleepInSecs(2)
+	// wait for atleast couple of replPollInterval to ensure slave replication
+	sleepInSecs(5)
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 
@@ -83,8 +83,8 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
-	// wait for atleast one replPollInterval to ensure slave replication
-	sleepInSecs(2)
+	// wait for atleast couple of replPollInterval to ensure slave replication
+	sleepInSecs(5)
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 
@@ -164,7 +164,7 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
-	if ss, err := NewService(store, ca, masterCli, replPollIntervalSecs, nil); err != nil {
+	if ss, err := NewService(store, ca, masterCli, replPollInterval, nil); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss

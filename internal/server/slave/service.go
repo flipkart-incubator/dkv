@@ -37,14 +37,13 @@ const maxNumChangesRepl = 10000
 // for changes from master node and replicates them onto its local
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
-func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollIntervalSecs uint, lgr *zap.Logger) (DKVService, error) {
-	if replPollIntervalSecs == 0 || replCli == nil || store == nil || ca == nil {
-		return nil, errors.New("invalid args - params `store`, `ca`, `replCli` and `replPollIntervalSecs` are all mandatory")
+func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollInterval time.Duration, lgr *zap.Logger) (DKVService, error) {
+	if replPollInterval == 0 || replCli == nil || store == nil || ca == nil {
+		return nil, errors.New("invalid args - params `store`, `ca`, `replCli` and `replPollInterval` are all mandatory")
 	}
 	if lgr == nil {
 		lgr = zap.NewNop()
 	}
-	replPollInterval := time.Duration(replPollIntervalSecs) * time.Second
 	return newSlaveService(store, ca, replCli, replPollInterval, lgr), nil
 }
 
