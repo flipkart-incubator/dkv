@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	dkv_sync "github.com/flipkart-incubator/dkv/internal/server/sync"
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"

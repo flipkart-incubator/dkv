@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/ctl"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 )

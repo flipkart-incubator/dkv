@@ -8,7 +8,7 @@ import (
 
 	"github.com/bojand/ghz/printer"
 	"github.com/bojand/ghz/runner"
-	"github.com/flipkart-incubator/dkv/internal/ctl"
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/tools/bench"
 )
 
