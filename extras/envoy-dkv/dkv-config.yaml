@@ -23,11 +23,11 @@ static_resources:
               domains: ["*"]
               routes:
               - match: { prefix: "/" }
-                route: { cluster: dkv }
+                route: { cluster: dkv-demo }
           http_filters:
           - name: envoy.filters.http.router
   clusters:
-  - name: dkv
+  - name: dkv-demo
     connect_timeout: 15s
     lb_policy: ROUND_ROBIN
     http2_protocol_options: {}

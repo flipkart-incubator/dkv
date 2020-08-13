@@ -153,7 +153,7 @@ func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) 
 		dss.replLag = chngsRes.MasterChangeNumber - actChngNum
 		return err
 	}
-	dss.lg.Warn("Not received any changes from master")
+	dss.lg.Info("Not received any changes from master")
 	return nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -31,14 +32,14 @@ import (
 
 // go build -o envoy-dkv ../envoy-dkv
 
-const clusterName = "dkv"
-
 var (
 	dkvMasterAddr string
 	zone          string
 	lgr           *zap.SugaredLogger
 	grpcPort      int
 	pollInterval  time.Duration
+	clusterName   string
+	nodeName      string
 )
 
 func init() {
@@ -46,6 +47,8 @@ func init() {
 	flag.StringVar(&zone, "zone", "", "Zone identifier for the given DKV master node")
 	flag.IntVar(&grpcPort, "grpcPort", 9090, "Port for serving GRPC xDS requests")
 	flag.DurationVar(&pollInterval, "pollInterval", 5*time.Second, "Polling interval for fetching replicas")
+	flag.StringVar(&clusterName, "clusterName", "dkv-demo", "Local service cluster name where Envoy is running")
+	flag.StringVar(&nodeName, "nodeName", "demo", "Local service node name where Envoy is running")
 	setupLogger()
 }
 
@@ -57,13 +60,14 @@ func main() {
 	defer cli.Close()
 
 	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, nil)
+	grpcServer, lis := setupXDSService(snapshotCache)
+	//defer grpcServer.GracefulStop()
+	defer grpcServer.Stop()
+	go grpcServer.Serve(lis)
+
 	tckr := time.NewTicker(pollInterval)
 	defer tckr.Stop()
 	go pollForDKVReplicas(tckr, cli, snapshotCache)
-
-	grpcServer, lis := setupXDSService(snapshotCache)
-	defer grpcServer.GracefulStop()
-	go grpcServer.Serve(lis)
 
 	sig := <-setupSignalHandler()
 	lgr.Warnf("[WARN] Caught signal: %v. Shutting down...\n", sig)
@@ -126,23 +130,21 @@ func connectToDKVMaster() *ctl.DKVClient {
 }
 
 func pollForDKVReplicas(tckr *time.Ticker, cli *ctl.DKVClient, snapshotCache cache.SnapshotCache) {
+	snapVersion := 0
+	dkvClusters := []types.Resource{resource.MakeCluster(resource.Ads, clusterName)}
+	snapshot := cache.NewSnapshot("", nil, dkvClusters, nil, nil, nil)
+	var oldRepls []string
 	for range tckr.C {
-		repls := cli.GetReplicas(zone)
-		if len(repls) > 0 {
-			dkvCluster := resource.MakeCluster(resource.Ads, clusterName)
-			var dkvReplicas []types.Resource
-			for _, repl := range repls {
-				replEndPoint := makeEndpoint(clusterName, repl)
-				dkvReplicas = append(dkvReplicas, replEndPoint)
-			}
-			snapshot := cache.NewSnapshot("1.0", dkvReplicas, []types.Resource{dkvCluster}, nil, nil, nil)
-			if err := snapshotCache.SetSnapshot("node", snapshot); err != nil {
+		if repls := cli.GetReplicas(zone); !reflect.DeepEqual(oldRepls, repls) {
+			replEndPoints := []types.Resource{makeEndpoint(clusterName, repls...)}
+			snapVersion++
+			snapshot.Resources[types.Endpoint] = cache.NewResources(strconv.Itoa(snapVersion), replEndPoints)
+			if err := snapshotCache.SetSnapshot(nodeName, snapshot); err != nil {
 				lgr.Panicf("Unable to set snapshot. Error: %v", err)
 			} else {
-				lgr.Info("Successfully updated endpoints with %q", repls)
+				lgr.Infof("Successfully updated endpoints with %q", repls)
+				oldRepls = repls
 			}
-		} else {
-			lgr.Warn("Not received any DKV replicas. Shall try later.")
 		}
 	}
 }
@@ -154,31 +156,36 @@ func setupSignalHandler() <-chan os.Signal {
 	return stopChan
 }
 
-func makeEndpoint(clusterName, replicaAddr string) *endpoint.ClusterLoadAssignment {
-	comps := strings.Split(replicaAddr, ":")
-	replicaHost := comps[0]
-	replicaPort, _ := strconv.ParseUint(comps[1], 10, 32)
-
-	return &endpoint.ClusterLoadAssignment{
-		ClusterName: clusterName,
-		Endpoints: []*endpointv2.LocalityLbEndpoints{{
-			LbEndpoints: []*endpointv2.LbEndpoint{{
-				HostIdentifier: &endpointv2.LbEndpoint_Endpoint{
-					Endpoint: &endpointv2.Endpoint{
-						Address: &core.Address{
-							Address: &core.Address_SocketAddress{
-								SocketAddress: &core.SocketAddress{
-									Protocol: core.SocketAddress_TCP,
-									Address:  replicaHost,
-									PortSpecifier: &core.SocketAddress_PortValue{
-										PortValue: uint32(replicaPort),
-									},
+func makeEndpoint(clusterName string, replicaAddrs ...string) *endpoint.ClusterLoadAssignment {
+	var endpoints []*endpointv2.LbEndpoint
+	for _, replicaAddr := range replicaAddrs {
+		comps := strings.Split(replicaAddr, ":")
+		replicaHost := comps[0]
+		replicaPort, _ := strconv.ParseUint(comps[1], 10, 32)
+		endpoints = append(endpoints, &endpointv2.LbEndpoint{
+			HostIdentifier: &endpointv2.LbEndpoint_Endpoint{
+				Endpoint: &endpointv2.Endpoint{
+					Address: &core.Address{
+						Address: &core.Address_SocketAddress{
+							SocketAddress: &core.SocketAddress{
+								Protocol: core.SocketAddress_TCP,
+								Address:  replicaHost,
+								PortSpecifier: &core.SocketAddress_PortValue{
+									PortValue: uint32(replicaPort),
 								},
 							},
 						},
 					},
 				},
-			}},
+			},
+		})
+	}
+
+	return &endpoint.ClusterLoadAssignment{
+		ClusterName: clusterName,
+		Endpoints: []*endpointv2.LocalityLbEndpoints{{
+			//Locality:
+			LbEndpoints: endpoints,
 		}},
 	}
 }

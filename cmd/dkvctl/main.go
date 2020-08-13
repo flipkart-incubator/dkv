@@ -27,7 +27,7 @@ var cmds = []*cmd{
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
 	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
 	{"removeNode", "<nodeId>", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
-	{"replicas", "<add> <host:port> [zone]|<remove> <host:port> [zone]|<list> [zone]", "Add, remove or list replicas", (*cmd).replicas, ""},
+	{"replica", "<add> <host:port> [zone]|<remove> <host:port> [zone]|<list> [zone]", "Add, remove or list replicas", (*cmd).replica, ""},
 }
 
 func (c *cmd) usage() {
@@ -134,7 +134,7 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) replicas(client *ctl.DKVClient, args ...string) {
+func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
 	cmd, cmdArgs := args[0], args[1:]
 	switch trimLower(cmd) {
 	case "add":
