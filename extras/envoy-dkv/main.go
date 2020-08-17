@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -37,7 +36,7 @@ var (
 	dkvMasterAddr string
 	zone          string
 	lgr           *zap.SugaredLogger
-	grpcPort      int
+	listenAddr    string
 	pollInterval  time.Duration
 	clusterName   string
 	nodeName      string
@@ -46,10 +45,10 @@ var (
 func init() {
 	flag.StringVar(&dkvMasterAddr, "dkvMaster", "", "Comma separated values of DKV master addresses in host:port format")
 	flag.StringVar(&zone, "zone", "", "Zone identifier for the given DKV master node")
-	flag.IntVar(&grpcPort, "grpcPort", 9090, "Port for serving GRPC xDS requests")
 	flag.DurationVar(&pollInterval, "pollInterval", 5*time.Second, "Polling interval for fetching replicas")
 	flag.StringVar(&clusterName, "clusterName", "dkv-demo", "Local service cluster name where Envoy is running")
 	flag.StringVar(&nodeName, "nodeName", "demo", "Local service node name where Envoy is running")
+	flag.StringVar(&listenAddr, "listenAddr", "127.0.0.1:9090", "Address to bind the xDS GRPC service")
 	setupLogger()
 }
 
@@ -111,13 +110,12 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, server)
 	api.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
 	api.RegisterClusterDiscoveryServiceServer(grpcServer, server)
-	xdsAddr := fmt.Sprintf("127.0.0.1:%d", grpcPort)
-	lis, err := net.Listen("tcp", xdsAddr)
+	lis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		lgr.Panicf("Unable to create listener for xDS GRPC service. Error: %v", err)
 		return nil, nil
 	}
-	lgr.Infof("Successfully setup the xDS GRPC service at %s...", xdsAddr)
+	lgr.Infof("Successfully setup the xDS GRPC service at %s...", listenAddr)
 	return grpcServer, lis
 }
 
