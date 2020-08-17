@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -43,7 +44,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&dkvMasterAddr, "dkvMaster", "", "GRPC address of DKV master in host:port format")
+	flag.StringVar(&dkvMasterAddr, "dkvMaster", "", "Comma separated values of DKV master addresses in host:port format")
 	flag.StringVar(&zone, "zone", "", "Zone identifier for the given DKV master node")
 	flag.IntVar(&grpcPort, "grpcPort", 9090, "Port for serving GRPC xDS requests")
 	flag.DurationVar(&pollInterval, "pollInterval", 5*time.Second, "Polling interval for fetching replicas")
@@ -56,8 +57,8 @@ func main() {
 	flag.Parse()
 	defer lgr.Sync()
 
-	cli := connectToDKVMaster()
-	defer cli.Close()
+	clis := connectToDKVMasters()
+	defer closeClients(clis)
 
 	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, nil)
 	grpcServer, lis := setupXDSService(snapshotCache)
@@ -67,7 +68,7 @@ func main() {
 
 	tckr := time.NewTicker(pollInterval)
 	defer tckr.Stop()
-	go pollForDKVReplicas(tckr, cli, snapshotCache)
+	go pollForDKVReplicas(tckr, snapshotCache, clis...)
 
 	sig := <-setupSignalHandler()
 	lgr.Warnf("[WARN] Caught signal: %v. Shutting down...\n", sig)
@@ -120,30 +121,47 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 	return grpcServer, lis
 }
 
-func connectToDKVMaster() *ctl.DKVClient {
-	client, err := ctl.NewInSecureDKVClient(dkvMasterAddr)
-	if err != nil {
-		lgr.Panicf("Unable to connect to DKV master at %s. Error: %v", dkvMasterAddr, err)
+func connectToDKVMasters() []*ctl.DKVClient {
+	var clis []*ctl.DKVClient
+	dkvMasters := strings.Split(dkvMasterAddr, ",")
+	for _, dkvMaster := range dkvMasters {
+		dkvMaster = strings.TrimSpace(dkvMaster)
+		if client, err := ctl.NewInSecureDKVClient(dkvMaster); err != nil {
+			lgr.Panicf("Unable to connect to DKV master at %s. Error: %v", dkvMaster, err)
+		} else {
+			lgr.Infof("Successfully connected to DKV master at %s.", dkvMaster)
+			clis = append(clis, client)
+		}
 	}
-	lgr.Infof("Successfully connected to DKV master at %s.", dkvMasterAddr)
-	return client
+	return clis
 }
 
-func pollForDKVReplicas(tckr *time.Ticker, cli *ctl.DKVClient, snapshotCache cache.SnapshotCache) {
+func closeClients(clis []*ctl.DKVClient) {
+	for _, cli := range clis {
+		cli.Close()
+	}
+}
+
+func pollForDKVReplicas(tckr *time.Ticker, snapshotCache cache.SnapshotCache, clis ...*ctl.DKVClient) {
 	snapVersion := 0
 	dkvClusters := []types.Resource{resource.MakeCluster(resource.Ads, clusterName)}
 	snapshot := cache.NewSnapshot("", nil, dkvClusters, nil, nil, nil)
 	var oldRepls []string
 	for range tckr.C {
-		if repls := cli.GetReplicas(zone); !reflect.DeepEqual(oldRepls, repls) {
-			replEndPoints := []types.Resource{makeEndpoint(clusterName, repls...)}
+		var newRepls []string
+		for _, cli := range clis {
+			newRepls = append(cli.GetReplicas(zone))
+		}
+		sort.Sort(sort.StringSlice(newRepls)) // Sorting for deterministic comparison
+		if !reflect.DeepEqual(oldRepls, newRepls) {
+			replEndPoints := []types.Resource{makeEndpoint(clusterName, newRepls...)}
 			snapVersion++
 			snapshot.Resources[types.Endpoint] = cache.NewResources(strconv.Itoa(snapVersion), replEndPoints)
 			if err := snapshotCache.SetSnapshot(nodeName, snapshot); err != nil {
 				lgr.Panicf("Unable to set snapshot. Error: %v", err)
 			} else {
-				lgr.Infof("Successfully updated endpoints with %q", repls)
-				oldRepls = repls
+				lgr.Infof("Successfully updated endpoints with %q", newRepls)
+				oldRepls = newRepls
 			}
 		}
 	}
