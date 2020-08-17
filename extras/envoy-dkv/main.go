@@ -150,7 +150,7 @@ func pollForDKVReplicas(tckr *time.Ticker, snapshotCache cache.SnapshotCache, cl
 	for range tckr.C {
 		var newRepls []string
 		for _, cli := range clis {
-			newRepls = append(cli.GetReplicas(zone))
+			newRepls = append(newRepls, cli.GetReplicas(zone)...)
 		}
 		sort.Sort(sort.StringSlice(newRepls)) // Sorting for deterministic comparison
 		if !reflect.DeepEqual(oldRepls, newRepls) {
