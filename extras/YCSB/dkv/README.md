@@ -17,12 +17,11 @@ Git clone YCSB and compile:
     
 Set host, port, password, and cluster mode in the workload you plan to run. 
 
-- `dkv.host`
-- `dkv.port`
+- `dkv.addr`
 
 Or, you can set configs with the shell command, EG:
 
-    ./bin/ycsb load dkv -s -P workloads/workloada -p "dkv.host=127.0.0.1" -p "dkv.port=8080" > outputLoad.txt
+    ./bin/ycsb load dkv -s -P workloads/workloada -p "dkv.addr=127.0.0.1:8080" > outputLoad.txt
 
 #### 5. Load data and run tests
 

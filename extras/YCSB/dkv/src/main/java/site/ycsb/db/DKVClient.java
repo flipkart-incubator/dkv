@@ -1,10 +1,12 @@
 package site.ycsb.db;
 
 import dkv.serverpb.Api;
+import org.dkv.client.DKVClientImpl;
 import org.dkv.client.DKVEntry;
 import site.ycsb.*;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -13,34 +15,42 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * YCSB binding for DKV.
  */
 public class DKVClient extends DB {
-  private static final int DEFAULT_PORT = 8080;
-  private static final String DEFAULT_HOST = "127.0.0.1";
-  private static final String HOST_PROPERTY = "dkv.host";
-  private static final String PORT_PROPERTY = "dkv.port";
+  private static final String DEFAUT_ADDR = "127.0.0.1:8080";
+  private static final String ADDR_PROPERTY = "dkv.addr";
   private static final String PRIMARY_KEY = "@@@PRIMARY@@@";
+  private static final String ADDRS_REGEX = "\\s*,\\s*";
+  private static final String ADDR_REGEX = "\\s*:\\s*";
 
-  private org.dkv.client.DKVClient dkvClient;
+  private ArrayList<org.dkv.client.DKVClient> dkvClients;
+  private AtomicInteger dkvCliIdx;
 
   @Override
   public void init() {
     Properties props = getProperties();
 
-    String host = props.getProperty(HOST_PROPERTY);
-    if (host == null || host.trim().isEmpty()) {
-      host = DEFAULT_HOST;
+    String[] dkvAddrs;
+    String addrs = props.getProperty(ADDR_PROPERTY);
+    if (addrs == null || addrs.trim().isEmpty()) {
+      dkvAddrs = new String[]{DEFAUT_ADDR};
+    } else {
+      dkvAddrs = addrs.split(ADDRS_REGEX);
     }
-
-    int port = DEFAULT_PORT;
-    String portString = props.getProperty(PORT_PROPERTY);
-    if (portString != null && !portString.trim().isEmpty()) {
-      port = Integer.parseInt(portString);
+    dkvClients = new ArrayList<>();
+    for (String dkvAddr : dkvAddrs) {
+      if (!dkvAddr.trim().isEmpty()) {
+        String[] comps = dkvAddr.split(ADDR_REGEX);
+        String dkvHost = comps[0];
+        int dkvPort = Integer.parseInt(comps[1]);
+        dkvClients.add(new DKVClientImpl(dkvHost, dkvPort));
+      }
     }
-    dkvClient = new org.dkv.client.DKVClientImpl(host, port);
+    dkvCliIdx = new AtomicInteger(-1);
   }
 
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
+      org.dkv.client.DKVClient dkvClient = nextDKVClient();
       if (fields == null || fields.isEmpty()) {
         byte[] startKey = toDKVKey(table, key, PRIMARY_KEY);
         byte[] keyPrefix = toDKVKey(table, key, "");
@@ -75,7 +85,7 @@ public class DKVClient extends DB {
                      Vector<HashMap<String, ByteIterator>> result) {
     try {
       byte[] startKeyBytes = toDKVKey(table, startkey, PRIMARY_KEY);
-      Iterator<DKVEntry> itrtr = dkvClient.iterate(startKeyBytes);
+      Iterator<DKVEntry> itrtr = nextDKVClient().iterate(startKeyBytes);
       result.add(new LinkedHashMap<>());
       String prevKey = startkey;
       while (itrtr.hasNext()) {
@@ -105,17 +115,27 @@ public class DKVClient extends DB {
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
     try {
-      dkvClient.put(toDKVKey(table, key, PRIMARY_KEY), key.getBytes(UTF_8));
+      org.dkv.client.DKVClient dkvCli = nextDKVClient();
+      dkvCli.put(toDKVKey(table, key, PRIMARY_KEY), key.getBytes(UTF_8));
       for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
         String field = entry.getKey();
         byte[] dkvKeyBytes = toDKVKey(table, key, field);
         byte[] dkvValueBytes = entry.getValue().toArray();
-        dkvClient.put(dkvKeyBytes, dkvValueBytes);
+        dkvCli.put(dkvKeyBytes, dkvValueBytes);
       }
       return Status.OK;
     } catch (Exception e) {
       return handleErrStatus(e);
     }
+  }
+
+  private org.dkv.client.DKVClient nextDKVClient() {
+    int currIdx, newIdx;
+    do {
+      currIdx = dkvCliIdx.get();
+      newIdx = (currIdx + 1) % dkvClients.size();
+    } while(!dkvCliIdx.compareAndSet(currIdx, newIdx));
+    return dkvClients.get(newIdx);
   }
 
   @Override
