@@ -4,7 +4,6 @@ go 1.13
 
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
-	github.com/bojand/ghz v0.50.0
 	github.com/coreos/etcd v3.3.19+incompatible // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dgraph-io/badger v1.6.0
@@ -16,7 +15,6 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
-	github.com/jhump/protoreflect v1.6.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
@@ -25,6 +23,7 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
 	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d // indirect
+	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
 	google.golang.org/genproto v0.0.0-20200318110522-7735f76e9fa5 // indirect
 	google.golang.org/grpc v1.28.0
