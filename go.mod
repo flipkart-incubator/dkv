@@ -26,7 +26,6 @@ require (
 	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
-	google.golang.org/genproto v0.0.0-20200318110522-7735f76e9fa5 // indirect
 	google.golang.org/grpc v1.28.0
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
@@ -45,6 +44,5 @@ replace (
 	golang.org/x/time => github.com/golang/time v0.0.0-20191024005414-555d28b269f0
 	golang.org/x/tools => github.com/golang/tools v0.0.0-20200318150045-ba25ddc85566
 	golang.org/x/xerrors => github.com/golang/xerrors v0.0.0-20191204190536-9bdfabe68543
-	google.golang.org/genproto => github.com/googleapis/go-genproto v0.0.0-20200318110522-7735f76e9fa5
 	honnef.co/go/tools => github.com/dominikh/go-tools v0.0.1-2020.1.3
 )
