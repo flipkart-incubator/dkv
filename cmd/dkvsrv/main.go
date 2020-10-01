@@ -13,6 +13,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/server/master"
 	"github.com/flipkart-incubator/dkv/internal/server/slave"
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
@@ -32,6 +33,7 @@ var (
 	dbFolder         string
 	dbListenAddr     string
 	dbRole           string
+	statsdAddr       string
 	replMasterAddr   string
 	replPollInterval time.Duration
 
@@ -42,6 +44,8 @@ var (
 	dkvLogger      *zap.Logger
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+
+	statsCli stats.Client
 )
 
 func init() {
@@ -49,6 +53,7 @@ func init() {
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
+	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
@@ -66,9 +71,11 @@ const (
 
 func main() {
 	flag.Parse()
+	validateFlags()
 	setupDKVLogger()
 	setupAccessLogger()
 	setFlagsForNexusDirs()
+	setupStats()
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
@@ -112,6 +119,18 @@ func main() {
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
 	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+}
+
+func validateFlags() {
+	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
+		panic(fmt.Errorf("Given listen address: %s is invalid. Must be in host:port format.", dbListenAddr))
+	}
+	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
+		panic(fmt.Errorf("Given master address: %s for replication is invalid. Must be in host:port format.", replMasterAddr))
+	}
+	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
+		panic(fmt.Errorf("Given StatsD address: %s is invalid. Must be in host:port format.", statsdAddr))
+	}
 }
 
 func setupAccessLogger() {
@@ -264,6 +283,14 @@ func setFlagsForNexusDirs() {
 	}
 }
 
+func setupStats() {
+	if statsdAddr != "" {
+		statsCli = stats.NewStatsDClient(statsdAddr, "nexus_redis")
+	} else {
+		statsCli = stats.NewNoOpClient()
+	}
+}
+
 const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
@@ -308,6 +335,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	mkdirNexusDirs()
 	replStore := sync.NewDKVReplStore(kvs)
 	nexusOpts := nexus.OptionsFromFlags()
+	nexusOpts = append(nexusOpts, nexus.StatsDAddr(statsdAddr))
 	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, nexusOpts...); err != nil {
 		panic(err)
 	} else {

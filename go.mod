@@ -17,6 +17,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
+	github.com/smira/go-statsd v1.3.1
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	go.uber.org/zap v1.14.1
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
