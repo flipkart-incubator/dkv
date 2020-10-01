@@ -311,7 +311,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		}
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb, err := badger.OpenDB(dbDir)
+		badgerDb, err := badger.OpenDBWithLogger(dbDir, dkvLogger)
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
