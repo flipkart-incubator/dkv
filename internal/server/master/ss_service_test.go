@@ -224,7 +224,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder, cacheSize)
+		rocksDb, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}

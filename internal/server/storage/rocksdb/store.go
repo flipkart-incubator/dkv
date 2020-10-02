@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
@@ -25,83 +26,90 @@ type DB interface {
 
 type rocksDB struct {
 	db   *gorocksdb.DB
-	opts *Opts
-	lg   *zap.Logger
+	opts *rocksDBOpts
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
 	globalMutation uint32
 }
 
-// Opts holds the various options required for configuring
-// the RocksDB storage engine.
-type Opts struct {
+type rocksDBOpts struct {
 	blockTableOpts *gorocksdb.BlockBasedTableOptions
 	rocksDBOpts    *gorocksdb.Options
 	restoreOpts    *gorocksdb.RestoreOptions
 	folderName     string
+	lgr            *zap.Logger
+	statsCli       stats.Client
 }
 
-// OpenDB initializes a new instance of RocksDB with default
-// options. It uses the given folder for storing the data files.
-func OpenDB(dbFolder string, cacheSize uint64) (DB, error) {
-	return OpenDBWithLogger(dbFolder, cacheSize, zap.NewNop())
-}
+// DBOption is used to configure the RocksDB
+// storage engine.
+type DBOption func(*rocksDBOpts)
 
-// OpenDBWithLogger initializes a new instance of RocksDB with default
-// options. It uses the given folder for storing the data files and the
-// given logger for logs.
-func OpenDBWithLogger(dbFolder string, cacheSize uint64, lgr *zap.Logger) (kvs DB, err error) {
-	opts := NewOptions()
-	opts.CreateDBFolderIfMissing(true).DBFolder(dbFolder).CacheSize(cacheSize)
-	if kvs, err = openStore(opts, lgr); err != nil {
-		lgr.Error("Unable to open RocksDB", zap.Error(err))
+// WithLogger is used to inject a ZAP logger instance.
+func WithLogger(lgr *zap.Logger) DBOption {
+	return func(opts *rocksDBOpts) {
+		if lgr != nil {
+			opts.lgr = lgr
+		} else {
+			opts.lgr = zap.NewNop()
+		}
 	}
-	return
 }
 
-// NewOptions initializes an instance of RocksDB options with
-// default settings. It can be used to customize specific parameters
-// of the underlying RocksDB storage engine.
-func NewOptions() *Opts {
+// WithStats is used to inject a metrics client.
+func WithStats(statsCli stats.Client) DBOption {
+	return func(opts *rocksDBOpts) {
+		if statsCli != nil {
+			opts.statsCli = statsCli
+		} else {
+			opts.statsCli = stats.NewNoOpClient()
+		}
+	}
+}
+
+// WithCacheSize is used to set the block cache size.
+func WithCacheSize(size uint64) DBOption {
+	return func(opts *rocksDBOpts) {
+		opts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
+	}
+}
+
+// OpenDB initializes a new instance of RocksDB with specified
+// options. It uses the given folder for storing the data files.
+func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
+	opts := newOptions(dbFolder)
+	for _, dbOpt := range dbOpts {
+		dbOpt(opts)
+	}
+	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, dbFolder)
+	if err != nil {
+		return nil, err
+	}
+	return &rocksDB{db, opts, 0}, nil
+}
+
+func newOptions(dbFolder string) *rocksDBOpts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
+	opts.SetCreateIfMissing(true)
 	opts.SetBlockBasedTableFactory(bbto)
 	rstOpts := gorocksdb.NewRestoreOptions()
-	return &Opts{blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts}
+	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts}
 }
 
-// CacheSize can be used to set the RocksDB block cache size.
-func (rdbOpts *Opts) CacheSize(size uint64) *Opts {
-	rdbOpts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
-	return rdbOpts
-}
-
-// CreateDBFolderIfMissing can be used to direct RocksDB to create
-// the database folder if its missing.
-func (rdbOpts *Opts) CreateDBFolderIfMissing(flag bool) *Opts {
-	rdbOpts.rocksDBOpts.SetCreateIfMissing(flag)
-	return rdbOpts
-}
-
-// DBFolder allows for the RocksDB database folder location to be set.
-func (rdbOpts *Opts) DBFolder(name string) *Opts {
-	rdbOpts.folderName = name
-	return rdbOpts
-}
-
-func (rdbOpts *Opts) destroy() {
+func (rdbOpts *rocksDBOpts) destroy() {
 	rdbOpts.blockTableOpts.Destroy()
 	rdbOpts.rocksDBOpts.Destroy()
 	rdbOpts.restoreOpts.Destroy()
 }
 
-func openStore(opts *Opts, lgr *zap.Logger) (*rocksDB, error) {
+func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName)
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{db, opts, lgr, 0}, nil
+	return &rocksDB{db, opts, 0}, nil
 }
 
 func (rdb *rocksDB) Close() error {
@@ -234,7 +242,7 @@ func (rdb *rocksDB) RestoreFrom(folder string) (st storage.KVStore, ba storage.B
 
 	// In any case, reopen a new DB
 	defer func() {
-		if finalDB, openErr := openStore(rdb.opts, rdb.lg); openErr != nil {
+		if finalDB, openErr := openStore(rdb.opts); openErr != nil {
 			err = openErr
 		} else {
 			st, ba, cp, ca = finalDB, finalDB, finalDB, finalDB

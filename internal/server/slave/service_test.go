@@ -133,7 +133,7 @@ func newRocksDBStore(dbFolder string) rocksdb.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := rocksdb.OpenDB(dbFolder, cacheSize)
+	store, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
 	if err != nil {
 		panic(err)
 	}

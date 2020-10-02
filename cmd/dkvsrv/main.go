@@ -123,13 +123,13 @@ func main() {
 
 func validateFlags() {
 	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
-		panic(fmt.Errorf("Given listen address: %s is invalid. Must be in host:port format.", dbListenAddr))
+		panic(fmt.Errorf("given listen address: %s is invalid, must be in host:port format", dbListenAddr))
 	}
 	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
-		panic(fmt.Errorf("Given master address: %s for replication is invalid. Must be in host:port format.", replMasterAddr))
+		panic(fmt.Errorf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr))
 	}
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
-		panic(fmt.Errorf("Given StatsD address: %s is invalid. Must be in host:port format.", statsdAddr))
+		panic(fmt.Errorf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr))
 	}
 }
 
@@ -305,13 +305,20 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	slg.Infof("Using %s as data folder", dbDir)
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDBWithLogger(dbDir, cacheSize, dkvLogger)
+		rocksDb, err := rocksdb.OpenDB(dbDir,
+			rocksdb.WithCacheSize(cacheSize),
+			rocksdb.WithStats(statsCli),
+			rocksdb.WithLogger(dkvLogger))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb, err := badger.OpenDBWithLogger(dbDir, dkvLogger)
+		badgerDb, err := badger.OpenDB(dbDir,
+			badger.WithLogger(dkvLogger),
+			badger.WithSyncWrites(),
+			badger.WithStats(statsCli),
+			badger.WithoutDBInternalLogging())
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}

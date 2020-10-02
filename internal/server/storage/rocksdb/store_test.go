@@ -639,6 +639,6 @@ func openRocksDB() (*rocksDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	db, err := OpenDB(dbFolder, cacheSize)
+	db, err := OpenDB(dbFolder, WithCacheSize(cacheSize))
 	return db.(*rocksDB), err
 }

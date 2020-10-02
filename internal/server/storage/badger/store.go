@@ -14,6 +14,7 @@ import (
 
 	"github.com/dgraph-io/badger"
 	badger_pb "github.com/dgraph-io/badger/pb"
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
@@ -29,51 +30,86 @@ type DB interface {
 
 type badgerDB struct {
 	db   *badger.DB
-	opts *Opts
-	lg   *zap.Logger
+	opts *bdgrOpts
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
 	globalMutation uint32
 }
 
-// Opts holds the various options required for configuring
-// the Badger storage engine.
-type Opts struct {
-	opts badger.Options
+type bdgrOpts struct {
+	opts     badger.Options
+	lgr      *zap.Logger
+	statsCli stats.Client
 }
 
-// OpenDB initializes a new instance of BadgerDB with default
-// options. It uses the given folder for storing the data files.
-func OpenDB(dbFolder string) (DB, error) {
-	return OpenDBWithLogger(dbFolder, zap.NewNop())
-}
+// DBOption is used to configure the Badger
+// storage engine.
+type DBOption func(*bdgrOpts)
 
-// OpenDBWithLogger initializes a new instance of BadgerDB with default
-// options. It uses the given folder for storing the data files and
-// the given logger for logs.
-func OpenDBWithLogger(dbFolder string, lgr *zap.Logger) (kvs DB, err error) {
-	opts := NewOptions(dbFolder)
-	if kvs, err = openStore(opts, lgr); err != nil {
-		lgr.Error("Unable to open Badger", zap.Error(err))
+// WithLogger is used to inject a ZAP logger instance.
+func WithLogger(lgr *zap.Logger) DBOption {
+	return func(opts *bdgrOpts) {
+		if lgr != nil {
+			opts.lgr = lgr
+		} else {
+			opts.lgr = zap.NewNop()
+		}
 	}
-	return
 }
 
-// NewOptions initializes an instance of BadgerDB options with
-// default settings. It can be used to customize specific parameters
-// of the underlying Badger storage engine.
-func NewOptions(dbFolder string) *Opts {
-	opts := badger.DefaultOptions(dbFolder).WithSyncWrites(true).WithLogger(nil)
-	return &Opts{opts}
+// WithStats is used to inject a metrics client.
+func WithStats(statsCli stats.Client) DBOption {
+	return func(opts *bdgrOpts) {
+		if statsCli != nil {
+			opts.statsCli = statsCli
+		} else {
+			opts.statsCli = stats.NewNoOpClient()
+		}
+	}
 }
 
-func openStore(bdbOpts *Opts, lgr *zap.Logger) (*badgerDB, error) {
+// WithSyncWrites configures Badger to ensure every
+// write is flushed to disk before acking back.
+func WithSyncWrites() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithSyncWrites(true)
+	}
+}
+
+// WithoutSyncWrites configures Badger to prevent
+// flush to disk for every write.
+func WithoutSyncWrites() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithSyncWrites(false)
+	}
+}
+
+// WithoutDBInternalLogging configures Badger to
+// prevent any internal logging to occur.
+func WithoutDBInternalLogging() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithLogger(nil)
+	}
+}
+
+// OpenDB initializes a new instance of BadgerDB with the specified
+// options. It uses the given folder for storing the data files.
+func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
+	bdgrDBOpts := badger.DefaultOptions(dbFolder)
+	opts := &bdgrOpts{opts: bdgrDBOpts}
+	for _, dbOpt := range dbOpts {
+		dbOpt(opts)
+	}
+	return openStore(opts)
+}
+
+func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 	db, err := badger.Open(bdbOpts.opts)
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts, lgr, 0}, nil
+	return &badgerDB{db, bdbOpts, 0}, nil
 }
 
 func (bdb *badgerDB) Close() error {
@@ -191,7 +227,7 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 
 	// In any case, reopen a new DB
 	defer func() {
-		if finalDB, openErr := openStore(bdb.opts, bdb.lg); openErr != nil {
+		if finalDB, openErr := openStore(bdb.opts); openErr != nil {
 			err = openErr
 		} else {
 			st, ba, cp, ca = finalDB, finalDB, nil, finalDB
@@ -212,13 +248,15 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 	defer f.Close()
 
 	// Create temp folder for the restored data
-	restoreFolder, err := storage.CreateTempFolder(tempDirPrefx)
+	restoreDir, err := storage.CreateTempFolder(tempDirPrefx)
 	if err != nil {
 		return
 	}
 
 	// Create a temp badger DB pointing to the temp folder
-	restoredDB, err := openStore(NewOptions(restoreFolder), bdb.lg)
+	cloneOpts := *bdb.opts
+	cloneOpts.opts = cloneOpts.opts.WithDir(restoreDir).WithValueDir(restoreDir)
+	restoredDB, err := openStore(&cloneOpts)
 	if err != nil {
 		return
 	}
@@ -233,7 +271,7 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 	restoredDB.db.Close()
 
 	// Move the temp folders to the actual locations
-	err = storage.RenameFolder(restoreFolder, bdb.opts.opts.Dir)
+	err = storage.RenameFolder(restoreDir, bdb.opts.opts.Dir)
 
 	// Plain return due to defer function above
 	return

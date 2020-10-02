@@ -24,8 +24,8 @@ func TestStatsDClient(t *testing.T) {
 	statsCli := NewStatsDClient(addr, "nexus_test", tags...)
 	defer statsCli.Close()
 
-	statsdAdminUrl := fmt.Sprintf("%s:%d", statsDHost, adminPort)
-	conn := connectToStatsD(t, statsdAdminUrl)
+	statsdAdminURL := fmt.Sprintf("%s:%d", statsDHost, adminPort)
+	conn := connectToStatsD(t, statsdAdminURL)
 
 	s, w := bufio.NewScanner(conn), bufio.NewWriter(conn)
 	//flushDuration := statsdFlushInterval(s, w)
@@ -75,10 +75,10 @@ func statsdFlushInterval(s *bufio.Scanner, w *bufio.Writer) time.Duration {
 	return 10 * time.Millisecond
 }
 
-func connectToStatsD(t *testing.T, statsdAdminUrl string) net.Conn {
-	conn, err := net.Dial("tcp", statsdAdminUrl)
+func connectToStatsD(t *testing.T, statsdAdminURL string) net.Conn {
+	conn, err := net.Dial("tcp", statsdAdminURL)
 	if err != nil {
-		t.Logf("Unable to connect to StatsD admin endpoint: %s. Skipping this test.", statsdAdminUrl)
+		t.Logf("Unable to connect to StatsD admin endpoint: %s. Skipping this test.", statsdAdminURL)
 		os.Exit(0)
 	}
 	return conn

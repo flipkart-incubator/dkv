@@ -7,14 +7,19 @@ import (
 	"github.com/smira/go-statsd"
 )
 
+// Tag represents the key value pair that is sent
+// along with every measurement to a metrics sink.
 type Tag struct {
 	key, val string
 }
 
+// NewTag creates an instance of the Tag type.
 func NewTag(key, val string) Tag {
 	return Tag{key, val}
 }
 
+// Client exposes all the behavior for capturing and
+// and sending various measurements to a metrics sink.
 type Client interface {
 	io.Closer
 	Incr(string, int64)
@@ -31,7 +36,9 @@ func (*noopClient) GaugeDelta(_ string, _ int64) {}
 func (*noopClient) Timing(_ string, _ time.Time) {}
 func (*noopClient) Close() error                 { return nil }
 
-func NewNoOpClient() *noopClient {
+// NewNoOpClient creates a metrics client that does
+// not send any measurements.
+func NewNoOpClient() Client {
 	return &noopClient{}
 }
 
@@ -39,7 +46,9 @@ type statsDClient struct {
 	cli *statsd.Client
 }
 
-func NewStatsDClient(statsdAddr, metricPrfx string, defTags ...Tag) *statsDClient {
+// NewStatsDClient creates a metrics client that sends
+// various measurements to StatsD client.
+func NewStatsDClient(statsdAddr, metricPrfx string, defTags ...Tag) Client {
 	statsTags := make([]statsd.Tag, len(defTags))
 	for i, defTag := range defTags {
 		statsTags[i] = statsd.StringTag(defTag.key, defTag.val)
