@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -22,6 +23,7 @@ type dkvSlaveService struct {
 	store       storage.KVStore
 	ca          storage.ChangeApplier
 	lg          *zap.Logger
+	statsCli    stats.Client
 	replCli     *ctl.DKVClient
 	replTckr    *time.Ticker
 	replStop    chan struct{}
@@ -37,18 +39,17 @@ const maxNumChangesRepl = 10000
 // for changes from master node and replicates them onto its local
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
-func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollInterval time.Duration, lgr *zap.Logger) (DKVService, error) {
+func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollInterval time.Duration,
+	lgr *zap.Logger, statsCli stats.Client) (DKVService, error) {
 	if replPollInterval == 0 || replCli == nil || store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca`, `replCli` and `replPollInterval` are all mandatory")
 	}
-	if lgr == nil {
-		lgr = zap.NewNop()
-	}
-	return newSlaveService(store, ca, replCli, replPollInterval, lgr), nil
+	return newSlaveService(store, ca, replCli, replPollInterval, lgr, statsCli), nil
 }
 
-func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration, lgr *zap.Logger) *dkvSlaveService {
-	dss := &dkvSlaveService{store: store, ca: ca, replCli: replCli, lg: lgr}
+func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration,
+	lgr *zap.Logger, statsCli stats.Client) *dkvSlaveService {
+	dss := &dkvSlaveService{store: store, ca: ca, replCli: replCli, lg: lgr, statsCli: statsCli}
 	dss.startReplication(pollInterval)
 	return dss
 }

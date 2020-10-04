@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -85,20 +85,20 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 	case masterRole:
 		if cp == nil {
-			panic(fmt.Sprintf("Storage engine %s is not supported for DKV master role.", dbEngine))
+			log.Panicf("Storage engine %s is not supported for DKV master role.", dbEngine)
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger)
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -109,7 +109,7 @@ func main() {
 			panic(err)
 		} else {
 			defer replCli.Close()
-			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger)
+			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger, statsCli)
 			defer dkvSvc.Close()
 			serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		}
@@ -118,23 +118,22 @@ func main() {
 	}
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
-	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+	log.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
 }
 
 func validateFlags() {
 	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
-		panic(fmt.Errorf("given listen address: %s is invalid, must be in host:port format", dbListenAddr))
+		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
 	}
 	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
-		panic(fmt.Errorf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr))
+		log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
 	}
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
-		panic(fmt.Errorf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr))
+		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
 	}
 }
 
 func setupAccessLogger() {
-	accessLogger = zap.NewNop()
 	if dbAccessLog != "" {
 		accessLoggerConfig := zap.Config{
 			Level:         zap.NewAtomicLevelAt(zap.InfoLevel),
@@ -160,7 +159,8 @@ func setupAccessLogger() {
 			ErrorOutputPaths: []string{dbAccessLog},
 		}
 		if lg, err := accessLoggerConfig.Build(); err != nil {
-			panic(err)
+			log.Printf("[WARN] Unable to configure access logger. Error: %v\n", err)
+			accessLogger = zap.NewNop()
 		} else {
 			accessLogger = lg
 		}
@@ -197,7 +197,8 @@ func setupDKVLogger() {
 	}
 
 	if lg, err := dkvLoggerConfig.Build(); err != nil {
-		panic(err)
+		log.Printf("[WARN] Unable to configure DKV logger. Error: %v\n", err)
+		dkvLogger = zap.NewNop()
 	} else {
 		dkvLogger = lg
 	}
@@ -211,12 +212,13 @@ func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	return grpcSrvr, newListener()
 }
 
-func newListener() net.Listener {
-	if lis, err := net.Listen("tcp", dbListenAddr); err != nil {
-		panic(fmt.Sprintf("failed to listen: %v", err))
-	} else {
-		return lis
+func newListener() (lis net.Listener) {
+	var err error
+	if lis, err = net.Listen("tcp", dbListenAddr); err != nil {
+		log.Panicf("failed to listen: %v", err)
+		return
 	}
+	return
 }
 
 func setupSignalHandler() <-chan os.Signal {
@@ -237,11 +239,11 @@ func haveFlagsWithPrefix(prefix string) bool {
 }
 
 func printFlagsWithPrefix(prefixes ...string) {
-	fmt.Println("Launching DKV server with following flags:")
+	log.Println("Launching DKV server with following flags:")
 	flag.VisitAll(func(f *flag.Flag) {
 		for _, pf := range prefixes {
 			if strings.HasPrefix(f.Name, pf) {
-				fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+				log.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
 			}
 		}
 	})
@@ -331,10 +333,10 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 
 func mkdirNexusDirs() {
 	if err := os.MkdirAll(nexusLogDirFlag.Value.String(), 0777); err != nil {
-		panic(fmt.Sprintf("Unable to create Nexus logDir. Error: %v", err))
+		log.Panicf("Unable to create Nexus logDir. Error: %v", err)
 	}
 	if err := os.MkdirAll(nexusSnapDirFlag.Value.String(), 0777); err != nil {
-		panic(fmt.Sprintf("Unable to create Nexus snapDir. Error: %v", err))
+		log.Panicf("Unable to create Nexus snapDir. Error: %v", err)
 	}
 }
 

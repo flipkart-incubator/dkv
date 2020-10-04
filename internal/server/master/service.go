@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -33,18 +34,16 @@ type standaloneService struct {
 	cp    storage.ChangePropagator
 	br    storage.Backupable
 
-	rwl *sync.RWMutex
-	lg  *zap.Logger
+	rwl      *sync.RWMutex
+	lg       *zap.Logger
+	statsCli stats.Client
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
-// that works only with the local storage and the instance of Zap logger.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger) DKVService {
-	if lgr == nil {
-		lgr = zap.NewNop()
-	}
+// that works only with the local storage.
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client) DKVService {
 	rwl := &sync.RWMutex{}
-	return &standaloneService{store, cp, br, rwl, lgr}
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -269,15 +268,14 @@ type distributedService struct {
 	DKVService
 	raftRepl nexus_api.RaftReplicator
 	lg       *zap.Logger
+	statsCli stats.Client
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
-func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, raftRepl nexus_api.RaftReplicator, lgr *zap.Logger) DKVClusterService {
-	if lgr == nil {
-		lgr = zap.NewNop()
-	}
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr), raftRepl, lgr}
+func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
+	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client) DKVClusterService {
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli), raftRepl, lgr, statsCli}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
