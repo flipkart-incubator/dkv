@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
@@ -95,7 +96,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	opts.SetCreateIfMissing(true)
 	opts.SetBlockBasedTableFactory(bbto)
 	rstOpts := gorocksdb.NewRestoreOptions()
-	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts}
+	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), statsCli: stats.NewNoOpClient()}
 }
 
 func (rdbOpts *rocksDBOpts) destroy() {
@@ -119,10 +120,15 @@ func (rdb *rocksDB) Close() error {
 }
 
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
+	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
 	wo := gorocksdb.NewDefaultWriteOptions()
 	wo.SetSync(true)
 	defer wo.Destroy()
-	return rdb.db.Put(wo, key, value)
+	err := rdb.db.Put(wo, key, value)
+	if err != nil {
+		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
+	}
+	return err
 }
 
 func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
@@ -286,6 +292,7 @@ func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
 }
 
 func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.load.changes.latency.ms", time.Now())
 	chngIter, err := rdb.db.GetUpdatesSince(fromChangeNumber)
 	if err != nil {
 		return nil, err
@@ -307,6 +314,7 @@ func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
 }
 
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.save.changes.latency.ms", time.Now())
 	wo := gorocksdb.NewDefaultWriteOptions()
 	wo.SetSync(true)
 	defer wo.Destroy()
@@ -425,16 +433,20 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 }
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]byte, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
 	value, err := rdb.db.Get(ro, key)
 	if err != nil {
+		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
 		return nil, err
 	}
 	return toByteArray(value), nil
 }
 
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([][]byte, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
 	values, err := rdb.db.MultiGet(ro, keys...)
 	if err != nil {
+		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
 		return nil, err
 	}
 	var results [][]byte

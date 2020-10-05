@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	badger_pb "github.com/dgraph-io/badger/pb"
@@ -97,7 +98,7 @@ func WithoutDBInternalLogging() DBOption {
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
 	bdgrDBOpts := badger.DefaultOptions(dbFolder)
-	opts := &bdgrOpts{opts: bdgrDBOpts}
+	opts := &bdgrOpts{opts: bdgrDBOpts, lgr: zap.NewNop(), statsCli: stats.NewNoOpClient()}
 	for _, dbOpt := range dbOpts {
 		dbOpt(opts)
 	}
@@ -118,12 +119,18 @@ func (bdb *badgerDB) Close() error {
 }
 
 func (bdb *badgerDB) Put(key []byte, value []byte) error {
-	return bdb.db.Update(func(txn *badger.Txn) error {
+	defer bdb.opts.statsCli.Timing("badger.put.latency.ms", time.Now())
+	err := bdb.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})
+	if err != nil {
+		bdb.opts.statsCli.Incr("badger.put.errors", 1)
+	}
+	return err
 }
 
 func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
+	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
 	var results [][]byte
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
@@ -139,6 +146,9 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		bdb.opts.statsCli.Incr("badger.get.errors", 1)
+	}
 	return results, err
 }
 
@@ -302,6 +312,7 @@ func (bdb *badgerDB) GetLatestAppliedChangeNumber() (uint64, error) {
 }
 
 func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
+	defer bdb.opts.statsCli.Timing("badger.save.changes.latency.ms", time.Now())
 	var appldChngNum uint64
 	var lastErr error
 
