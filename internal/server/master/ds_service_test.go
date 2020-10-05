@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
@@ -17,6 +18,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -209,7 +211,7 @@ func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storag
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder, cacheSize)
+		rocksDb, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}
@@ -229,7 +231,7 @@ func newDistributedDKVNode(id int, join bool, clusURL string) (DKVService, *grpc
 	kvs, cp, br := newKVStoreWithID(id)
 	dkvRepl := newReplicator(id, kvs, join, clusURL)
 	dkvRepl.Start()
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, nil)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, zap.NewNop(), stats.NewNoOpClient())
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

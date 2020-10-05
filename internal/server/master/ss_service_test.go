@@ -9,11 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -224,7 +226,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder, cacheSize)
+		rocksDb, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}
@@ -242,7 +244,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 
 func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore()
-	dkvSvc = NewStandaloneService(kvs, cp, ba, nil)
+	dkvSvc = NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient())
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

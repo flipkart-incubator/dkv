@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/server/master"
 	"github.com/flipkart-incubator/dkv/internal/server/slave"
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
@@ -32,6 +33,7 @@ var (
 	dbFolder         string
 	dbListenAddr     string
 	dbRole           string
+	statsdAddr       string
 	replMasterAddr   string
 	replPollInterval time.Duration
 
@@ -42,6 +44,8 @@ var (
 	dkvLogger      *zap.Logger
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+
+	statsCli stats.Client
 )
 
 func init() {
@@ -49,6 +53,7 @@ func init() {
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
+	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
@@ -66,9 +71,11 @@ const (
 
 func main() {
 	flag.Parse()
+	validateFlags()
 	setupDKVLogger()
 	setupAccessLogger()
 	setFlagsForNexusDirs()
+	setupStats()
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
@@ -78,20 +85,20 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 	case masterRole:
 		if cp == nil {
-			panic(fmt.Sprintf("Storage engine %s is not supported for DKV master role.", dbEngine))
+			log.Panicf("Storage engine %s is not supported for DKV master role.", dbEngine)
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger)
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -102,7 +109,7 @@ func main() {
 			panic(err)
 		} else {
 			defer replCli.Close()
-			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger)
+			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger, statsCli)
 			defer dkvSvc.Close()
 			serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		}
@@ -111,11 +118,22 @@ func main() {
 	}
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
-	fmt.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+	log.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+}
+
+func validateFlags() {
+	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
+		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
+	}
+	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
+		log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
+	}
+	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
+		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
+	}
 }
 
 func setupAccessLogger() {
-	accessLogger = zap.NewNop()
 	if dbAccessLog != "" {
 		accessLoggerConfig := zap.Config{
 			Level:         zap.NewAtomicLevelAt(zap.InfoLevel),
@@ -141,7 +159,8 @@ func setupAccessLogger() {
 			ErrorOutputPaths: []string{dbAccessLog},
 		}
 		if lg, err := accessLoggerConfig.Build(); err != nil {
-			panic(err)
+			log.Printf("[WARN] Unable to configure access logger. Error: %v\n", err)
+			accessLogger = zap.NewNop()
 		} else {
 			accessLogger = lg
 		}
@@ -178,7 +197,8 @@ func setupDKVLogger() {
 	}
 
 	if lg, err := dkvLoggerConfig.Build(); err != nil {
-		panic(err)
+		log.Printf("[WARN] Unable to configure DKV logger. Error: %v\n", err)
+		dkvLogger = zap.NewNop()
 	} else {
 		dkvLogger = lg
 	}
@@ -192,12 +212,13 @@ func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	return grpcSrvr, newListener()
 }
 
-func newListener() net.Listener {
-	if lis, err := net.Listen("tcp", dbListenAddr); err != nil {
-		panic(fmt.Sprintf("failed to listen: %v", err))
-	} else {
-		return lis
+func newListener() (lis net.Listener) {
+	var err error
+	if lis, err = net.Listen("tcp", dbListenAddr); err != nil {
+		log.Panicf("failed to listen: %v", err)
+		return
 	}
+	return
 }
 
 func setupSignalHandler() <-chan os.Signal {
@@ -218,11 +239,11 @@ func haveFlagsWithPrefix(prefix string) bool {
 }
 
 func printFlagsWithPrefix(prefixes ...string) {
-	fmt.Println("Launching DKV server with following flags:")
+	log.Println("Launching DKV server with following flags:")
 	flag.VisitAll(func(f *flag.Flag) {
 		for _, pf := range prefixes {
 			if strings.HasPrefix(f.Name, pf) {
-				fmt.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+				log.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
 			}
 		}
 	})
@@ -264,6 +285,14 @@ func setFlagsForNexusDirs() {
 	}
 }
 
+func setupStats() {
+	if statsdAddr != "" {
+		statsCli = stats.NewStatsDClient(statsdAddr, "nexus_redis")
+	} else {
+		statsCli = stats.NewNoOpClient()
+	}
+}
+
 const cacheSize = 3 << 30
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
@@ -278,13 +307,20 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	slg.Infof("Using %s as data folder", dbDir)
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDBWithLogger(dbDir, cacheSize, dkvLogger)
+		rocksDb, err := rocksdb.OpenDB(dbDir,
+			rocksdb.WithCacheSize(cacheSize),
+			rocksdb.WithStats(statsCli),
+			rocksdb.WithLogger(dkvLogger))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb, err := badger.OpenDBWithLogger(dbDir, dkvLogger)
+		badgerDb, err := badger.OpenDB(dbDir,
+			badger.WithLogger(dkvLogger),
+			badger.WithSyncWrites(),
+			badger.WithStats(statsCli),
+			badger.WithoutDBInternalLogging())
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
@@ -297,10 +333,10 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 
 func mkdirNexusDirs() {
 	if err := os.MkdirAll(nexusLogDirFlag.Value.String(), 0777); err != nil {
-		panic(fmt.Sprintf("Unable to create Nexus logDir. Error: %v", err))
+		log.Panicf("Unable to create Nexus logDir. Error: %v", err)
 	}
 	if err := os.MkdirAll(nexusSnapDirFlag.Value.String(), 0777); err != nil {
-		panic(fmt.Sprintf("Unable to create Nexus snapDir. Error: %v", err))
+		log.Panicf("Unable to create Nexus snapDir. Error: %v", err)
 	}
 }
 
@@ -308,6 +344,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	mkdirNexusDirs()
 	replStore := sync.NewDKVReplStore(kvs)
 	nexusOpts := nexus.OptionsFromFlags()
+	nexusOpts = append(nexusOpts, nexus.StatsDAddr(statsdAddr))
 	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, nexusOpts...); err != nil {
 		panic(err)
 	} else {

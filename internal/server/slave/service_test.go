@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/server/master"
+	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -133,7 +135,7 @@ func newRocksDBStore(dbFolder string) rocksdb.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := rocksdb.OpenDB(dbFolder, cacheSize)
+	store, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
 	if err != nil {
 		panic(err)
 	}
@@ -153,7 +155,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, bu, nil)
+	masterSvc = master.NewStandaloneService(store, cp, bu, zap.NewNop(), stats.NewNoOpClient())
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -164,7 +166,7 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
-	if ss, err := NewService(store, ca, masterCli, replPollInterval, nil); err != nil {
+	if ss, err := NewService(store, ca, masterCli, replPollInterval, zap.NewNop(), stats.NewNoOpClient()); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
