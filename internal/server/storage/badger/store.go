@@ -94,11 +94,41 @@ func WithoutDBInternalLogging() DBOption {
 	}
 }
 
+// WithKeepL0InMemory configures Badger to place
+// the L0 SSTable in memory for better write performance.
+// However, replaying the value log during startup
+// can take longer with this option set. This is
+// enabled by default in DKV.
+func WithKeepL0InMemory() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithKeepL0InMemory(true)
+	}
+}
+
+// WithoutKeepL0InMemory configures Badger to prevent
+// placing L0 SSTable in memory.
+func WithoutKeepL0InMemory() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithKeepL0InMemory(false)
+	}
+}
+
+// WithDisklessMode configures Badger to not use
+// the disk for storing data or logs.
+func WithDisklessMode() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithInMemory(true)
+	}
+}
+
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
-	bdgrDBOpts := badger.DefaultOptions(dbFolder)
-	opts := &bdgrOpts{opts: bdgrDBOpts, lgr: zap.NewNop(), statsCli: stats.NewNoOpClient()}
+	opts := &bdgrOpts{
+		opts:     badger.DefaultOptions(dbFolder).WithKeepL0InMemory(true),
+		lgr:      zap.NewNop(),
+		statsCli: stats.NewNoOpClient(),
+	}
 	for _, dbOpt := range dbOpts {
 		dbOpt(opts)
 	}
