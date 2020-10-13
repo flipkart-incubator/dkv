@@ -71,6 +71,8 @@ github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 h1:E2s37DuLxFhQD
 github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870/go.mod h1:5tD+neXqOorC30/tWg0LCSkrqj/AR6gu8yY8/fpw1q0=
 github.com/flipkart-incubator/nexus v0.0.0-20201009122510-8c3d0b758a38 h1:/4E93KnyllOGsBeTISibjNQkNQ5yYB6N5EXZ3EPQFfo=
 github.com/flipkart-incubator/nexus v0.0.0-20201009122510-8c3d0b758a38/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
+github.com/flipkart-incubator/nexus v0.0.0-20201012104818-6c9d9d310a07 h1:jOXsik89KrcVR+Kenxpvdj54Swba+2Tef4gI1c22OBw=
+github.com/flipkart-incubator/nexus v0.0.0-20201012104818-6c9d9d310a07/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
