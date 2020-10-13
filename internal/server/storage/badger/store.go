@@ -113,19 +113,25 @@ func WithoutKeepL0InMemory() DBOption {
 	}
 }
 
-// WithDisklessMode configures Badger to not use
-// the disk for storing data or logs.
-func WithDisklessMode() DBOption {
-	return func(opts *bdgrOpts) {
-		opts.opts.WithInMemory(true)
-	}
-}
-
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
 	opts := &bdgrOpts{
 		opts:     badger.DefaultOptions(dbFolder).WithKeepL0InMemory(true),
+		lgr:      zap.NewNop(),
+		statsCli: stats.NewNoOpClient(),
+	}
+	for _, dbOpt := range dbOpts {
+		dbOpt(opts)
+	}
+	return openStore(opts)
+}
+
+// OpenInMemDB initializes a new instance of BadgerDB with the specified
+// options. It does not use the disk for storing data.
+func OpenInMemDB(dbOpts ...DBOption) (kvs DB, err error) {
+	opts := &bdgrOpts{
+		opts:     badger.DefaultOptions("").WithInMemory(true),
 		lgr:      zap.NewNop(),
 		statsCli: stats.NewNoOpClient(),
 	}
