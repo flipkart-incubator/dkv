@@ -222,7 +222,30 @@ func TestBackupAndRestore(t *testing.T) {
 		} else {
 			store = st.(*badgerDB)
 			getKeys(t, store, numTrxns, keyPrefix, valPrefix)
-			noKeys(t, numTrxns, missKeyPrefix)
+			noKeys(t, store, numTrxns, missKeyPrefix)
+		}
+	}
+}
+
+func TestBackupAndRestoreForInMemBadger(t *testing.T) {
+	bdb, _ := OpenInMemDB()
+	numTrxns := 50
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, bdb, numTrxns, keyPrefix, valPrefix)
+
+	backupPath := fmt.Sprintf("%s/%s", dbFolder, "badger_in_mem.bak")
+	if err := bdb.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	} else {
+		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
+		putKeys(t, bdb, numTrxns, missKeyPrefix, missValPrefix)
+		bdb.Close()
+		if st, _, _, _, err := bdb.RestoreFrom(backupPath); err != nil {
+			t.Fatal(err)
+		} else {
+			bdb = st.(*badgerDB)
+			getKeys(t, bdb, numTrxns, keyPrefix, valPrefix)
+			noKeys(t, bdb, numTrxns, missKeyPrefix)
 		}
 	}
 }
@@ -566,7 +589,7 @@ func BenchmarkIteratorBasedIteration(b *testing.B) {
 	}
 }
 
-func checkGetResults(t *testing.T, bdb DB, ks, expVs [][]byte) {
+func checkGetResults(t *testing.T, bdb storage.KVStore, ks, expVs [][]byte) {
 	if results, err := bdb.Get(ks...); err != nil {
 		t.Error(err)
 	} else {
@@ -578,16 +601,16 @@ func checkGetResults(t *testing.T, bdb DB, ks, expVs [][]byte) {
 	}
 }
 
-func noKeys(t *testing.T, numKeys int, keyPrefix string) {
+func noKeys(t *testing.T, bdb storage.KVStore, numKeys int, keyPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key := fmt.Sprintf("%s_%d", keyPrefix, i)
-		if _, err := store.Get([]byte(key)); err == nil {
+		if _, err := bdb.Get([]byte(key)); err == nil {
 			t.Fatalf("Expected missing key. Key: %s", key)
 		}
 	}
 }
 
-func getKeys(t *testing.T, bdb DB, numKeys int, keyPrefix, valPrefix string) {
+func getKeys(t *testing.T, bdb storage.KVStore, numKeys int, keyPrefix, valPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 		if readResults, err := bdb.Get([]byte(key)); err != nil {
@@ -598,7 +621,7 @@ func getKeys(t *testing.T, bdb DB, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
-func putKeys(t testing.TB, bdb DB, numKeys int, keyPrefix, valPrefix string) map[string]string {
+func putKeys(t testing.TB, bdb storage.KVStore, numKeys int, keyPrefix, valPrefix string) map[string]string {
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
@@ -617,7 +640,7 @@ func putKeys(t testing.TB, bdb DB, numKeys int, keyPrefix, valPrefix string) map
 	return data
 }
 
-func checkMissingGetResults(t *testing.T, bdb DB, ks [][]byte) {
+func checkMissingGetResults(t *testing.T, bdb storage.KVStore, ks [][]byte) {
 	for _, k := range ks {
 		if result, err := bdb.Get(k); err == nil {
 			t.Errorf("Expected missing entry for key: %s. But instead found value: %s", k, result)

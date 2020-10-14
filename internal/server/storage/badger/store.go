@@ -276,10 +276,12 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 
 	// In any case, reopen a new DB
 	defer func() {
-		if finalDB, openErr := openStore(bdb.opts); openErr != nil {
-			err = openErr
-		} else {
-			st, ba, cp, ca = finalDB, finalDB, nil, finalDB
+		if !bdb.opts.opts.InMemory {
+			if finalDB, openErr := openStore(bdb.opts); openErr != nil {
+				err = openErr
+			} else {
+				st, ba, cp, ca = finalDB, finalDB, nil, finalDB
+			}
 		}
 	}()
 
@@ -304,7 +306,9 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 
 	// Create a temp badger DB pointing to the temp folder
 	cloneOpts := *bdb.opts
-	cloneOpts.opts = cloneOpts.opts.WithDir(restoreDir).WithValueDir(restoreDir)
+	if !cloneOpts.opts.InMemory {
+		cloneOpts.opts = cloneOpts.opts.WithDir(restoreDir).WithValueDir(restoreDir)
+	}
 	restoredDB, err := openStore(&cloneOpts)
 	if err != nil {
 		return
@@ -316,11 +320,16 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 		return
 	}
 
-	// Close the temp badger DB
-	restoredDB.db.Close()
+	if !cloneOpts.opts.InMemory {
+		// Close the temp badger DB
+		restoredDB.db.Close()
 
-	// Move the temp folders to the actual locations
-	err = storage.RenameFolder(restoreDir, bdb.opts.opts.Dir)
+		// Move the temp folders to the actual locations
+		err = storage.RenameFolder(restoreDir, bdb.opts.opts.Dir)
+	} else {
+		// Assign to return vars directly for diskless mode
+		st, ba, cp, ca = restoredDB, restoredDB, nil, restoredDB
+	}
 
 	// Plain return due to defer function above
 	return
