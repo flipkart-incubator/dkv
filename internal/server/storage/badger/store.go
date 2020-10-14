@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // DB interface represents the capabilities exposed
@@ -53,8 +55,7 @@ func WithLogger(lgr *zap.Logger) DBOption {
 	return func(opts *bdgrOpts) {
 		if lgr != nil {
 			opts.lgr = lgr
-		} else {
-			opts.lgr = zap.NewNop()
+			opts.opts.WithLogger(&zapBadgerLogger{lgr: lgr})
 		}
 	}
 }
@@ -86,14 +87,6 @@ func WithoutSyncWrites() DBOption {
 	}
 }
 
-// WithoutDBInternalLogging configures Badger to
-// prevent any internal logging to occur.
-func WithoutDBInternalLogging() DBOption {
-	return func(opts *bdgrOpts) {
-		opts.opts.WithLogger(nil)
-	}
-}
-
 // WithKeepL0InMemory configures Badger to place
 // the L0 SSTable in memory for better write performance.
 // However, replaying the value log during startup
@@ -116,9 +109,14 @@ func WithoutKeepL0InMemory() DBOption {
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
+	noopLgr := zap.NewNop()
+	defOpts := badger.
+		DefaultOptions(dbFolder).
+		WithKeepL0InMemory(true).
+		WithLogger(&zapBadgerLogger{lgr: noopLgr})
 	opts := &bdgrOpts{
-		opts:     badger.DefaultOptions(dbFolder).WithKeepL0InMemory(true),
-		lgr:      zap.NewNop(),
+		opts:     defOpts,
+		lgr:      noopLgr,
 		statsCli: stats.NewNoOpClient(),
 	}
 	for _, dbOpt := range dbOpts {
@@ -513,4 +511,40 @@ func checksForRestore(rstrPath string) error {
 	default:
 		return nil
 	}
+}
+
+type zapBadgerLogger struct {
+	lgr *zap.Logger
+}
+
+func (blgr *zapBadgerLogger) Errorf(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.ErrorLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) Warningf(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.WarnLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) Infof(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.InfoLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) Debugf(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.DebugLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) log(ce *zapcore.CheckedEntry, args ...interface{}) {
+	flds := make([]zap.Field, len(args))
+	for i, arg := range args {
+		flds[i] = zap.Any(strconv.Itoa(i), arg)
+	}
+	ce.Write(flds...)
 }

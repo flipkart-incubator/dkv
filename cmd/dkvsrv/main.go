@@ -319,8 +319,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		badgerDb, err := badger.OpenDB(dbDir,
 			badger.WithLogger(dkvLogger),
 			badger.WithSyncWrites(),
-			badger.WithStats(statsCli),
-			badger.WithoutDBInternalLogging())
+			badger.WithStats(statsCli))
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
