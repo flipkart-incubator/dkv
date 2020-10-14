@@ -128,9 +128,14 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
 // OpenInMemDB initializes a new instance of BadgerDB with the specified
 // options. It does not use the disk for storing data.
 func OpenInMemDB(dbOpts ...DBOption) (kvs DB, err error) {
+	noopLgr := zap.NewNop()
+	defOpts := badger.
+		DefaultOptions("").
+		WithInMemory(true).
+		WithLogger(&zapBadgerLogger{lgr: noopLgr})
 	opts := &bdgrOpts{
-		opts:     badger.DefaultOptions("").WithInMemory(true),
-		lgr:      zap.NewNop(),
+		opts:     defOpts,
+		lgr:      noopLgr,
 		statsCli: stats.NewNoOpClient(),
 	}
 	for _, dbOpt := range dbOpts {
