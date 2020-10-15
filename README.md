@@ -230,6 +230,24 @@ be changed through the `replPollInterval` flag while launching the slave node.
 Note that only **rocksdb** engine is supported on the DKV master node while the slave
 node can be launched with either *rocksdb* or *badger* storage engines.
 
+#### In memory mode for Badger based slaves
+
+For slave nodes using the Badger storage engine, we also support an in-memory mode
+where the entire dataset is stored in RAM without any writes to disk whatsoever.
+This can be achieved by using the `-dbDiskless` option during launch as shown here.
+
+```bash
+$ ./bin/dkvsrv \
+    -dbDiskless \
+    -dbListenAddr <host:port> \
+    -dbEngine badger \
+    -dbRole slave \
+    -replMasterAddr <dkv_master_listen_addr>
+```
+
+This mode may provide better performance for reads and is also useful for deployments
+that are cache-like having optional durability requirements.
+
 ## Testing
 
 If you want to execute tests inside DKV, run this command:
