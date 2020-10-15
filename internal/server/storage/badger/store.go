@@ -9,16 +9,18 @@ import (
 	"errors"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger"
-	badger_pb "github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/badger/v2"
+	badger_pb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/flipkart-incubator/dkv/internal/server/stats"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // DB interface represents the capabilities exposed
@@ -53,8 +55,7 @@ func WithLogger(lgr *zap.Logger) DBOption {
 	return func(opts *bdgrOpts) {
 		if lgr != nil {
 			opts.lgr = lgr
-		} else {
-			opts.lgr = zap.NewNop()
+			opts.opts.WithLogger(&zapBadgerLogger{lgr: lgr})
 		}
 	}
 }
@@ -86,19 +87,57 @@ func WithoutSyncWrites() DBOption {
 	}
 }
 
-// WithoutDBInternalLogging configures Badger to
-// prevent any internal logging to occur.
-func WithoutDBInternalLogging() DBOption {
+// WithKeepL0InMemory configures Badger to place
+// the L0 SSTable in memory for better write performance.
+// However, replaying the value log during startup
+// can take longer with this option set. This is
+// enabled by default in DKV.
+func WithKeepL0InMemory() DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts.WithLogger(nil)
+		opts.opts.WithKeepL0InMemory(true)
+	}
+}
+
+// WithoutKeepL0InMemory configures Badger to prevent
+// placing L0 SSTable in memory.
+func WithoutKeepL0InMemory() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithKeepL0InMemory(false)
 	}
 }
 
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
-	bdgrDBOpts := badger.DefaultOptions(dbFolder)
-	opts := &bdgrOpts{opts: bdgrDBOpts, lgr: zap.NewNop(), statsCli: stats.NewNoOpClient()}
+	noopLgr := zap.NewNop()
+	defOpts := badger.
+		DefaultOptions(dbFolder).
+		WithKeepL0InMemory(true).
+		WithLogger(&zapBadgerLogger{lgr: noopLgr})
+	opts := &bdgrOpts{
+		opts:     defOpts,
+		lgr:      noopLgr,
+		statsCli: stats.NewNoOpClient(),
+	}
+	for _, dbOpt := range dbOpts {
+		dbOpt(opts)
+	}
+	return openStore(opts)
+}
+
+// OpenInMemDB initializes a new instance of BadgerDB with the specified
+// options. It does not use the disk for storing data.
+func OpenInMemDB(dbOpts ...DBOption) (kvs DB, err error) {
+	noopLgr := zap.NewNop()
+	defOpts := badger.
+		DefaultOptions("").
+		WithInMemory(true).
+		WithLogger(&zapBadgerLogger{lgr: noopLgr})
+	opts := &bdgrOpts{
+		opts:     defOpts,
+		lgr:      noopLgr,
+		statsCli: stats.NewNoOpClient(),
+	}
 	for _, dbOpt := range dbOpts {
 		dbOpt(opts)
 	}
@@ -237,10 +276,12 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 
 	// In any case, reopen a new DB
 	defer func() {
-		if finalDB, openErr := openStore(bdb.opts); openErr != nil {
-			err = openErr
-		} else {
-			st, ba, cp, ca = finalDB, finalDB, nil, finalDB
+		if !bdb.opts.opts.InMemory {
+			if finalDB, openErr := openStore(bdb.opts); openErr != nil {
+				err = openErr
+			} else {
+				st, ba, cp, ca = finalDB, finalDB, nil, finalDB
+			}
 		}
 	}()
 
@@ -265,7 +306,9 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 
 	// Create a temp badger DB pointing to the temp folder
 	cloneOpts := *bdb.opts
-	cloneOpts.opts = cloneOpts.opts.WithDir(restoreDir).WithValueDir(restoreDir)
+	if !cloneOpts.opts.InMemory {
+		cloneOpts.opts = cloneOpts.opts.WithDir(restoreDir).WithValueDir(restoreDir)
+	}
 	restoredDB, err := openStore(&cloneOpts)
 	if err != nil {
 		return
@@ -277,11 +320,16 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 		return
 	}
 
-	// Close the temp badger DB
-	restoredDB.db.Close()
+	if !cloneOpts.opts.InMemory {
+		// Close the temp badger DB
+		restoredDB.db.Close()
 
-	// Move the temp folders to the actual locations
-	err = storage.RenameFolder(restoreDir, bdb.opts.opts.Dir)
+		// Move the temp folders to the actual locations
+		err = storage.RenameFolder(restoreDir, bdb.opts.opts.Dir)
+	} else {
+		// Assign to return vars directly for diskless mode
+		st, ba, cp, ca = restoredDB, restoredDB, nil, restoredDB
+	}
 
 	// Plain return due to defer function above
 	return
@@ -477,4 +525,40 @@ func checksForRestore(rstrPath string) error {
 	default:
 		return nil
 	}
+}
+
+type zapBadgerLogger struct {
+	lgr *zap.Logger
+}
+
+func (blgr *zapBadgerLogger) Errorf(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.ErrorLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) Warningf(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.WarnLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) Infof(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.InfoLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) Debugf(msg string, args ...interface{}) {
+	if ce := blgr.lgr.Check(zap.DebugLevel, msg); ce != nil {
+		blgr.log(ce, args...)
+	}
+}
+
+func (blgr *zapBadgerLogger) log(ce *zapcore.CheckedEntry, args ...interface{}) {
+	flds := make([]zap.Field, len(args))
+	for i, arg := range args {
+		flds[i] = zap.Any(strconv.Itoa(i), arg)
+	}
+	ce.Write(flds...)
 }

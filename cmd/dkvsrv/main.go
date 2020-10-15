@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -29,6 +30,7 @@ import (
 )
 
 var (
+	disklessMode     bool
 	dbEngine         string
 	dbFolder         string
 	dbListenAddr     string
@@ -49,6 +51,7 @@ var (
 )
 
 func init() {
+	flag.BoolVar(&disklessMode, "dbDiskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
 	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
@@ -57,7 +60,7 @@ func init() {
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
 	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
-	flag.BoolVar(&verboseLogging, "verbose", false, "Enable verbose logging. By default, only warnings and errors are logged.")
+	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -130,6 +133,12 @@ func validateFlags() {
 	}
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
 		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
+	}
+	if disklessMode && (strings.ToLower(dbEngine) == "rocksdb" || strings.ToLower(dbRole) == masterRole) {
+		log.Panicf("diskless is available only on Badger storage and for standalone and slave roles")
+	}
+	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
+		log.Panicf("replMasterAddr must be given in slave mode")
 	}
 }
 
@@ -316,11 +325,18 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		}
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
-		badgerDb, err := badger.OpenDB(dbDir,
-			badger.WithLogger(dkvLogger),
-			badger.WithSyncWrites(),
-			badger.WithStats(statsCli),
-			badger.WithoutDBInternalLogging())
+		var badgerDb badger.DB
+		var err error
+		if disklessMode {
+			badgerDb, err = badger.OpenInMemDB(
+				badger.WithLogger(dkvLogger),
+				badger.WithStats(statsCli))
+		} else {
+			badgerDb, err = badger.OpenDB(dbDir,
+				badger.WithLogger(dkvLogger),
+				badger.WithSyncWrites(),
+				badger.WithStats(statsCli))
+		}
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}

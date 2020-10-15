@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dgraph-io/badger"
-	badger_pb "github.com/dgraph-io/badger/pb"
+	"github.com/dgraph-io/badger/v2"
+	badger_pb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/flipkart-incubator/dkv/internal/server/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
@@ -47,6 +47,17 @@ func TestPutAndGet(t *testing.T) {
 		} else if string(results[0]) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, results[0])
 		}
+	}
+}
+
+func TestInMemPutAndGet(t *testing.T) {
+	if kvs, err := OpenInMemDB(); err != nil {
+		t.Fatalf("Unable to open Badger with in-memory mode. Error: %v", err)
+	} else {
+		numTrxns := 50
+		keyPrefix, valPrefix := "brKey", "brVal"
+		putKeys(t, kvs, numTrxns, keyPrefix, valPrefix)
+		getKeys(t, kvs, numTrxns, keyPrefix, valPrefix)
 	}
 }
 
@@ -87,7 +98,7 @@ func TestMultiGet(t *testing.T) {
 		}
 	}
 
-	checkGetResults(t, keys, vals)
+	checkGetResults(t, store, keys, vals)
 }
 
 func TestMissingGet(t *testing.T) {
@@ -98,7 +109,13 @@ func TestMissingGet(t *testing.T) {
 }
 
 func TestSaveChangesForPutAndDelete(t *testing.T) {
-	if chngNum, err := store.GetLatestAppliedChangeNumber(); err != nil {
+	testSaveChangesForPutAndDelete(t, store)
+	inMemStore, _ := OpenInMemDB()
+	testSaveChangesForPutAndDelete(t, inMemStore)
+}
+
+func testSaveChangesForPutAndDelete(t *testing.T, bdb DB) {
+	if chngNum, err := bdb.GetLatestAppliedChangeNumber(); err != nil {
 		t.Error(err)
 	} else {
 		numChngs, keyPref, valPref := 10, "KSC_", "VSC_"
@@ -109,14 +126,14 @@ func TestSaveChangesForPutAndDelete(t *testing.T) {
 			vs[i] = []byte(fmt.Sprintf("%s%d", valPref, i))
 			chngRecs[i] = newPutChange(chngNum+uint64(i+1), ks[i], vs[i])
 		}
-		if appldChng, err := store.SaveChanges(chngRecs); err != nil {
+		if appldChng, err := bdb.SaveChanges(chngRecs); err != nil {
 			t.Error(err)
 		} else {
 			actNumChngs := int(appldChng - chngNum)
 			if actNumChngs != numChngs {
 				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", numChngs, actNumChngs)
 			} else {
-				checkGetResults(t, ks, vs)
+				checkGetResults(t, bdb, ks, vs)
 			}
 		}
 		chngNum = chngNum + uint64(numChngs)
@@ -125,22 +142,28 @@ func TestSaveChangesForPutAndDelete(t *testing.T) {
 		for i := 0; i < delNumChngs; i++ {
 			delChngRecs[i] = newDelChange(chngNum+uint64(i+1), ks[i])
 		}
-		if appldChng, err := store.SaveChanges(delChngRecs); err != nil {
+		if appldChng, err := bdb.SaveChanges(delChngRecs); err != nil {
 			t.Error(err)
 		} else {
 			actNumChngs := int(appldChng - chngNum)
 			if actNumChngs != delNumChngs {
 				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", delNumChngs, actNumChngs)
 			} else {
-				checkMissingGetResults(t, ks[:actNumChngs])
-				checkGetResults(t, ks[actNumChngs:], vs[actNumChngs:])
+				checkMissingGetResults(t, bdb, ks[:actNumChngs])
+				checkGetResults(t, bdb, ks[actNumChngs:], vs[actNumChngs:])
 			}
 		}
 	}
 }
 
 func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
-	if chngNum, err := store.GetLatestAppliedChangeNumber(); err != nil {
+	testSaveChangesForInterleavedPutAndDelete(t, store)
+	inMemStore, _ := OpenInMemDB()
+	testSaveChangesForInterleavedPutAndDelete(t, inMemStore)
+}
+
+func testSaveChangesForInterleavedPutAndDelete(t *testing.T, bdb DB) {
+	if chngNum, err := bdb.GetLatestAppliedChangeNumber(); err != nil {
 		t.Error(err)
 	} else {
 		numChngs, keyPref, valPref := 4, "KISC_", "VISC_"
@@ -156,7 +179,7 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 				chngRecs[i] = newDelChange(chngNum+uint64(i+1), ks[j-1])
 			}
 		}
-		if appldChng, err := store.SaveChanges(chngRecs); err != nil {
+		if appldChng, err := bdb.SaveChanges(chngRecs); err != nil {
 			t.Error(err)
 		} else {
 			actNumChngs := int(appldChng - chngNum)
@@ -164,7 +187,7 @@ func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 				t.Errorf("Mismatch in the expected number of changes. Expected: %d, Actual: %d", numChngs, actNumChngs)
 			} else {
 				// As 'even' change records add keys and 'odd' ones remove the previous key, we expect no keys to be present
-				checkMissingGetResults(t, ks)
+				checkMissingGetResults(t, bdb, ks)
 			}
 		}
 	}
@@ -185,21 +208,44 @@ func TestRestoreFileValidity(t *testing.T) {
 func TestBackupAndRestore(t *testing.T) {
 	numTrxns := 50
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, store, numTrxns, keyPrefix, valPrefix)
 
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "badger.bak")
 	if err := store.BackupTo(backupPath); err != nil {
 		t.Fatal(err)
 	} else {
 		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
-		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
+		putKeys(t, store, numTrxns, missKeyPrefix, missValPrefix)
 		store.Close()
 		if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 			t.Fatal(err)
 		} else {
 			store = st.(*badgerDB)
-			getKeys(t, numTrxns, keyPrefix, valPrefix)
-			noKeys(t, numTrxns, missKeyPrefix)
+			getKeys(t, store, numTrxns, keyPrefix, valPrefix)
+			noKeys(t, store, numTrxns, missKeyPrefix)
+		}
+	}
+}
+
+func TestBackupAndRestoreForInMemBadger(t *testing.T) {
+	bdb, _ := OpenInMemDB()
+	numTrxns := 50
+	keyPrefix, valPrefix := "brKey", "brVal"
+	putKeys(t, bdb, numTrxns, keyPrefix, valPrefix)
+
+	backupPath := fmt.Sprintf("%s/%s", dbFolder, "badger_in_mem.bak")
+	if err := bdb.BackupTo(backupPath); err != nil {
+		t.Fatal(err)
+	} else {
+		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
+		putKeys(t, bdb, numTrxns, missKeyPrefix, missValPrefix)
+		bdb.Close()
+		if st, _, _, _, err := bdb.RestoreFrom(backupPath); err != nil {
+			t.Fatal(err)
+		} else {
+			bdb = st.(*badgerDB)
+			getKeys(t, bdb, numTrxns, keyPrefix, valPrefix)
+			noKeys(t, bdb, numTrxns, missKeyPrefix)
 		}
 	}
 }
@@ -207,20 +253,20 @@ func TestBackupAndRestore(t *testing.T) {
 func TestGetPutSnapshot(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1, newValPrefix1 := "firSnapKey", "firSnapVal", "newFirSnapVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, store, numTrxns, keyPrefix1, valPrefix1)
 
 	if snap, err := store.GetSnapshot(); err != nil {
 		t.Fatal(err)
 	} else {
-		putKeys(t, numTrxns, keyPrefix1, newValPrefix1)
+		putKeys(t, store, numTrxns, keyPrefix1, newValPrefix1)
 		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
-		putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+		putKeys(t, store, numTrxns, keyPrefix2, valPrefix2)
 
 		if err := store.PutSnapshot(snap); err != nil {
 			t.Fatal(err)
 		} else {
-			getKeys(t, numTrxns, keyPrefix1, valPrefix1)
-			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+			getKeys(t, store, numTrxns, keyPrefix1, valPrefix1)
+			getKeys(t, store, numTrxns, keyPrefix2, valPrefix2)
 		}
 	}
 }
@@ -228,7 +274,7 @@ func TestGetPutSnapshot(t *testing.T) {
 func TestIterationUsingStream(t *testing.T) {
 	numTrxns := 100
 	keyPrefix, valPrefix := "firKey", "firVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, store, numTrxns, keyPrefix, valPrefix)
 
 	actCnt := 0
 	strm := store.db.NewStream()
@@ -254,11 +300,11 @@ func TestIterationUsingStream(t *testing.T) {
 func TestIteratorPrefixScan(t *testing.T) {
 	numTrxns := 3
 	keyPrefix1, valPrefix1 := "aaPrefixKey", "aaPrefixVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, store, numTrxns, keyPrefix1, valPrefix1)
 	keyPrefix2, valPrefix2 := "bbPrefixKey", "bbPrefixVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, store, numTrxns, keyPrefix2, valPrefix2)
 	keyPrefix3, valPrefix3 := "ccPrefixKey", "ccPrefixVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+	putKeys(t, store, numTrxns, keyPrefix3, valPrefix3)
 
 	prefix := []byte("bbPrefix")
 	itOpts, err := storage.NewIteratorOptions(
@@ -289,11 +335,11 @@ func TestIteratorPrefixScan(t *testing.T) {
 func TestIteratorFromStartKey(t *testing.T) {
 	numTrxns := 3
 	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, store, numTrxns, keyPrefix1, valPrefix1)
 	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, store, numTrxns, keyPrefix2, valPrefix2)
 	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+	putKeys(t, store, numTrxns, keyPrefix3, valPrefix3)
 
 	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
 	itOpts, err := storage.NewIteratorOptions(
@@ -326,7 +372,7 @@ func TestIteratorFromStartKey(t *testing.T) {
 func TestIterationUsingIterator(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1 := "firKey", "firVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, store, numTrxns, keyPrefix1, valPrefix1)
 
 	txn := store.db.NewTransaction(false)
 	defer txn.Discard()
@@ -335,7 +381,7 @@ func TestIterationUsingIterator(t *testing.T) {
 	defer it.Close()
 
 	keyPrefix2, valPrefix2 := "secKey", "secVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, store, numTrxns, keyPrefix2, valPrefix2)
 
 	actCnt := 0
 	for it.Rewind(); it.Valid(); it.Next() {
@@ -363,7 +409,7 @@ func TestIterationUsingIterator(t *testing.T) {
 func TestPreventParallelBackups(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, store, numTrxns, keyPrefix, valPrefix)
 
 	parallelism := 5
 	var succ, fail uint32
@@ -394,7 +440,7 @@ func TestPreventParallelBackups(t *testing.T) {
 func TestPreventParallelRestores(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, store, numTrxns, keyPrefix, valPrefix)
 	backupPath := fmt.Sprintf("%s/%s.bak", dbFolder, "test_backup")
 	if err := store.BackupTo(backupPath); err != nil {
 		t.Fatal(err)
@@ -487,7 +533,7 @@ func BenchmarkStreamBasedIteration(b *testing.B) {
 	b.ResetTimer()
 	numTrxns := b.N
 	keyPrefix, valPrefix := "strmBenchKey", "strmBenchVal"
-	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	data := putKeys(b, store, numTrxns, keyPrefix, valPrefix)
 	b.StartTimer()
 
 	actCnt := 0
@@ -516,7 +562,7 @@ func BenchmarkIteratorBasedIteration(b *testing.B) {
 	b.ResetTimer()
 	numTrxns := b.N
 	keyPrefix, valPrefix := "benchKey", "benchVal"
-	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	data := putKeys(b, store, numTrxns, keyPrefix, valPrefix)
 	b.StartTimer()
 
 	txn := store.db.NewTransaction(false)
@@ -543,8 +589,8 @@ func BenchmarkIteratorBasedIteration(b *testing.B) {
 	}
 }
 
-func checkGetResults(t *testing.T, ks, expVs [][]byte) {
-	if results, err := store.Get(ks...); err != nil {
+func checkGetResults(t *testing.T, bdb storage.KVStore, ks, expVs [][]byte) {
+	if results, err := bdb.Get(ks...); err != nil {
 		t.Error(err)
 	} else {
 		for i, result := range results {
@@ -555,19 +601,19 @@ func checkGetResults(t *testing.T, ks, expVs [][]byte) {
 	}
 }
 
-func noKeys(t *testing.T, numKeys int, keyPrefix string) {
+func noKeys(t *testing.T, bdb storage.KVStore, numKeys int, keyPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key := fmt.Sprintf("%s_%d", keyPrefix, i)
-		if _, err := store.Get([]byte(key)); err == nil {
+		if _, err := bdb.Get([]byte(key)); err == nil {
 			t.Fatalf("Expected missing key. Key: %s", key)
 		}
 	}
 }
 
-func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
+func getKeys(t *testing.T, bdb storage.KVStore, numKeys int, keyPrefix, valPrefix string) {
 	for i := 1; i <= numKeys; i++ {
 		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if readResults, err := store.Get([]byte(key)); err != nil {
+		if readResults, err := bdb.Get([]byte(key)); err != nil {
 			t.Errorf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(readResults[0]) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
@@ -575,14 +621,14 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
-func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string) map[string]string {
+func putKeys(t testing.TB, bdb storage.KVStore, numKeys int, keyPrefix, valPrefix string) map[string]string {
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := store.Put([]byte(k), []byte(v)); err != nil {
+		if err := bdb.Put([]byte(k), []byte(v)); err != nil {
 			t.Fatal(err)
 		} else {
-			if readResults, err := store.Get([]byte(k)); err != nil {
+			if readResults, err := bdb.Get([]byte(k)); err != nil {
 				t.Fatal(err)
 			} else if string(readResults[0]) != string(v) {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
@@ -594,9 +640,9 @@ func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string) map[string]
 	return data
 }
 
-func checkMissingGetResults(t *testing.T, ks [][]byte) {
+func checkMissingGetResults(t *testing.T, bdb storage.KVStore, ks [][]byte) {
 	for _, k := range ks {
-		if result, err := store.Get(k); err == nil {
+		if result, err := bdb.Get(k); err == nil {
 			t.Errorf("Expected missing entry for key: %s. But instead found value: %s", k, result)
 		}
 	}
