@@ -143,6 +143,7 @@ func validateFlags() {
 }
 
 func setupAccessLogger() {
+	accessLogger = zap.NewNop()
 	if dbAccessLog != "" {
 		accessLoggerConfig := zap.Config{
 			Level:         zap.NewAtomicLevelAt(zap.InfoLevel),
@@ -169,7 +170,6 @@ func setupAccessLogger() {
 		}
 		if lg, err := accessLoggerConfig.Build(); err != nil {
 			log.Printf("[WARN] Unable to configure access logger. Error: %v\n", err)
-			accessLogger = zap.NewNop()
 		} else {
 			accessLogger = lg
 		}
