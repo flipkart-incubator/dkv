@@ -251,6 +251,9 @@ $ ./bin/dkvsrv \
 This mode may provide better performance for reads and is also useful for deployments
 that are cache-like having optional durability requirements.
 
+## Documentation
+Detailed documentation on specific features, design principles, data guarantees etc. can be found in the [dkv Wiki](https://github.com/flipkart-incubator/dkv/wiki)
+
 ## Testing
 
 If you want to execute tests inside DKV, run this command:
