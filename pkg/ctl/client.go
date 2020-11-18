@@ -129,16 +129,19 @@ func (dkvClnt *DKVClient) RemoveReplica(replicaAddr, zone string) error {
 // GetReplicas retrieves all the replica from master in host:port
 // format using the underlying GRPC GetReplicas method. This is a
 // convenience wrapper.
-func (dkvClnt *DKVClient) GetReplicas(zone string) []string {
+func (dkvClnt *DKVClient) GetReplicas(zone string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	res, _ := dkvClnt.dkvReplCli.GetReplicas(ctx, &serverpb.GetReplicasRequest{Zone: zone})
+	res, err := dkvClnt.dkvReplCli.GetReplicas(ctx, &serverpb.GetReplicasRequest{Zone: zone})
+	if err != nil {
+		return nil, err
+	}
 	var replicas []string
 	for _, replica := range res.Replicas {
 		repl := fmt.Sprintf("%s:%d", replica.Hostname, replica.Port)
 		replicas = append(replicas, repl)
 	}
-	return replicas
+	return replicas, nil
 }
 
 // Backup backs up the entire keyspace into the given filesystem

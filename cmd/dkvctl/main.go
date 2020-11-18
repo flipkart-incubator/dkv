@@ -174,9 +174,12 @@ func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
 		if len(cmdArgs) > 0 {
 			zone = cmdArgs[0]
 		}
-		repls := client.GetReplicas(zone)
-		for _, repl := range repls {
-			fmt.Println(repl)
+		if repls, err := client.GetReplicas(zone); err != nil {
+			fmt.Printf("Unable to fetch replicas. Error: %v\n", err)
+		} else {
+			for _, repl := range repls {
+				fmt.Println(repl)
+			}
 		}
 	default:
 		c.usage()

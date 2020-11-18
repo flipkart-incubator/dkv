@@ -138,7 +138,10 @@ func verifyAddRemoveReplicas(t *testing.T, zone string, replicas []string) {
 			t.Fatalf("Unable to add replica %s. Error: %v", replica, err)
 		}
 	}
-	repls := dkvCli.GetReplicas(zone)
+	repls, err := dkvCli.GetReplicas(zone)
+	if err != nil {
+		t.Fatalf("Unable to fetch replicas. Error: %v", err)
+	}
 	if !reflect.DeepEqual(repls, replicas) {
 		t.Errorf("Expected %q replicas but got %q", replicas, repls)
 	}
@@ -147,7 +150,10 @@ func verifyAddRemoveReplicas(t *testing.T, zone string, replicas []string) {
 		t.Fatalf("Unable to remove replica %s. Error: %v", replicas[0], err)
 	}
 
-	repls = dkvCli.GetReplicas(zone)
+	repls, err = dkvCli.GetReplicas(zone)
+	if err != nil {
+		t.Fatalf("Unable to fetch replicas. Error: %v", err)
+	}
 	replicas = replicas[1:]
 	if !reflect.DeepEqual(repls, replicas) {
 		t.Errorf("Expected %q replicas but got %q", replicas, repls)
@@ -159,7 +165,10 @@ func verifyAddRemoveReplicas(t *testing.T, zone string, replicas []string) {
 		}
 	}
 
-	repls = dkvCli.GetReplicas(zone)
+	repls, err = dkvCli.GetReplicas(zone)
+	if err != nil {
+		t.Fatalf("Unable to fetch replicas. Error: %v", err)
+	}
 	if len(repls) > 0 {
 		t.Errorf("Expected no replicas but got %q", repls)
 	}
