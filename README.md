@@ -93,6 +93,9 @@ bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set hello world
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
 world
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -iter "*"
+foo => bar
+hello => world
 ```
 
 ### Launching the DKV server for synchronous replication

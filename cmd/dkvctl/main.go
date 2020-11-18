@@ -22,7 +22,7 @@ type cmd struct {
 var cmds = []*cmd{
 	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, ""},
 	{"get", "<key>", "Get value for the given key", (*cmd).get, ""},
-	{"iter", "<prefix> [<startKey>] | *", "Iterate the keyspace. Use * for all keys", (*cmd).iter, ""},
+	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, ""},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
 	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
