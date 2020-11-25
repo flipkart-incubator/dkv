@@ -230,7 +230,7 @@ func pollForDKVReplicas(tckr *time.Ticker, snapshotCache cache.SnapshotCache, cl
 	snapVersion := 0
 	dkvClusters := []types.Resource{makeCluster()}
 	dkvLstnrs := []types.Resource{makeHTTPListener("listener_0", 10000)}
-	snapshot := cache.NewSnapshot("", nil, dkvClusters, nil, dkvLstnrs, nil)
+	snapshot := cache.NewSnapshot("", nil, nil, nil, nil, nil)
 	var oldRepls []string
 	for range tckr.C {
 		var newRepls []string
@@ -246,6 +246,8 @@ func pollForDKVReplicas(tckr *time.Ticker, snapshotCache cache.SnapshotCache, cl
 			replEndPoints := []types.Resource{makeEndpoint(clusterName, newRepls...)}
 			snapVersion++
 			snapshot.Resources[types.Endpoint] = cache.NewResources(strconv.Itoa(snapVersion), replEndPoints)
+			snapshot.Resources[types.Cluster] = cache.NewResources(strconv.Itoa(snapVersion), dkvClusters)
+			snapshot.Resources[types.Listener] = cache.NewResources(strconv.Itoa(snapVersion), dkvLstnrs)
 			if err := snapshotCache.SetSnapshot(nodeName, snapshot); err != nil {
 				lgr.Panicf("Unable to set snapshot. Error: %v", err)
 			} else {
