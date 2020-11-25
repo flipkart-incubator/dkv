@@ -123,7 +123,8 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 	reflection.Register(grpcServer)
 	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, server)
 	api.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
-	api.RegisterClusterDiscoveryServiceServer(grpcServer, server)
+	listener.RegisterListenerDiscoveryServiceServer(grpcServer, server)
+	cluster.RegisterClusterDiscoveryServiceServer(grpcServer, server)
 	lis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		lgr.Panicf("Unable to create listener for xDS GRPC service. Error: %v", err)
