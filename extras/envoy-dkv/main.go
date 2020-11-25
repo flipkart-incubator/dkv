@@ -19,15 +19,21 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	api "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	cluster "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	listener "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	listenerv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
+	route "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	hcm "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v2"
 	xds "github.com/envoyproxy/go-control-plane/pkg/server/v2"
 	"github.com/envoyproxy/go-control-plane/pkg/test/resource/v2"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
+	"github.com/golang/protobuf/ptypes"
 )
 
 // go build -o envoy-dkv ../envoy-dkv
@@ -40,6 +46,14 @@ var (
 	pollInterval  time.Duration
 	clusterName   string
 	nodeName      string
+)
+
+const (
+	connectTimeout = 15 * time.Second
+	xdsCluster     = "xds_cluster"
+	envoyRouter    = "envoy.router"
+	localhost      = "127.0.0.1"
+	envoyHCM       = "envoy.http_connection_manager"
 )
 
 func init() {
@@ -140,10 +154,82 @@ func closeClients(clis []*ctl.DKVClient) {
 	}
 }
 
+func makeCluster() types.Resource {
+	dkvClus := resource.MakeCluster(resource.Xds, clusterName)
+	dkvClus.ConnectTimeout = ptypes.DurationProto(connectTimeout)
+	dkvClus.ClusterDiscoveryType = &cluster.Cluster_Type{Type: cluster.Cluster_EDS}
+	dkvClus.Http2ProtocolOptions = new(core.Http2ProtocolOptions)
+	dkvClus.LbPolicy = cluster.Cluster_ROUND_ROBIN
+	return dkvClus
+}
+
+func makeHTTPListener(listenerName string, port uint32) *listener.Listener {
+	// HTTP filter configuration
+	manager := &hcm.HttpConnectionManager{
+		CodecType:  hcm.HttpConnectionManager_AUTO,
+		StatPrefix: "ingress_http",
+		// For dynamic routes, use HttpConnectionManager_Rds
+		RouteSpecifier: &hcm.HttpConnectionManager_RouteConfig{
+			RouteConfig: &api.RouteConfiguration{
+				Name: "local_route",
+				VirtualHosts: []*route.VirtualHost{{
+					Name:    "local_service",
+					Domains: []string{"*"},
+					Routes: []*route.Route{{
+						Match: &route.RouteMatch{
+							PathSpecifier: &route.RouteMatch_Prefix{
+								Prefix: "/",
+							},
+						},
+						Action: &route.Route_Route{
+							Route: &route.RouteAction{
+								ClusterSpecifier: &route.RouteAction_Cluster{
+									Cluster: clusterName,
+								},
+							},
+						},
+					}},
+				}},
+			},
+		},
+		HttpFilters: []*hcm.HttpFilter{{
+			Name: envoyRouter,
+		}},
+	}
+	pbst, err := ptypes.MarshalAny(manager)
+	if err != nil {
+		panic(err)
+	}
+
+	return &listener.Listener{
+		Name: listenerName,
+		Address: &core.Address{
+			Address: &core.Address_SocketAddress{
+				SocketAddress: &core.SocketAddress{
+					Protocol: core.SocketAddress_TCP,
+					Address:  localhost,
+					PortSpecifier: &core.SocketAddress_PortValue{
+						PortValue: port,
+					},
+				},
+			},
+		},
+		FilterChains: []*listenerv2.FilterChain{{
+			Filters: []*listenerv2.Filter{{
+				Name: envoyHCM,
+				ConfigType: &listenerv2.Filter_TypedConfig{
+					TypedConfig: pbst,
+				},
+			}},
+		}},
+	}
+}
+
 func pollForDKVReplicas(tckr *time.Ticker, snapshotCache cache.SnapshotCache, clis ...*ctl.DKVClient) {
 	snapVersion := 0
-	dkvClusters := []types.Resource{resource.MakeCluster(resource.Ads, clusterName)}
-	snapshot := cache.NewSnapshot("", nil, dkvClusters, nil, nil, nil)
+	dkvClusters := []types.Resource{makeCluster()}
+	dkvLstnrs := []types.Resource{makeHTTPListener("listener_0", 10000)}
+	snapshot := cache.NewSnapshot("", nil, dkvClusters, nil, dkvLstnrs, nil)
 	var oldRepls []string
 	for range tckr.C {
 		var newRepls []string
