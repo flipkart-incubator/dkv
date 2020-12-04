@@ -51,5 +51,4 @@ crashlytics-build.properties
 
 .DS_Store
 bin/
-envoy-dkv
 
