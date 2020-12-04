@@ -1,6 +1,7 @@
 package org.dkv.client;
 
 import dkv.serverpb.Api;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -11,13 +12,13 @@ import static org.junit.Assert.assertEquals;
 
 public class DKVClientTest {
 
-    private static final String DKV_HOST = "localhost";
-    private static final int DKV_PORT = 8080;
-    private DKVClient dkvCli;
+    private static final String AUTHORITY = "dkv-master";
+    private static final String DKV_TARGET = "127.0.0.1:8080";
+    private DKVClientImpl dkvCli;
 
     @Before
     public void setUp() {
-        dkvCli = new DKVClientImpl(DKV_HOST, DKV_PORT);
+        dkvCli = new DKVClientImpl(DKV_TARGET, AUTHORITY);
     }
 
     @Test
@@ -70,12 +71,17 @@ public class DKVClientTest {
         assertEquals(numKeys * 3, startIdx-1);
     }
 
+    @After
+    public void tearDown() {
+        dkvCli.close();
+    }
+
     private void assertValues(String keyPref, String[] keys, String[] vals) {
         assertEquals("Incorrect number of values from MultiGet", keys.length, vals.length);
         for (String val : vals) {
             String[] vs = val.split("_");
             assertEquals(2, vs.length);
-            Integer idx = Integer.valueOf(vs[1]);
+            int idx = Integer.parseInt(vs[1]);
             assertEquals(format("Incorrect key for value: %s", val), keys[idx-1], format("%s%d", keyPref, idx));
         }
     }

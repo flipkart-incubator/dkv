@@ -2,6 +2,7 @@ package org.dkv.client;
 
 import dkv.serverpb.Api;
 
+import java.io.Closeable;
 import java.util.Iterator;
 
 /**
@@ -12,7 +13,7 @@ import java.util.Iterator;
  * @see DKVClientImpl
  * @see DKVException
  */
-public interface DKVClient {
+public interface DKVClient extends Closeable {
     /**
      * Associates the specified value with the specified key
      * inside DKV database. If this association already exists

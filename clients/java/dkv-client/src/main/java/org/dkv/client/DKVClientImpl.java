@@ -52,6 +52,96 @@ public class DKVClientImpl implements DKVClient {
         blockingStub = DKVGrpc.newBlockingStub(channel);
     }
 
+    /**
+     * Creates an instance with the underlying GRPC conduit to the DKV database
+     * running on the specified <tt>dkvHost</tt> and <tt>dkPort</tt>. Currently
+     * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
+     * implementations will support additional options for securing these exchanges.
+     *
+     * <tt>authority</tt> parameter can be used to send a user defined value inside
+     * the HTTP/2 authority psuedo header as defined by
+     * <a href="https://tools.ietf.org/html/rfc7540">RFC 7540</a>. A typical use case
+     * for setting this parameter is the virtual host based routing to upstream DKV
+     * clusters via an HTTP proxy such as NGINX or Envoy.
+     *
+     * @param dkvHost host on which DKV database is running
+     * @param dkvPort port the DKV database is listening on
+     * @param authority value to be sent inside the HTTP/2 authority header
+     * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
+     * is invalid
+     * @throws RuntimeException in case of any connection failures
+     */
+    public DKVClientImpl(String dkvHost, int dkvPort, String authority) {
+        if (dkvHost == null || dkvHost.trim().length() == 0) {
+            throw new IllegalArgumentException("Valid DKV hostname must be provided");
+        }
+
+        if (authority == null || authority.trim().length() == 0) {
+            throw new IllegalArgumentException("Valid authority must be provided");
+        }
+
+        if (dkvPort <= 0) {
+            throw new IllegalArgumentException("Valid DKV port must be provided");
+        }
+
+        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext().overrideAuthority(authority);
+        ManagedChannel channel = channelBuilder.build();
+        blockingStub = DKVGrpc.newBlockingStub(channel);
+    }
+
+    /**
+     * Creates an instance with the underlying GRPC conduit to the DKV database
+     * running on the specified <tt>dkvTarget</tt>. Currently
+     * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
+     * implementations will support additional options for securing these exchanges.
+     *
+     * @param dkvTarget location (in the form host:port) at which DKV database is running
+     * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
+     * is invalid
+     * @throws RuntimeException in case of any connection failures
+     */
+    public DKVClientImpl(String dkvTarget) {
+        if (dkvTarget == null || dkvTarget.trim().length() == 0) {
+            throw new IllegalArgumentException("Valid DKV hostname must be provided");
+        }
+
+        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext();
+        ManagedChannel channel = channelBuilder.build();
+        blockingStub = DKVGrpc.newBlockingStub(channel);
+    }
+
+    /**
+     * Creates an instance with the underlying GRPC conduit to the DKV database
+     * running on the specified <tt>dkvTarget</tt>. Currently
+     * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
+     * implementations will support additional options for securing these exchanges.
+     *
+     * <tt>authority</tt> parameter can be used to send a user defined value inside
+     * the HTTP/2 authority psuedo header as defined by
+     * <a href="https://tools.ietf.org/html/rfc7540">RFC 7540</a>. A typical use case
+     * for setting this parameter is the virtual host based routing to upstream DKV
+     * clusters via an HTTP proxy such as NGINX or Envoy.
+     *
+     * @param dkvTarget location (in the form host:port) at which DKV database is running
+     * @param authority value to be sent inside the HTTP/2 authority header
+     * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
+     * is invalid
+     * @throws RuntimeException in case of any connection failures
+     */
+    public DKVClientImpl(String dkvTarget, String authority) {
+        if (dkvTarget == null || dkvTarget.trim().length() == 0) {
+            throw new IllegalArgumentException("Valid DKV target (host:port) must be provided");
+        }
+
+        if (authority == null || authority.trim().length() == 0) {
+            throw new IllegalArgumentException("Valid authority must be provided");
+        }
+
+        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext().overrideAuthority(authority);
+        ManagedChannel channel = channelBuilder.build();
+        blockingStub = DKVGrpc.newBlockingStub(channel);
+    }
+
     public void put(String key, String value) {
         put(ByteString.copyFromUtf8(key), ByteString.copyFromUtf8(value));
     }
@@ -120,6 +210,11 @@ public class DKVClientImpl implements DKVClient {
         Iterator<Api.IterateResponse> iterRes = iterate(
                 ByteString.copyFrom(startKey), ByteString.copyFrom(keyPref));
         return new DKVEntryIterator(iterRes);
+    }
+
+    @Override
+    public void close() {
+        ((ManagedChannel) blockingStub.getChannel()).shutdownNow();
     }
 
     private Iterator<Api.IterateResponse> iterate(ByteString startKey, ByteString keyPref) {
