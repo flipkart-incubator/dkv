@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 var (
@@ -218,6 +219,7 @@ func newGrpcServerListener() (*grpc.Server, net.Listener) {
 		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
 		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
 	)
+	reflection.Register(grpcSrvr)
 	return grpcSrvr, newListener()
 }
 
