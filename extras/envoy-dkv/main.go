@@ -52,7 +52,6 @@ func init() {
 	flag.StringVar(&configPath, "config", "", "Path to the config JSON file with Envoy xDS configuration")
 	flag.StringVar(&listenAddr, "listenAddr", "", "Address (host:port) to bind for Envoy xDS")
 	flag.DurationVar(&pollInterval, "pollInterval", 5*time.Second, "Polling interval for checking config updates")
-	flag.Usage = customUsage
 }
 
 func main() {
@@ -403,12 +402,12 @@ func readClusters(shrd string, kvs map[string]interface{}) (clusters []string, e
 
 func validateFlags() {
 	if configPath == "" || strings.TrimSpace(configPath) == "" {
-		customUsage()
+		flag.Usage()
 		os.Exit(1)
 	}
 
 	if listenAddr == "" || strings.TrimSpace(listenAddr) == "" {
-		customUsage()
+		flag.Usage()
 		os.Exit(1)
 	}
 }
@@ -435,26 +434,4 @@ func setupSignalHandler() <-chan os.Signal {
 	stopChan := make(chan os.Signal, len(signals))
 	signal.Notify(stopChan, signals...)
 	return stopChan
-}
-
-func customUsage() {
-	fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
-	flag.VisitAll(func(flg *flag.Flag) {
-		if !strings.HasPrefix(flg.Name, "ginkgo") {
-			s := fmt.Sprintf("  -%s", flg.Name)
-			name, usage := flag.UnquoteUsage(flg)
-			if len(name) > 0 {
-				s += " " + name
-			}
-			if len(s) <= 4 {
-				s += "\t"
-			} else {
-				s += "\n    \t"
-			}
-			s += strings.ReplaceAll(usage, "\n", "\n    \t")
-			s += fmt.Sprintf(" (default %q)", flg.DefValue)
-
-			fmt.Fprint(flag.CommandLine.Output(), s, "\n")
-		}
-	})
 }
