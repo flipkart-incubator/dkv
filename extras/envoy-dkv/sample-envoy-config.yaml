@@ -1,6 +1,6 @@
 node:
-	id: demo
-	cluster: dkv-demo
+  id: local-group
+  cluster: local
 
 admin:
   access_log_path: /tmp/admin_access.log
@@ -8,18 +8,18 @@ admin:
     socket_address: { address: 127.0.0.1, port_value: 9901 }
 
 dynamic_resources:
-	lds_config:
-		api_config_source:
-			api_type: GRPC
-			grpc_services:
-				- envoy_grpc:
-					  cluster_name: xds_cluster
-	cds_config:
-		api_config_source:
-			api_type: GRPC
-			grpc_services:
-				- envoy_grpc:
-					  cluster_name: xds_cluster
+  lds_config:
+    api_config_source:
+      api_type: GRPC
+      grpc_services:
+        - envoy_grpc:
+            cluster_name: xds_cluster
+  cds_config:
+    api_config_source:
+      api_type: GRPC
+      grpc_services:
+        - envoy_grpc:
+            cluster_name: xds_cluster
 
 static_resources:
   clusters:
@@ -38,4 +38,4 @@ static_resources:
             address:
               socket_address:
                 address: 127.0.0.1
-                port_value: 9090
+                port_value: 7979
