@@ -10,7 +10,7 @@ import java.util.Iterator;
  * expected to throw {@link DKVException} in case of any failures
  * while handling these calls.
  *
- * @see DKVClientImpl
+ * @see SimpleDKVClient
  * @see DKVException
  */
 public interface DKVClient extends Closeable {
@@ -168,4 +168,7 @@ public interface DKVClient extends Closeable {
      * @see DKVEntry
      */
     Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref);
+
+    @Override
+    void close();
 }

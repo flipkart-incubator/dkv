@@ -23,7 +23,7 @@ import java.util.List;
  * @see DKVClient
  * @see DKVException
  */
-public class DKVClientImpl implements DKVClient {
+public class SimpleDKVClient implements DKVClient {
     private final DKVGrpc.DKVBlockingStub blockingStub;
 
     /**
@@ -38,7 +38,7 @@ public class DKVClientImpl implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public DKVClientImpl(String dkvHost, int dkvPort) {
+    public SimpleDKVClient(String dkvHost, int dkvPort) {
         if (dkvHost == null || dkvHost.trim().length() == 0) {
             throw new IllegalArgumentException("Valid DKV hostname must be provided");
         }
@@ -71,7 +71,7 @@ public class DKVClientImpl implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public DKVClientImpl(String dkvHost, int dkvPort, String authority) {
+    public SimpleDKVClient(String dkvHost, int dkvPort, String authority) {
         if (dkvHost == null || dkvHost.trim().length() == 0) {
             throw new IllegalArgumentException("Valid DKV hostname must be provided");
         }
@@ -100,7 +100,7 @@ public class DKVClientImpl implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public DKVClientImpl(String dkvTarget) {
+    public SimpleDKVClient(String dkvTarget) {
         if (dkvTarget == null || dkvTarget.trim().length() == 0) {
             throw new IllegalArgumentException("Valid DKV hostname must be provided");
         }
@@ -128,7 +128,7 @@ public class DKVClientImpl implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public DKVClientImpl(String dkvTarget, String authority) {
+    public SimpleDKVClient(String dkvTarget, String authority) {
         if (dkvTarget == null || dkvTarget.trim().length() == 0) {
             throw new IllegalArgumentException("Valid DKV target (host:port) must be provided");
         }
