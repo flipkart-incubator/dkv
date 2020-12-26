@@ -58,6 +58,7 @@ public class DKVShard {
     }
 
     // intended for deserialization
+    @SuppressWarnings("unused")
     private DKVShard() {
         this.name = null;
         this.host = null;

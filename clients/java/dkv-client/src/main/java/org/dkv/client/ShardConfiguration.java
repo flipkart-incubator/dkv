@@ -22,6 +22,7 @@ public class ShardConfiguration {
     }
 
     // intended for deserialization
+    @SuppressWarnings("unused")
     private ShardConfiguration() {
         this.dkvShards = null;
     }

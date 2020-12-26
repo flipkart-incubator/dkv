@@ -5,7 +5,7 @@ import org.junit.Test;
 
 import static com.google.common.collect.Iterables.size;
 import static java.lang.String.format;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class KeyHashBasedShardProviderTest {
 
