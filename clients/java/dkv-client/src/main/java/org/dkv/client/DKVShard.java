@@ -7,18 +7,18 @@ import static org.dkv.client.Utils.checkf;
 public class DKVShard {
     private static final int MAX_PORT_VALUE = 0xFFFF;
 
+    private final String name;
     private final String host;
     private final int port;
-    private final String authority;
 
-    public DKVShard(String host, int port, String authority) {
+    public DKVShard(String name, String host, int port) {
+        checkf(name != null && !name.trim().isEmpty(), IllegalArgumentException.class, "shard name must be provided");
         checkf(host != null && !host.trim().isEmpty(), IllegalArgumentException.class, "host must be provided");
         checkf(port > 0 && port <= MAX_PORT_VALUE, IllegalArgumentException.class, "given port %d is invalid", port);
-        checkf(authority != null && !authority.trim().isEmpty(), IllegalArgumentException.class, "authority must be provided");
 
+        this.name = name;
         this.host = host;
         this.port = port;
-        this.authority = authority;
     }
 
     public String getHost() {
@@ -29,8 +29,8 @@ public class DKVShard {
         return port;
     }
 
-    public String getAuthority() {
-        return authority;
+    public String getName() {
+        return name;
     }
 
     @Override
@@ -40,12 +40,12 @@ public class DKVShard {
         DKVShard dkvShard = (DKVShard) o;
         return port == dkvShard.port &&
                 host.equals(dkvShard.host) &&
-                authority.equals(dkvShard.authority);
+                name.equals(dkvShard.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(host, port, authority);
+        return Objects.hash(host, port, name);
     }
 
     @Override
@@ -53,7 +53,14 @@ public class DKVShard {
         return "DKVShard{" +
                 "host='" + host + '\'' +
                 ", port=" + port +
-                ", authority='" + authority + '\'' +
+                ", authority='" + name + '\'' +
                 '}';
+    }
+
+    // intended for deserialization
+    private DKVShard() {
+        this.name = null;
+        this.host = null;
+        this.port = -1;
     }
 }

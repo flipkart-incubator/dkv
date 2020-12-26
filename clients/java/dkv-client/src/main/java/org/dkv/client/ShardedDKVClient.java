@@ -105,7 +105,7 @@ public class ShardedDKVClient implements DKVClient {
 
     private DKVClient getDKVClient(Iterable<DKVShard> dkvShards) {
         DKVShard dkvShard = Iterables.get(dkvShards, 0);
-        dkvCliCache.computeIfAbsent(dkvShard, shard -> new SimpleDKVClient(shard.getHost(), shard.getPort(), shard.getAuthority()));
+        dkvCliCache.computeIfAbsent(dkvShard, shard -> new SimpleDKVClient(shard.getHost(), shard.getPort(), shard.getName()));
         return dkvCliCache.get(dkvShard);
     }
 
@@ -115,5 +115,4 @@ public class ShardedDKVClient implements DKVClient {
             dkvClient.close();
         }
     }
-
 }

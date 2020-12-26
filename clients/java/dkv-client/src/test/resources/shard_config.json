@@ -1,0 +1,19 @@
+{
+  "dkvShards": [
+    {
+      "name": "shard0",
+      "host": "127.0.0.1",
+      "port": 8081
+    },
+    {
+      "name": "shard1",
+      "host": "127.0.0.1",
+      "port": 8082
+    },
+    {
+      "name": "shard2",
+      "host": "127.0.0.1",
+      "port": 8083
+    }
+  ]
+}

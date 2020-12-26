@@ -120,7 +120,7 @@ func pollForConfigUpdates(tckr *time.Ticker, snapshotCache cache.SnapshotCache) 
 	}
 }
 
-func makeGRPCListener(hp hostPort, domains ...string) *listener.Listener {
+func makeGRPCListener(shrd string, hp hostPort, domains ...string) *listener.Listener {
 	vhosts := make([]*route.VirtualHost, len(domains))
 	for i, domain := range domains {
 		vhosts[i] = &route.VirtualHost{
@@ -160,6 +160,7 @@ func makeGRPCListener(hp hostPort, domains ...string) *listener.Listener {
 	}
 
 	return &listener.Listener{
+		Name: fmt.Sprintf("%s-listener", shrd),
 		Address: &core.Address{
 			Address: &core.Address_SocketAddress{
 				SocketAddress: &core.SocketAddress{
@@ -200,7 +201,7 @@ func computeSnapshot(appId string, kvs map[string]interface{}, version uint) (sn
 						err = confErr
 						break
 					} else {
-						lstnrs = append(lstnrs, makeGRPCListener(hp, clusters...))
+						lstnrs = append(lstnrs, makeGRPCListener(shrd, hp, clusters...))
 						clusts = append(clusts, makeClusters(endpoints, connectTimeouts, clusters...)...)
 					}
 				}

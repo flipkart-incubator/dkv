@@ -20,4 +20,9 @@ public class ShardConfiguration {
     public long getNumShards() {
         return dkvShards.length;
     }
+
+    // intended for deserialization
+    private ShardConfiguration() {
+        this.dkvShards = null;
+    }
 }

@@ -18,7 +18,7 @@ public class KeyHashBasedShardProviderTest {
     public void setup() {
         DKVShard[] dkvShards = new DKVShard[NUM_SHARDS];
         for (int i = 0; i < NUM_SHARDS; i++) {
-            dkvShards[i] = new DKVShard("host" + i, 1000 + i, "shard" + i);
+            dkvShards[i] = new DKVShard("shard" + i, "host" + i, 1000 + i);
         }
         ShardConfiguration shardConfiguration = new ShardConfiguration(dkvShards);
         shardProvider = new KeyHashBasedShardProvider(shardConfiguration);
