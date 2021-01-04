@@ -1,5 +1,7 @@
 package org.dkv.client;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -18,7 +20,12 @@ public class KeyHashBasedShardProviderTest {
     public void setup() {
         DKVShard[] dkvShards = new DKVShard[NUM_SHARDS];
         for (int i = 0; i < NUM_SHARDS; i++) {
-            dkvShards[i] = new DKVShard("shard" + i, "host" + i, 1000 + i);
+            DKVNode node = new DKVNode("host" + i, 1000 + i);
+            ImmutableMap<DKVOpType, DKVNodeSet> topology = ImmutableMap.of(
+                    DKVOpType.READ, new DKVNodeSet("slaves"+i, ImmutableSet.of(node)),
+                    DKVOpType.WRITE, new DKVNodeSet("masters"+i, ImmutableSet.of(node))
+            );
+            dkvShards[i] = new DKVShard("shard" + i, topology);
         }
         ShardConfiguration shardConfiguration = new ShardConfiguration(dkvShards);
         shardProvider = new KeyHashBasedShardProvider(shardConfiguration);
@@ -30,13 +37,13 @@ public class KeyHashBasedShardProviderTest {
         for (int i = 0; i < NUM_SHARDS; i++) {
             keys[i] = format("%s%d", KEY_PREFIX, i);
         }
-        Iterable<DKVShard> dkvShards = shardProvider.provideShards(DKVOpType.UNKNOWN, keys);
+        Iterable<DKVShard> dkvShards = shardProvider.provideShards(keys);
         assertEquals("Expected keys to distribute equally in all shards", NUM_SHARDS, size(dkvShards));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldValidateEmptyKeys() {
-        shardProvider.provideShards(DKVOpType.UNKNOWN, new byte[][]{});
+        shardProvider.provideShards(new byte[][]{});
     }
 
     @Test(expected = IllegalArgumentException.class)

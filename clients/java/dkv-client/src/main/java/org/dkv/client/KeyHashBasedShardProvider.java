@@ -7,6 +7,14 @@ import java.util.LinkedHashSet;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.dkv.client.Utils.checkf;
 
+/**
+ * An implementation of a shard provider that computes the
+ * relevant {@link DKVShard} based on the hash value of the
+ * respective key involved in the operation.
+ *
+ * <p>It uses the <a href="https://en.wikipedia.org/wiki/RIPEMD#RIPEMD-160_hashes">RipeMD160 algorithm</a> for computing the hash value
+ * of the given key(s).
+ */
 public class KeyHashBasedShardProvider implements ShardProvider {
     private final ShardConfiguration shardConfiguration;
 
@@ -16,7 +24,7 @@ public class KeyHashBasedShardProvider implements ShardProvider {
     }
 
     @Override
-    public Iterable<DKVShard> provideShards(DKVOpType opType, byte[]... keys) {
+    public Iterable<DKVShard> provideShards(byte[]... keys) {
         checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for providing shards");
         LinkedHashSet<DKVShard> shards = new LinkedHashSet<>();
         //noinspection ConstantConditions
@@ -29,7 +37,7 @@ public class KeyHashBasedShardProvider implements ShardProvider {
     }
 
     @Override
-    public Iterable<DKVShard> provideShards(DKVOpType opType, String... keys) {
+    public Iterable<DKVShard> provideShards(String... keys) {
         checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for providing shards");
         LinkedHashSet<DKVShard> shards = new LinkedHashSet<>();
         //noinspection ConstantConditions

@@ -17,7 +17,7 @@ import java.util.List;
  * are blocking. Users must wrap these calls around {@link DKVException} if they
  * wish to handle failures.
  *
- * This implementation has no non-final state and hence its instances are thread safe
+ * <p>This implementation has no non-final state and hence its instances are thread safe
  * for concurrent access.
  *
  * @see DKVClient
@@ -58,7 +58,7 @@ public class SimpleDKVClient implements DKVClient {
      * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
      * implementations will support additional options for securing these exchanges.
      *
-     * <tt>authority</tt> parameter can be used to send a user defined value inside
+     * <p><tt>authority</tt> parameter can be used to send a user defined value inside
      * the HTTP/2 authority psuedo header as defined by
      * <a href="https://tools.ietf.org/html/rfc7540">RFC 7540</a>. A typical use case
      * for setting this parameter is the virtual host based routing to upstream DKV
@@ -116,7 +116,7 @@ public class SimpleDKVClient implements DKVClient {
      * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
      * implementations will support additional options for securing these exchanges.
      *
-     * <tt>authority</tt> parameter can be used to send a user defined value inside
+     * <p><tt>authority</tt> parameter can be used to send a user defined value inside
      * the HTTP/2 authority psuedo header as defined by
      * <a href="https://tools.ietf.org/html/rfc7540">RFC 7540</a>. A typical use case
      * for setting this parameter is the virtual host based routing to upstream DKV
