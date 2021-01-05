@@ -21,9 +21,9 @@ public class KeyHashBasedShardProviderTest {
         DKVShard[] dkvShards = new DKVShard[NUM_SHARDS];
         for (int i = 0; i < NUM_SHARDS; i++) {
             DKVNode node = new DKVNode("host" + i, 1000 + i);
-            ImmutableMap<DKVOpType, DKVNodeSet> topology = ImmutableMap.of(
-                    DKVOpType.READ, new DKVNodeSet("slaves"+i, ImmutableSet.of(node)),
-                    DKVOpType.WRITE, new DKVNodeSet("masters"+i, ImmutableSet.of(node))
+            ImmutableMap<DKVNodeType, DKVNodeSet> topology = ImmutableMap.of(
+                    DKVNodeType.SLAVE, new DKVNodeSet("slaves"+i, ImmutableSet.of(node)),
+                    DKVNodeType.MASTER, new DKVNodeSet("masters"+i, ImmutableSet.of(node))
             );
             dkvShards[i] = new DKVShard("shard" + i, topology);
         }

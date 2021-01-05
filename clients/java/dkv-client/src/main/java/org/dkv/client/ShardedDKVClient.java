@@ -7,6 +7,7 @@ import java.util.Iterator;
 
 import static com.google.common.collect.Iterables.isEmpty;
 import static com.google.common.collect.Iterables.size;
+import static org.dkv.client.DKVNodeType.getNodeTypeByReadConsistency;
 import static org.dkv.client.Utils.checkf;
 
 /**
@@ -35,7 +36,7 @@ public class ShardedDKVClient implements DKVClient {
     public void put(String key, String value) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(key);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.WRITE, dkvShards)) {
+        try (DKVClient dkvClient = getDKVClient(dkvShards, DKVNodeType.MASTER)) {
             dkvClient.put(key, value);
         }
     }
@@ -44,7 +45,7 @@ public class ShardedDKVClient implements DKVClient {
     public void put(byte[] key, byte[] value) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(key);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given key");
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.WRITE, dkvShards)) {
+        try (DKVClient dkvClient = getDKVClient(dkvShards, DKVNodeType.MASTER)) {
             dkvClient.put(key, value);
         }
     }
@@ -53,7 +54,8 @@ public class ShardedDKVClient implements DKVClient {
     public String get(Api.ReadConsistency consistency, String key) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(key);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        DKVNodeType nodeType = getNodeTypeByReadConsistency(consistency);
+        try (DKVClient dkvClient = getDKVClient(dkvShards, nodeType)) {
             return dkvClient.get(consistency, key);
         }
     }
@@ -62,7 +64,8 @@ public class ShardedDKVClient implements DKVClient {
     public byte[] get(Api.ReadConsistency consistency, byte[] key) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(key);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given key");
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        DKVNodeType nodeType = getNodeTypeByReadConsistency(consistency);
+        try (DKVClient dkvClient = getDKVClient(dkvShards, nodeType)) {
             return dkvClient.get(consistency, key);
         }
     }
@@ -72,7 +75,8 @@ public class ShardedDKVClient implements DKVClient {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(keys);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given keys");
         checkf(size(dkvShards) == 1, UnsupportedOperationException.class, "DKV does not support cross shard multi get");
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        DKVNodeType nodeType = getNodeTypeByReadConsistency(consistency);
+        try (DKVClient dkvClient = getDKVClient(dkvShards, nodeType)) {
             return dkvClient.multiGet(consistency, keys);
         }
     }
@@ -82,7 +86,8 @@ public class ShardedDKVClient implements DKVClient {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(keys);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given keys");
         checkf(size(dkvShards) == 1, UnsupportedOperationException.class, "DKV does not support cross shard multi get");
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        DKVNodeType nodeType = getNodeTypeByReadConsistency(consistency);
+        try (DKVClient dkvClient = getDKVClient(dkvShards, nodeType)) {
             return dkvClient.multiGet(consistency, keys);
         }
     }
@@ -91,7 +96,7 @@ public class ShardedDKVClient implements DKVClient {
     public Iterator<DKVEntry> iterate(String startKey) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key: %s", startKey);
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        try (DKVClient dkvClient = getDKVClient(dkvShards, DKVNodeType.SLAVE)) {
             return dkvClient.iterate(startKey);
         }
     }
@@ -100,7 +105,7 @@ public class ShardedDKVClient implements DKVClient {
     public Iterator<DKVEntry> iterate(byte[] startKey) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key");
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        try (DKVClient dkvClient = getDKVClient(dkvShards, DKVNodeType.SLAVE)) {
             return dkvClient.iterate(startKey);
         }
     }
@@ -109,7 +114,7 @@ public class ShardedDKVClient implements DKVClient {
     public Iterator<DKVEntry> iterate(String startKey, String keyPref) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key: %s", startKey);
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        try (DKVClient dkvClient = getDKVClient(dkvShards, DKVNodeType.SLAVE)) {
             return dkvClient.iterate(startKey, keyPref);
         }
     }
@@ -118,14 +123,14 @@ public class ShardedDKVClient implements DKVClient {
     public Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key");
-        try (DKVClient dkvClient = getDKVClient(DKVOpType.READ, dkvShards)) {
+        try (DKVClient dkvClient = getDKVClient(dkvShards, DKVNodeType.SLAVE)) {
             return dkvClient.iterate(startKey, keyPref);
         }
     }
 
-    private DKVClient getDKVClient(DKVOpType opType, Iterable<DKVShard> dkvShards) {
+    private DKVClient getDKVClient(Iterable<DKVShard> dkvShards, DKVNodeType nodeType) {
         DKVShard dkvShard = Iterables.get(dkvShards, 0);
-        DKVNodeSet nodeSet = dkvShard.getNodesByOpType(opType);
+        DKVNodeSet nodeSet = dkvShard.getNodesByType(nodeType);
         DKVNode dkvNode = Iterables.get(nodeSet.getNodes(), 0);
         return new SimpleDKVClient(dkvNode.getHost(), dkvNode.getPort(), nodeSet.getName());
     }

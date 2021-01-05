@@ -11,6 +11,7 @@ import java.util.Iterator;
  * while handling these calls.
  *
  * @see SimpleDKVClient
+ * @see ShardedDKVClient
  * @see DKVException
  */
 public interface DKVClient extends Closeable {

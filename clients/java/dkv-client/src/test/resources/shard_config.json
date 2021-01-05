@@ -3,7 +3,7 @@
     {
       "name": "shard0",
       "topology": {
-        "READ": {
+        "SLAVE": {
           "name": "slaves",
           "nodes": [
             {
@@ -12,7 +12,7 @@
             }
           ]
         },
-        "WRITE": {
+        "MASTER": {
           "name": "masters",
           "nodes": [
             {
@@ -26,7 +26,7 @@
     {
       "name": "shard1",
       "topology": {
-        "READ": {
+        "SLAVE": {
           "name": "slaves",
           "nodes": [
             {
@@ -35,7 +35,7 @@
             }
           ]
         },
-        "WRITE": {
+        "MASTER": {
           "name": "masters",
           "nodes": [
             {
@@ -49,7 +49,7 @@
     {
       "name": "shard2",
       "topology": {
-        "READ": {
+        "SLAVE": {
           "name": "slaves",
           "nodes": [
             {
@@ -58,7 +58,7 @@
             }
           ]
         },
-        "WRITE": {
+        "MASTER": {
           "name": "masters",
           "nodes": [
             {

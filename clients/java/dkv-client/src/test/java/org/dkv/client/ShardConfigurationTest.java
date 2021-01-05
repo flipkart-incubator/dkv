@@ -24,13 +24,13 @@ public class ShardConfigurationTest {
             DKVShard dkvShard = shardConf.getShardAtIndex(i);
             assertEquals("shard"+i, dkvShard.getName());
 
-            DKVNodeSet readNodes = dkvShard.getNodesByOpType(DKVOpType.READ);
+            DKVNodeSet readNodes = dkvShard.getNodesByType(DKVNodeType.MASTER);
             assertEquals(1, size(readNodes.getNodes()));
             DKVNode dkvNode = getLast(readNodes.getNodes());
             assertEquals("127.0.0.1", dkvNode.getHost());
             assertEquals(8081+i, dkvNode.getPort());
 
-            DKVNodeSet writeNodes = dkvShard.getNodesByOpType(DKVOpType.WRITE);
+            DKVNodeSet writeNodes = dkvShard.getNodesByType(DKVNodeType.SLAVE);
             assertEquals(1, size(writeNodes.getNodes()));
             dkvNode = getLast(writeNodes.getNodes());
             assertEquals("127.0.0.1", dkvNode.getHost());

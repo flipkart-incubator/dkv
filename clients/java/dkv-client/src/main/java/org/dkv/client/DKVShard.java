@@ -10,15 +10,15 @@ import static org.dkv.client.Utils.checkf;
  * Represents a shard or partition of keyspace owned by
  * a DKV instance. It is identified by a user defined
  * name along with one or more {@link DKVNodeSet} instances
- * identified by the respective {@link DKVOpType}.
+ * identified by the respective {@link DKVNodeType}.
  *
  * @see ShardedDKVClient
  */
 public class DKVShard {
     private final String name;
-    private final Map<DKVOpType, DKVNodeSet> topology;
+    private final Map<DKVNodeType, DKVNodeSet> topology;
 
-    public DKVShard(String name, Map<DKVOpType, DKVNodeSet> topology) {
+    public DKVShard(String name, Map<DKVNodeType, DKVNodeSet> topology) {
         checkf(name != null && !name.trim().isEmpty(), IllegalArgumentException.class, "shard name must be provided");
         validate(topology);
 
@@ -26,26 +26,15 @@ public class DKVShard {
         this.topology = unmodifiableMap(topology);
     }
 
-    private void validate(Map<DKVOpType, DKVNodeSet> topology) {
-        checkf(topology != null && !topology.isEmpty(), IllegalArgumentException.class, "topology must be given");
-        //noinspection ConstantConditions
-        for (Map.Entry<DKVOpType, DKVNodeSet> topEntry : topology.entrySet()) {
-            DKVOpType opType = topEntry.getKey();
-            checkf(opType != DKVOpType.UNKNOWN, IllegalArgumentException.class, "DKV operation type must be given");
-            DKVNodeSet nodes = topEntry.getValue();
-            checkf(nodes != null, IllegalArgumentException.class, "DKV nodes must be given");
-        }
-    }
-
     public String getName() {
         return name;
     }
 
-    public DKVNodeSet getNodesByOpType(DKVOpType opType) {
-        checkf(opType != null && this.topology.containsKey(opType), IllegalArgumentException.class, "valid DKV operation type must be given");
+    public DKVNodeSet getNodesByType(DKVNodeType nodeType) {
+        checkf(nodeType != null && this.topology.containsKey(nodeType), IllegalArgumentException.class, "valid DKV node type must be given");
         checkf(this.topology != null, IllegalStateException.class, "topology is not initialized");
         //noinspection ConstantConditions
-        return this.topology.get(opType);
+        return this.topology.get(nodeType);
     }
 
     @Override
@@ -67,6 +56,16 @@ public class DKVShard {
                 "name='" + name + '\'' +
                 ", topology=" + topology +
                 '}';
+    }
+
+    private void validate(Map<DKVNodeType, DKVNodeSet> topology) {
+        checkf(topology != null && !topology.isEmpty(), IllegalArgumentException.class, "topology must be given");
+        //noinspection ConstantConditions
+        for (Map.Entry<DKVNodeType, DKVNodeSet> topEntry : topology.entrySet()) {
+            DKVNodeType nodeType = topEntry.getKey();
+            DKVNodeSet nodes = topEntry.getValue();
+            checkf(nodes != null, IllegalArgumentException.class, "DKV nodes must be given for node type: %s", nodeType.name());
+        }
     }
 
     // intended for deserialization

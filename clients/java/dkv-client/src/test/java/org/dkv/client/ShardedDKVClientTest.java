@@ -21,6 +21,7 @@ public class ShardedDKVClientTest {
 
     @Before
     public void setup() {
+//        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
         ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
         dkvClient = new ShardedDKVClient(new KeyHashBasedShardProvider(shardConf));
     }
@@ -36,7 +37,8 @@ public class ShardedDKVClientTest {
         }
 
         for (int i = 0; i < NUM_KEYS; i++) {
-            String actVal = dkvClient.get(Api.ReadConsistency.LINEARIZABLE, keys[i]);
+//            String actVal = dkvClient.get(Api.ReadConsistency.LINEARIZABLE, keys[i]);
+            String actVal = dkvClient.get(Api.ReadConsistency.SEQUENTIAL, keys[i]);
             assertEquals(format("Invalid value for key: %s", keys[i]), expVals[i], actVal);
         }
     }
