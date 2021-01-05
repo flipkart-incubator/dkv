@@ -22,6 +22,8 @@ import static org.dkv.client.Utils.checkf;
  * the corresponding operation on it. Upon completion, the underlying
  * GRPC conduit is closed.
  *
+ * @see DKVShard
+ * @see ShardProvider
  * @see SimpleDKVClient
  */
 public class ShardedDKVClient implements DKVClient {
