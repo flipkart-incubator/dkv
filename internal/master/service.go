@@ -11,9 +11,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flipkart-incubator/dkv/internal/server/stats"
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	"github.com/gogo/protobuf/proto"

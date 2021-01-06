@@ -12,7 +12,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	badger_pb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
+	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
