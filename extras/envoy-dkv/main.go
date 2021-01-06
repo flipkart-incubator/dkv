@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"github.com/flipkart-incubator/envoy-dkv/pkg"
+	"github.com/flipkart-incubator/dkv/extras/envoy-dkv/pkg"
 	"io/ioutil"
 	"log"
 	"net"

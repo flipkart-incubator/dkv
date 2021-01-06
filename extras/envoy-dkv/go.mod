@@ -1,4 +1,4 @@
-module github.com/flipkart-incubator/envoy-dkv
+module github.com/flipkart-incubator/dkv/extras/envoy-dkv
 
 go 1.13
 
