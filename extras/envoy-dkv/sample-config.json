@@ -1,0 +1,23 @@
+{
+    "appId": "local",
+    "local.instanceGroups": [
+        "local-group"
+    ],
+    "local.shards": [
+        "shard0"
+    ],
+    "shard0.listener_addr": "127.0.0.1:10000",
+    "shard0.clusters": [
+        "shard0-masters",
+        "shard0-slaves"
+    ],
+    "shard0-masters.connect_timeout": "10s",
+    "shard0-slaves.connect_timeout": "10s",
+    "shard0-masters.endpoints": [
+        "127.0.0.1:8080"
+    ],
+    "shard0-slaves.endpoints": [
+        "127.0.0.1:9090",
+        "127.0.0.1:9191"
+    ]
+}

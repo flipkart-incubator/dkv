@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/sync/raftpb"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"

@@ -1,0 +1,50 @@
+{
+  "appId": "local",
+  "local.instanceGroups": [
+    "local-group"
+  ],
+  "local.shards": [
+    "shard0",
+    "shard1",
+    "shard2"
+  ],
+  "shard0.listener_addr": "127.0.0.1:10001",
+  "shard1.listener_addr": "127.0.0.1:10002",
+  "shard2.listener_addr": "127.0.0.1:10003",
+  "shard0.clusters": [
+    "shard0-masters",
+    "shard0-slaves"
+  ],
+  "shard1.clusters": [
+    "shard1-masters",
+    "shard1-slaves"
+  ],
+  "shard2.clusters": [
+    "shard2-masters",
+    "shard2-slaves"
+  ],
+  "shard0-masters.connect_timeout": "10s",
+  "shard1-masters.connect_timeout": "10s",
+  "shard2-masters.connect_timeout": "10s",
+  "shard0-slaves.connect_timeout": "10s",
+  "shard1-slaves.connect_timeout": "10s",
+  "shard2-slaves.connect_timeout": "10s",
+  "shard0-masters.endpoints": [
+    "127.0.0.1:9091"
+  ],
+  "shard1-masters.endpoints": [
+    "127.0.0.1:9092"
+  ],
+  "shard2-masters.endpoints": [
+    "127.0.0.1:9093"
+  ],
+  "shard0-slaves.endpoints": [
+    "127.0.0.1:9191"
+  ],
+  "shard1-slaves.endpoints": [
+    "127.0.0.1:9292"
+  ],
+  "shard2-slaves.endpoints": [
+    "127.0.0.1:9393"
+  ]
+}

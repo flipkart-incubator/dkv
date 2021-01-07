@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/server/master"
-	"github.com/flipkart-incubator/dkv/internal/server/slave"
-	"github.com/flipkart-incubator/dkv/internal/server/stats"
-	"github.com/flipkart-incubator/dkv/internal/server/storage"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/server/storage/rocksdb"
-	"github.com/flipkart-incubator/dkv/internal/server/sync"
+	"github.com/flipkart-incubator/dkv/internal/master"
+	"github.com/flipkart-incubator/dkv/internal/slave"
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
+	"github.com/flipkart-incubator/dkv/internal/sync"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 var (
@@ -218,6 +219,7 @@ func newGrpcServerListener() (*grpc.Server, net.Listener) {
 		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
 		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
 	)
+	reflection.Register(grpcSrvr)
 	return grpcSrvr, newListener()
 }
 

@@ -1,0 +1,73 @@
+{
+  "dkvShards": [
+    {
+      "name": "shard0",
+      "topology": {
+        "SLAVE": {
+          "name": "shard0-slaves",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 10001
+            }
+          ]
+        },
+        "MASTER": {
+          "name": "shard0-masters",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 10001
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shard1",
+      "topology": {
+        "SLAVE": {
+          "name": "shard1-slaves",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 10002
+            }
+          ]
+        },
+        "MASTER": {
+          "name": "shard1-masters",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 10002
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shard2",
+      "topology": {
+        "SLAVE": {
+          "name": "shard2-slaves",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 10003
+            }
+          ]
+        },
+        "MASTER": {
+          "name": "shard2-masters",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 10003
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
