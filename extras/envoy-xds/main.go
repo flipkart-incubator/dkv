@@ -1,12 +1,12 @@
 package main
 
-// go build -o envoy-dkv main.go
+// go build -o envoy-xds main.go
 
 import (
 	"context"
 	"encoding/json"
 	"flag"
-	"github.com/flipkart-incubator/dkv/extras/envoy-dkv/pkg"
+	"github.com/flipkart-incubator/dkv/extras/envoy-xds/pkg"
 	"io/ioutil"
 	"log"
 	"net"
