@@ -80,7 +80,10 @@ func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) 
 	defer cancel()
 	multiGetReq := &serverpb.MultiGetRequest{Keys: keys, ReadConsistency: rc}
 	res, err := dkvClnt.dkvCli.MultiGet(ctx, multiGetReq)
-	return res.Values, err
+	if err != nil {
+		return nil, err
+	}
+	return res.Values, nil
 }
 
 // GetChanges retrieves changes since the given change number
