@@ -3,23 +3,27 @@ package site.ycsb.db;
 import org.junit.Before;
 import org.junit.Test;
 import site.ycsb.ByteIterator;
+import site.ycsb.DBException;
 import site.ycsb.Status;
 import site.ycsb.StringByteIterator;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Vector;
+import java.util.*;
 
 import static org.junit.Assert.*;
+import static site.ycsb.db.DKVClient.DKV_CONF_PROPERTY;
+import static site.ycsb.db.DKVClient.ENABLE_LINEARIZABLE_READS_PROPERTY;
 
 public class DKVClientTest {
     private static final String TEST_TABLE = "customers";
     private DKVClient dkvClient;
 
     @Before
-    public void setup() {
+    public void setup() throws DBException {
         dkvClient = new DKVClient();
+        Properties props = new Properties();
+        props.setProperty(DKV_CONF_PROPERTY, "/shard_config.json");
+        props.setProperty(ENABLE_LINEARIZABLE_READS_PROPERTY, "false");
+        dkvClient.setProperties(props);
         dkvClient.init();
     }
 
@@ -79,6 +83,7 @@ public class DKVClientTest {
         }
     }
 
+    @SuppressWarnings("SameParameterValue")
     private Map<String, String> fieldValues(String key, String val, String... kvs) {
         LinkedHashMap<String, String> result = new LinkedHashMap<>();
         result.put(key, val);
