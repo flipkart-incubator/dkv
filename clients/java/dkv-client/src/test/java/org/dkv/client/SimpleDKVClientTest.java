@@ -12,13 +12,12 @@ import static org.junit.Assert.assertEquals;
 
 public class SimpleDKVClientTest {
 
-    private static final String AUTHORITY = "dkv-master";
-    private static final String DKV_TARGET = "127.0.0.1:9091";
+    private static final String DKV_TARGET = "127.0.0.1:8080";
     private DKVClient dkvCli;
 
     @Before
     public void setUp() {
-        dkvCli = new SimpleDKVClient(DKV_TARGET, AUTHORITY);
+        dkvCli = new SimpleDKVClient(DKV_TARGET);
     }
 
     @Test
