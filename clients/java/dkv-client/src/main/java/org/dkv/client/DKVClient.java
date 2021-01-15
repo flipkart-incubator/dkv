@@ -120,8 +120,9 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
+     * @see DKVEntryIterator
      */
-    Iterator<DKVEntry> iterate(String startKey);
+    DKVEntryIterator iterate(String startKey);
 
     /**
      * Iterates through the various key value associations found in the
@@ -134,8 +135,9 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
+     * @see DKVEntryIterator
      */
-    Iterator<DKVEntry> iterate(byte[] startKey);
+    DKVEntryIterator iterate(byte[] startKey);
 
     /**
      * Iterates through the various key value associations found in the
@@ -149,8 +151,9 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
+     * @see DKVEntryIterator
      */
-    Iterator<DKVEntry> iterate(String startKey, String keyPref);
+    DKVEntryIterator iterate(String startKey, String keyPref);
 
     /**
      * Iterates through the various key value associations found in the
@@ -167,8 +170,9 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
+     * @see DKVEntryIterator
      */
-    Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref);
+    DKVEntryIterator iterate(byte[] startKey, byte[] keyPref);
 
     @Override
     void close();

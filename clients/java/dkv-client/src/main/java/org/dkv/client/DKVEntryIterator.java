@@ -1,14 +1,30 @@
 package org.dkv.client;
 
 import dkv.serverpb.Api;
+import dkv.serverpb.DKVGrpc;
+import io.grpc.ManagedChannel;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Iterator;
 
-class DKVEntryIterator implements Iterator<DKVEntry> {
+/**
+ * An iterator implementation that allows iteration of DKV keyspace via
+ * {@link DKVEntry} instances. Clients must invoke the <tt>close</tt> method once
+ * iteration is completed either successfully or with failures.
+ *
+ * Instances of this class are intended to be created only by this implementation
+ * and hence no public constructors are exposed.
+ *
+ * @see DKVEntry
+ */
+public class DKVEntryIterator implements Iterator<DKVEntry>, Closeable {
     private final Iterator<Api.IterateResponse> iterRes;
+    private final DKVGrpc.DKVBlockingStub blockingStub;
 
-    DKVEntryIterator(Iterator<Api.IterateResponse> iterRes) {
-        this.iterRes = iterRes;
+    DKVEntryIterator(DKVGrpc.DKVBlockingStub blockingStub, Api.IterateRequest iterReq) {
+        this.blockingStub = blockingStub;
+        this.iterRes = blockingStub.iterate(iterReq);
     }
 
     public boolean hasNext() {
@@ -21,6 +37,11 @@ class DKVEntryIterator implements Iterator<DKVEntry> {
     }
 
     public void remove() {
-        iterRes.remove();
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void close() {
+        ((ManagedChannel) blockingStub.getChannel()).shutdownNow();
     }
 }

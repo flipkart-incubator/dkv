@@ -95,39 +95,35 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
-    public Iterator<DKVEntry> iterate(String startKey) {
+    public DKVEntryIterator iterate(String startKey) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key: %s", startKey);
-        try (DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN)) {
-            return dkvClient.iterate(startKey);
-        }
+        DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN);
+        return dkvClient.iterate(startKey);
     }
 
     @Override
-    public Iterator<DKVEntry> iterate(byte[] startKey) {
+    public DKVEntryIterator iterate(byte[] startKey) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key");
-        try (DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN)) {
-            return dkvClient.iterate(startKey);
-        }
+        DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN);
+        return dkvClient.iterate(startKey);
     }
 
     @Override
-    public Iterator<DKVEntry> iterate(String startKey, String keyPref) {
+    public DKVEntryIterator iterate(String startKey, String keyPref) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key: %s", startKey);
-        try (DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN)) {
-            return dkvClient.iterate(startKey, keyPref);
-        }
+        DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN);
+        return dkvClient.iterate(startKey, keyPref);
     }
 
     @Override
-    public Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref) {
+    public DKVEntryIterator iterate(byte[] startKey, byte[] keyPref) {
         Iterable<DKVShard> dkvShards = shardProvider.provideShards(startKey);
         checkf(!isEmpty(dkvShards), IllegalArgumentException.class, "unable to compute shard for the given start key");
-        try (DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN)) {
-            return dkvClient.iterate(startKey, keyPref);
-        }
+        DKVClient dkvClient = getDKVClient(dkvShards, SLAVE, UNKNOWN);
+        return dkvClient.iterate(startKey, keyPref);
     }
 
     private DKVClient getDKVClient(Iterable<DKVShard> dkvShards, DKVNodeType... nodeType) {

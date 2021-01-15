@@ -10,6 +10,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import static com.google.protobuf.ByteString.*;
+
 /**
  * An implementation of the {@link DKVClient} interface. It provides a convenient
  * wrapper around the underlying GRPC stubs for interacting with the DKV database.
@@ -143,27 +145,27 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     public void put(String key, String value) {
-        put(ByteString.copyFromUtf8(key), ByteString.copyFromUtf8(value));
+        put(copyFromUtf8(key), copyFromUtf8(value));
     }
 
     public void put(byte[] key, byte[] value) {
-        put(ByteString.copyFrom(key), ByteString.copyFrom(value));
+        put(copyFrom(key), copyFrom(value));
     }
 
     public String get(Api.ReadConsistency consistency, String key) {
-        ByteString value = get(consistency, ByteString.copyFromUtf8(key));
+        ByteString value = get(consistency, copyFromUtf8(key));
         return value.toStringUtf8();
     }
 
     public byte[] get(Api.ReadConsistency consistency, byte[] key) {
-        ByteString value = get(consistency, ByteString.copyFrom(key));
+        ByteString value = get(consistency, copyFrom(key));
         return value.toByteArray();
     }
 
     public String[] multiGet(Api.ReadConsistency consistency, String[] keys) {
         LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (String key : keys) {
-            keyByteStrs.add(ByteString.copyFromUtf8(key));
+            keyByteStrs.add(copyFromUtf8(key));
         }
         List<ByteString> valByteStrs = multiGet(consistency, keyByteStrs);
         String[] values = new String[valByteStrs.size()];
@@ -177,7 +179,7 @@ public class SimpleDKVClient implements DKVClient {
     public byte[][] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
         LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (byte[] key : keys) {
-            keyByteStrs.add(ByteString.copyFrom(key));
+            keyByteStrs.add(copyFrom(key));
         }
         List<ByteString> valByteStrs = multiGet(consistency, keyByteStrs);
         byte[][] values = new byte[valByteStrs.size()][];
@@ -188,28 +190,20 @@ public class SimpleDKVClient implements DKVClient {
         return values;
     }
 
-    public Iterator<DKVEntry> iterate(String startKey) {
-        Iterator<Api.IterateResponse> iterRes = iterate(
-                ByteString.copyFromUtf8(startKey), ByteString.EMPTY);
-        return new DKVEntryIterator(iterRes);
+    public DKVEntryIterator iterate(String startKey) {
+        return iterate(copyFromUtf8(startKey), EMPTY);
     }
 
-    public Iterator<DKVEntry> iterate(byte[] startKey) {
-        Iterator<Api.IterateResponse> iterRes = iterate(
-                ByteString.copyFrom(startKey), ByteString.EMPTY);
-        return new DKVEntryIterator(iterRes);
+    public DKVEntryIterator iterate(byte[] startKey) {
+        return iterate(copyFrom(startKey), EMPTY);
     }
 
-    public Iterator<DKVEntry> iterate(String startKey, String keyPref) {
-        Iterator<Api.IterateResponse> iterRes = iterate(
-                ByteString.copyFromUtf8(startKey), ByteString.copyFromUtf8(keyPref));
-        return new DKVEntryIterator(iterRes);
+    public DKVEntryIterator iterate(String startKey, String keyPref) {
+        return iterate(copyFromUtf8(startKey), copyFromUtf8(keyPref));
     }
 
-    public Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref) {
-        Iterator<Api.IterateResponse> iterRes = iterate(
-                ByteString.copyFrom(startKey), ByteString.copyFrom(keyPref));
-        return new DKVEntryIterator(iterRes);
+    public DKVEntryIterator iterate(byte[] startKey, byte[] keyPref) {
+        return iterate(copyFrom(startKey), copyFrom(keyPref));
     }
 
     @Override
@@ -217,13 +211,13 @@ public class SimpleDKVClient implements DKVClient {
         ((ManagedChannel) blockingStub.getChannel()).shutdownNow();
     }
 
-    private Iterator<Api.IterateResponse> iterate(ByteString startKey, ByteString keyPref) {
+    private DKVEntryIterator iterate(ByteString startKey, ByteString keyPref) {
         Api.IterateRequest.Builder iterReqBuilder = Api.IterateRequest.newBuilder();
         Api.IterateRequest iterReq = iterReqBuilder
                 .setKeyPrefix(keyPref)
                 .setStartKey(startKey)
                 .build();
-        return blockingStub.iterate(iterReq);
+        return new DKVEntryIterator(blockingStub, iterReq);
     }
 
     private void put(ByteString keyByteStr, ByteString valByteStr) {
