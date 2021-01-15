@@ -56,13 +56,14 @@ public class DKVClient extends DB {
       if (fields == null || fields.isEmpty()) {
         byte[] startKey = toDKVKey(table, key, PRIMARY_KEY);
         byte[] keyPrefix = toDKVKey(table, key, "");
-        Iterator<DKVEntry> iter = dkvClient.iterate(startKey, keyPrefix);
-        while (iter.hasNext()) {
-          DKVEntry entry = iter.next();
-          entry.checkStatus();
-          String currField = fromDKVKey(entry.getKeyAsString())[2];
-          if (!PRIMARY_KEY.equals(currField)) {
-            result.put(currField, new ByteArrayByteIterator(entry.getValueAsByteArray()));
+        try (DKVEntryIterator iter = dkvClient.iterate(startKey, keyPrefix)) {
+          while (iter.hasNext()) {
+            DKVEntry entry = iter.next();
+            entry.checkStatus();
+            String currField = fromDKVKey(entry.getKeyAsString())[2];
+            if (!PRIMARY_KEY.equals(currField)) {
+              result.put(currField, new ByteArrayByteIterator(entry.getValueAsByteArray()));
+            }
           }
         }
       } else {
@@ -87,25 +88,26 @@ public class DKVClient extends DB {
                      Vector<HashMap<String, ByteIterator>> result) {
     try {
       byte[] startKeyBytes = toDKVKey(table, startkey, PRIMARY_KEY);
-      Iterator<DKVEntry> itrtr = dkvClient.iterate(startKeyBytes);
-      result.add(new LinkedHashMap<>());
-      String prevKey = startkey;
-      while (itrtr.hasNext()) {
-        DKVEntry entry = itrtr.next();
-        entry.checkStatus();
-        String[] comps = fromDKVKey(entry.getKeyAsString());
-        String currKey = comps[1], currField = comps[2];
-        if (currKey.equals(prevKey)) {
-          if (!PRIMARY_KEY.equals(currField) && (fields == null || fields.isEmpty() || fields.contains(currField))) {
-            result.lastElement().put(currField, new ByteArrayByteIterator(entry.getValueAsByteArray()));
+      try (DKVEntryIterator itrtr = dkvClient.iterate(startKeyBytes, table.getBytes(UTF_8))) {
+        result.add(new LinkedHashMap<>());
+        String prevKey = startkey;
+        while (itrtr.hasNext()) {
+          DKVEntry entry = itrtr.next();
+          entry.checkStatus();
+          String[] comps = fromDKVKey(entry.getKeyAsString());
+          String currKey = comps[1], currField = comps[2];
+          if (currKey.equals(prevKey)) {
+            if (!PRIMARY_KEY.equals(currField) && (fields == null || fields.isEmpty() || fields.contains(currField))) {
+              result.lastElement().put(currField, new ByteArrayByteIterator(entry.getValueAsByteArray()));
+            }
+          } else {
+            prevKey = currKey;
+            recordcount--;
+            if (recordcount <= 0) {
+              break;
+            }
+            result.add(new LinkedHashMap<>());
           }
-        } else {
-          prevKey = currKey;
-          recordcount--;
-          if (recordcount <= 0) {
-            break;
-          }
-          result.add(new LinkedHashMap<>());
         }
       }
       return Status.OK;
