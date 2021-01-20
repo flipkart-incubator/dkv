@@ -5,7 +5,6 @@ import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.Iterator;
 
 /**

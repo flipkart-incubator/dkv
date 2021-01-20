@@ -8,10 +8,10 @@ import org.junit.Test;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
-import static dkv.serverpb.Api.ReadConsistency.*;
+import static dkv.serverpb.Api.ReadConsistency.LINEARIZABLE;
+import static dkv.serverpb.Api.ReadConsistency.SEQUENTIAL;
 import static java.lang.String.format;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 public class ShardedDKVClientTest {
 
@@ -23,9 +23,9 @@ public class ShardedDKVClientTest {
 
     @Before
     public void setup() {
+        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
-//        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
-        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
+//        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
         dkvClient = new ShardedDKVClient(new KeyHashBasedShardProvider(shardConf));
     }
 
@@ -42,6 +42,19 @@ public class ShardedDKVClientTest {
         for (int i = 0; i < NUM_KEYS; i++) {
             String actVal = dkvClient.get(READ_CONSISTENCY, keys[i]);
             assertEquals(format("Invalid value for key: %s", keys[i]), expVals[i], actVal);
+        }
+
+        String[] actVals = dkvClient.multiGet(READ_CONSISTENCY, keys);
+        for (int i = 0; i < actVals.length; i++) {
+            String actVal = actVals[i];
+            String expVal = expVals[i];
+            assertEquals(format("Invalid value for key: %s", keys[i]), expVal, actVal);
+        }
+
+        try {
+            dkvClient.multiGet(LINEARIZABLE, keys);
+        } catch (Exception e) {
+            assertTrue(e instanceof UnsupportedOperationException);
         }
     }
 

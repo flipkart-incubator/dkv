@@ -2,7 +2,10 @@ package org.dkv.client;
 
 import gnu.crypto.hash.RipeMD160;
 
-import java.util.LinkedHashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.dkv.client.Utils.checkf;
@@ -24,28 +27,44 @@ public class KeyHashBasedShardProvider implements ShardProvider {
     }
 
     @Override
-    public Iterable<DKVShard> provideShards(byte[]... keys) {
-        checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for providing shards");
-        LinkedHashSet<DKVShard> shards = new LinkedHashSet<>();
-        //noinspection ConstantConditions
-        for (byte[] key : keys) {
-            int shardId = getShardId(key);
-            shards.add(shardConfiguration.getShardAtIndex(shardId));
-        }
-
-        return shards;
+    public DKVShard provideShard(byte[] key) {
+        int shardId = getShardId(key);
+        return shardConfiguration.getShardAtIndex(shardId);
     }
 
     @Override
-    public Iterable<DKVShard> provideShards(String... keys) {
+    public DKVShard provideShard(String key) {
+        int shardId = getShardId(key.getBytes(UTF_8));
+        return shardConfiguration.getShardAtIndex(shardId);
+    }
+
+    @Override
+    public Map<DKVShard, List<byte[]>> provideShards(byte[]... keys) {
         checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for providing shards");
-        LinkedHashSet<DKVShard> shards = new LinkedHashSet<>();
+        HashMap<DKVShard, List<byte[]>> result = new HashMap<>();
         //noinspection ConstantConditions
-        for (String key : keys) {
-            int shardId = getShardId(key.getBytes(UTF_8));
-            shards.add(shardConfiguration.getShardAtIndex(shardId));
+        int numKeys = keys.length;
+        for (byte[] key : keys) {
+            DKVShard dkvShard = provideShard(key);
+            result.putIfAbsent(dkvShard, new ArrayList<>(numKeys));
+            result.get(dkvShard).add(key);
         }
-        return shards;
+
+        return result;
+    }
+
+    @Override
+    public Map<DKVShard, List<String>> provideShards(String... keys) {
+        checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for providing shards");
+        HashMap<DKVShard, List<String>> result = new HashMap<>();
+        //noinspection ConstantConditions
+        int numKeys = keys.length;
+        for (String key : keys) {
+            DKVShard dkvShard = provideShard(key);
+            result.putIfAbsent(dkvShard, new ArrayList<>(numKeys));
+            result.get(dkvShard).add(key);
+        }
+        return result;
     }
 
     private int getShardId(byte[] key) {
