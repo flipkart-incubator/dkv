@@ -11,7 +11,7 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 import static site.ycsb.db.DKVClient.DKV_CONF_PROPERTY;
-import static site.ycsb.db.DKVClient.ENABLE_LINEARIZABLE_READS_PROPERTY;
+import static site.ycsb.db.DKVClient.ENABLE_LINEARIZED_READS_PROPERTY;
 
 public class DKVClientTest {
     private static final String TEST_TABLE = "customers";
@@ -21,8 +21,8 @@ public class DKVClientTest {
     public void setup() throws DBException {
         dkvClient = new DKVClient();
         Properties props = new Properties();
-        props.setProperty(DKV_CONF_PROPERTY, "/shard_config.json");
-        props.setProperty(ENABLE_LINEARIZABLE_READS_PROPERTY, "false");
+        props.setProperty(DKV_CONF_PROPERTY, "/single_shard.json");
+        props.setProperty(ENABLE_LINEARIZED_READS_PROPERTY, "false");
         dkvClient.setProperties(props);
         dkvClient.init();
     }

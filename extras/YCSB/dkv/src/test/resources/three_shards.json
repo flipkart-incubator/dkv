@@ -1,0 +1,46 @@
+{
+  "dkvShards": [
+    {
+      "name": "shard1",
+      "topology": {
+        "UNKNOWN": {
+          "name": "default",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 9091
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shard2",
+      "topology": {
+        "UNKNOWN": {
+          "name": "default",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 9092
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shard3",
+      "topology": {
+        "UNKNOWN": {
+          "name": "default",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 9093
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

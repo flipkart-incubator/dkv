@@ -10,6 +10,7 @@ import java.util.*;
 
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
+import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
@@ -17,9 +18,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 public class DKVClient extends DB {
   static final String DKV_CONF_PROPERTY = "dkv.conf";
-  static final String ENABLE_LINEARIZABLE_READS_PROPERTY = "enable.linearizable.reads";
+  static final String ENABLE_LINEARIZED_READS_PROPERTY = "enable.linearized.reads";
   private static final String PRIMARY_KEY = "@@@PRIMARY@@@";
-  private static final String ENABLE_LINEARIZABLE_READS_DEFAULT = "false";
+  private static final String ENABLE_LINEARIZED_READS_DEFAULT = "false";
 
   private ShardedDKVClient dkvClient;
   private Api.ReadConsistency readConsistency;
@@ -30,15 +31,26 @@ public class DKVClient extends DB {
 
     String dkvConfigFile = props.getProperty(DKV_CONF_PROPERTY);
     if (dkvConfigFile == null || dkvConfigFile.trim().isEmpty()) {
-      throw new DBException(format("required property '%s' is missing", DKV_CONF_PROPERTY));
+      throw new DBException(getUsage());
     }
 
     Reader confReader = loadConfigReader(dkvConfigFile);
     ShardConfiguration shardConf = new Gson().fromJson(confReader, ShardConfiguration.class);
     dkvClient = new ShardedDKVClient(new KeyHashBasedShardProvider(shardConf));
 
-    boolean enableLinearizableReads = parseBoolean(props.getProperty(ENABLE_LINEARIZABLE_READS_PROPERTY, ENABLE_LINEARIZABLE_READS_DEFAULT));
-    readConsistency = enableLinearizableReads ? Api.ReadConsistency.LINEARIZABLE : Api.ReadConsistency.SEQUENTIAL;
+    String linearizedReads = props.getProperty(ENABLE_LINEARIZED_READS_PROPERTY, ENABLE_LINEARIZED_READS_DEFAULT);
+    boolean enableLinearizedReads = parseBoolean(linearizedReads);
+    readConsistency = enableLinearizedReads ? Api.ReadConsistency.LINEARIZABLE : Api.ReadConsistency.SEQUENTIAL;
+  }
+
+  private String getUsage() {
+    StringBuilder msg = new StringBuilder().append(lineSeparator());
+    msg.append(format("required property '%s' is missing", DKV_CONF_PROPERTY)).append(lineSeparator());
+    msg.append(format("Usage: -p %s=<config_json_file> -p %s=<true|false>", DKV_CONF_PROPERTY,
+            ENABLE_LINEARIZED_READS_PROPERTY)).append(lineSeparator());
+    msg.append(format("Defaults: %s=%s", ENABLE_LINEARIZED_READS_PROPERTY,
+            ENABLE_LINEARIZED_READS_DEFAULT)).append(lineSeparator());
+    return msg.toString();
   }
 
   private Reader loadConfigReader(String dkvConfigFile) {
