@@ -124,7 +124,7 @@ func getKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPre
 
 func newDKVClient(port int) *ctl.DKVClient {
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
 		panic(err)
 	} else {
 		return client

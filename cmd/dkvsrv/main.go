@@ -109,7 +109,9 @@ func main() {
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	case slaveRole:
-		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr); err != nil {
+		// TODO: Check if authority override option is needed for slaves
+		// while they connect with masters
+		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr, ""); err != nil {
 			panic(err)
 		} else {
 			defer replCli.Close()

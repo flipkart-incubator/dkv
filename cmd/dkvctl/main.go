@@ -186,10 +186,11 @@ func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-var dkvAddr string
+var dkvAddr, dkvAuthority string
 
 func init() {
 	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
+	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
 	for _, c := range cmds {
 		flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
 	}
@@ -198,8 +199,10 @@ func init() {
 
 func usage() {
 	fmt.Printf("Usage of %s:\n", os.Args[0])
-	dkvAddrFlag := flag.Lookup("dkvAddr")
-	fmt.Printf("  -dkvAddr %s (default: %s)\n", dkvAddrFlag.Usage, dkvAddrFlag.DefValue)
+	for _, flagName := range []string{"dkvAddr", "authority"} {
+		dkvFlag := flag.Lookup(flagName)
+		fmt.Printf("  -%s %s (default: %s)\n", dkvFlag.Name, dkvFlag.Usage, dkvFlag.DefValue)
+	}
 	for _, cmd := range cmds {
 		cmd.usage()
 	}
@@ -216,8 +219,12 @@ func main() {
 	}
 
 	flag.Parse()
-	fmt.Printf("Connecting to DKV service at %s...", dkvAddr)
-	client, err := ctl.NewInSecureDKVClient(dkvAddr)
+	fmt.Printf("Connecting to DKV service at %s", dkvAddr)
+	if dkvAuthority = strings.TrimSpace(dkvAuthority); dkvAuthority != "" {
+		fmt.Printf(" (:authority = %s)", dkvAuthority)
+	}
+	fmt.Printf("...")
+	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
