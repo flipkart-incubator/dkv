@@ -1,5 +1,6 @@
 package site.ycsb.db;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import site.ycsb.ByteIterator;
@@ -64,6 +65,11 @@ public class DKVClientTest {
         assertResults(results.get(0), fv1);
         assertResults(results.get(1), fv2);
         assertResults(results.get(2), fv3);
+    }
+
+    @After
+    public void teardown() throws DBException {
+        dkvClient.cleanup();
     }
 
     private Map<String, ByteIterator> transform(Map<String, String> fvs) {

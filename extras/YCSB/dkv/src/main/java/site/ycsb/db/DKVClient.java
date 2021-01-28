@@ -12,6 +12,8 @@ import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
 import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static site.ycsb.StringByteIterator.getByteIteratorMap;
+import static site.ycsb.StringByteIterator.getStringMap;
 
 /**
  * YCSB binding for DKV.
@@ -19,7 +21,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 public class DKVClient extends DB {
   static final String DKV_CONF_PROPERTY = "dkv.conf";
   static final String ENABLE_LINEARIZED_READS_PROPERTY = "enable.linearized.reads";
-  private static final String PRIMARY_KEY = "@@@PRIMARY@@@";
   private static final String ENABLE_LINEARIZED_READS_DEFAULT = "false";
 
   private ShardedDKVClient dkvClient;
@@ -65,28 +66,13 @@ public class DKVClient extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
+      byte[] value = dkvClient.get(readConsistency, toDKVKey(table, key));
+      Map<String, ByteIterator> resultValues = fromDKVValue(value);
       if (fields == null || fields.isEmpty()) {
-        byte[] startKey = toDKVKey(table, key, PRIMARY_KEY);
-        byte[] keyPrefix = toDKVKey(table, key, "");
-        try (DKVEntryIterator iter = dkvClient.iterate(startKey, keyPrefix)) {
-          while (iter.hasNext()) {
-            DKVEntry entry = iter.next();
-            entry.checkStatus();
-            String currField = fromDKVKey(entry.getKeyAsString())[2];
-            if (!PRIMARY_KEY.equals(currField)) {
-              result.put(currField, new ByteArrayByteIterator(entry.getValueAsByteArray()));
-            }
-          }
-        }
+        result.putAll(resultValues);
       } else {
-        String[] flds = fields.toArray(new String[0]);
-        byte[][] keys = new byte[flds.length][];
-        for (int i = 0; i < flds.length; i++) {
-          keys[i] = toDKVKey(table, key, flds[i]);
-        }
-        byte[][] values = dkvClient.multiGet(readConsistency, keys);
-        for (int i = 0; i < flds.length; i++) {
-          result.put(flds[i], new ByteArrayByteIterator(values[i]));
+        for (String field : fields) {
+          result.put(field, resultValues.get(field));
         }
       }
       return Status.OK;
@@ -99,28 +85,23 @@ public class DKVClient extends DB {
   public Status scan(String table, String startkey, int recordcount, Set<String> fields,
                      Vector<HashMap<String, ByteIterator>> result) {
     try {
-      byte[] startKeyBytes = toDKVKey(table, startkey, PRIMARY_KEY);
-      try (DKVEntryIterator itrtr = dkvClient.iterate(startKeyBytes, table.getBytes(UTF_8))) {
-        result.add(new LinkedHashMap<>());
-        String prevKey = startkey;
-        while (itrtr.hasNext()) {
-          DKVEntry entry = itrtr.next();
-          entry.checkStatus();
-          String[] comps = fromDKVKey(entry.getKeyAsString());
-          String currKey = comps[1], currField = comps[2];
-          if (currKey.equals(prevKey)) {
-            if (!PRIMARY_KEY.equals(currField) && (fields == null || fields.isEmpty() || fields.contains(currField))) {
-              result.lastElement().put(currField, new ByteArrayByteIterator(entry.getValueAsByteArray()));
-            }
-          } else {
-            prevKey = currKey;
-            recordcount--;
-            if (recordcount <= 0) {
-              break;
-            }
-            result.add(new LinkedHashMap<>());
+      byte[] startKeyBytes = toDKVKey(table, startkey);
+      Iterator<DKVEntry> itrtr = dkvClient.iterate(startKeyBytes);
+      while (recordcount > 0 && itrtr.hasNext()) {
+        DKVEntry entry = itrtr.next();
+        entry.checkStatus();
+        byte[] valueBytes = entry.getValueAsByteArray();
+        Map<String, ByteIterator> valueMap = fromDKVValue(valueBytes);
+        HashMap<String, ByteIterator> fieldValues = new HashMap<>();
+        if (fields != null) {
+          for (String field : fields) {
+            fieldValues.put(field, valueMap.get(field));
           }
+        } else {
+          fieldValues.putAll(valueMap);
         }
+        result.add(fieldValues);
+        recordcount--;
       }
       return Status.OK;
     } catch (Exception e) {
@@ -131,13 +112,7 @@ public class DKVClient extends DB {
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
     try {
-      dkvClient.put(toDKVKey(table, key, PRIMARY_KEY), key.getBytes(UTF_8));
-      for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-        String field = entry.getKey();
-        byte[] dkvKeyBytes = toDKVKey(table, key, field);
-        byte[] dkvValueBytes = entry.getValue().toArray();
-        dkvClient.put(dkvKeyBytes, dkvValueBytes);
-      }
+      dkvClient.put(toDKVKey(table, key), toDKVValue(values));
       return Status.OK;
     } catch (Exception e) {
       return handleErrStatus(e);
@@ -154,25 +129,37 @@ public class DKVClient extends DB {
     throw new UnsupportedOperationException("Delete not implemented in DKV");
   }
 
+  @Override
+  public void cleanup() throws DBException {
+    dkvClient.close();
+    super.cleanup();
+  }
+
   private Status handleErrStatus(Exception e) {
     System.err.println(e.getMessage());
     e.printStackTrace();
     return Status.ERROR;
   }
 
-  private String[] fromDKVKey(String entryKey) {
-    String[] firstComps = entryKey.split("_");
-    if (firstComps.length != 2) {
-      throw new IllegalArgumentException(format("Invalid DKV key supplied: %s", entryKey));
-    }
-    String[] secondComps = firstComps[1].split(":");
-    if (secondComps.length != 2) {
-      throw new IllegalArgumentException(format("Invalid DKV key supplied: %s", entryKey));
-    }
-    return new String[] {/* table */ firstComps[0], /* key */ secondComps[0], /* field */ secondComps[1]};
+  private byte[] toDKVKey(String table, String key) {
+    return format("%s_%s", table, key).getBytes(UTF_8);
   }
 
-  private byte[] toDKVKey(String table, String key, String field) {
-    return format("%s_%s:%s", table, key, field).getBytes(UTF_8);
+  private byte[] toDKVValue(Map<String, ByteIterator> values) throws IOException {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream oos = new ObjectOutputStream(bytes)) {
+      Map<String, String> vals = getStringMap(values);
+      oos.writeObject(vals);
+      oos.flush();
+      return bytes.toByteArray();
+    }
+  }
+
+  private Map<String, ByteIterator> fromDKVValue(byte[] value) throws IOException, ClassNotFoundException {
+    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(value))) {
+      //noinspection unchecked
+      Map<String, String> vals = (Map<String, String>) ois.readObject();
+      return getByteIteratorMap(vals);
+    }
   }
 }
