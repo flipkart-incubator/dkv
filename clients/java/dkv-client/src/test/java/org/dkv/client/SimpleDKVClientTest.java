@@ -5,6 +5,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Iterator;
+
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
 
@@ -44,30 +46,28 @@ public class SimpleDKVClientTest {
         put(numKeys, keyPref2, valPref2);
         put(numKeys, keyPref3, valPref3);
         String startKey = format("%s%d", keyPref2, startIdx);
-        try (DKVEntryIterator iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey, keyPref2)) {
-            while (iterRes.hasNext()) {
-                DKVEntry entry = iterRes.next();
-                entry.checkStatus();
-                assertEquals(format("%s%d", keyPref2, startIdx), entry.getKeyAsString());
-                assertEquals(format("%s%d", valPref2, startIdx), entry.getValueAsString());
-                startIdx++;
-            }
-            assertEquals(numKeys, startIdx-1);
+        Iterator<DKVEntry> iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey, keyPref2);
+        while (iterRes.hasNext()) {
+            DKVEntry entry = iterRes.next();
+            entry.checkStatus();
+            assertEquals(format("%s%d", keyPref2, startIdx), entry.getKeyAsString());
+            assertEquals(format("%s%d", valPref2, startIdx), entry.getValueAsString());
+            startIdx++;
         }
+        assertEquals(numKeys, startIdx-1);
 
         startIdx = 1;
         startKey = format("%s%d", keyPref1, startIdx);
-        try (DKVEntryIterator iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey)) {
-            while (iterRes.hasNext()) {
-                DKVEntry entry = iterRes.next();
-                entry.checkStatus();
-                String key = entry.getKeyAsString();
-                if (key.startsWith(keyPref1) || key.startsWith(keyPref2) || key.startsWith(keyPref3)) {
-                    startIdx++;
-                }
+        iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey);
+        while (iterRes.hasNext()) {
+            DKVEntry entry = iterRes.next();
+            entry.checkStatus();
+            String key = entry.getKeyAsString();
+            if (key.startsWith(keyPref1) || key.startsWith(keyPref2) || key.startsWith(keyPref3)) {
+                startIdx++;
             }
-            assertEquals(numKeys * 3, startIdx-1);
         }
+        assertEquals(numKeys * 3, startIdx-1);
     }
 
     @After

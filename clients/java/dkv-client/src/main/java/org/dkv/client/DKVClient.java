@@ -3,6 +3,7 @@ package org.dkv.client;
 import dkv.serverpb.Api;
 
 import java.io.Closeable;
+import java.util.Iterator;
 
 /**
  * Provides the means to interact with DKV GRPC APIs. Implementors are
@@ -119,9 +120,8 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
-     * @see DKVEntryIterator
      */
-    DKVEntryIterator iterate(String startKey);
+    Iterator<DKVEntry> iterate(String startKey);
 
     /**
      * Iterates through the various key value associations found in the
@@ -134,9 +134,8 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
-     * @see DKVEntryIterator
      */
-    DKVEntryIterator iterate(byte[] startKey);
+    Iterator<DKVEntry> iterate(byte[] startKey);
 
     /**
      * Iterates through the various key value associations found in the
@@ -150,9 +149,8 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
-     * @see DKVEntryIterator
      */
-    DKVEntryIterator iterate(String startKey, String keyPref);
+    Iterator<DKVEntry> iterate(String startKey, String keyPref);
 
     /**
      * Iterates through the various key value associations found in the
@@ -169,9 +167,8 @@ public interface DKVClient extends Closeable {
      * @return an iterator of {@link DKVEntry} instances
      *
      * @see DKVEntry
-     * @see DKVEntryIterator
      */
-    DKVEntryIterator iterate(byte[] startKey, byte[] keyPref);
+    Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref);
 
     @Override
     void close();

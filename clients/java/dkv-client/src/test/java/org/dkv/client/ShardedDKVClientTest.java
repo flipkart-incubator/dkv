@@ -2,6 +2,7 @@ package org.dkv.client;
 
 import com.google.gson.Gson;
 import dkv.serverpb.Api;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -16,7 +17,7 @@ import static org.junit.Assert.*;
 public class ShardedDKVClientTest {
 
     private static final String KEY_PREFIX = "key_135";
-    private static final int NUM_KEYS = 9;
+    private static final int NUM_KEYS = 9000;
     private static final Api.ReadConsistency READ_CONSISTENCY = SEQUENTIAL;
 
     private ShardedDKVClient dkvClient;
@@ -63,5 +64,10 @@ public class ShardedDKVClientTest {
         InputStream configStream = this.getClass().getResourceAsStream(configPath);
         assertNotNull(configStream);
         return new Gson().fromJson(new InputStreamReader(configStream), ShardConfiguration.class);
+    }
+
+    @After
+    public void teardown() {
+        dkvClient.close();
     }
 }

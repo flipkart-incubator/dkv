@@ -6,6 +6,7 @@ import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -189,19 +190,19 @@ public class SimpleDKVClient implements DKVClient {
         return values;
     }
 
-    public DKVEntryIterator iterate(String startKey) {
+    public Iterator<DKVEntry> iterate(String startKey) {
         return iterate(copyFromUtf8(startKey), EMPTY);
     }
 
-    public DKVEntryIterator iterate(byte[] startKey) {
+    public Iterator<DKVEntry> iterate(byte[] startKey) {
         return iterate(copyFrom(startKey), EMPTY);
     }
 
-    public DKVEntryIterator iterate(String startKey, String keyPref) {
+    public Iterator<DKVEntry> iterate(String startKey, String keyPref) {
         return iterate(copyFromUtf8(startKey), copyFromUtf8(keyPref));
     }
 
-    public DKVEntryIterator iterate(byte[] startKey, byte[] keyPref) {
+    public Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref) {
         return iterate(copyFrom(startKey), copyFrom(keyPref));
     }
 
@@ -210,13 +211,35 @@ public class SimpleDKVClient implements DKVClient {
         ((ManagedChannel) blockingStub.getChannel()).shutdownNow();
     }
 
-    private DKVEntryIterator iterate(ByteString startKey, ByteString keyPref) {
+    private Iterator<DKVEntry> iterate(ByteString startKey, ByteString keyPref) {
         Api.IterateRequest.Builder iterReqBuilder = Api.IterateRequest.newBuilder();
         Api.IterateRequest iterReq = iterReqBuilder
                 .setKeyPrefix(keyPref)
                 .setStartKey(startKey)
                 .build();
-        return new DKVEntryIterator(blockingStub, iterReq);
+        Iterator<Api.IterateResponse> iterRes = blockingStub.iterate(iterReq);
+        return new DKVEntryIterator(iterRes);
+    }
+
+    private static class DKVEntryIterator implements Iterator<DKVEntry> {
+        private final Iterator<Api.IterateResponse> iterRes;
+
+        DKVEntryIterator(Iterator<Api.IterateResponse> iterRes) {
+            this.iterRes = iterRes;
+        }
+
+        public boolean hasNext() {
+            return iterRes.hasNext();
+        }
+
+        public DKVEntry next() {
+            Api.IterateResponse iterateResponse = iterRes.next();
+            return new DKVEntry(iterateResponse);
+        }
+
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private void put(ByteString keyByteStr, ByteString valByteStr) {
