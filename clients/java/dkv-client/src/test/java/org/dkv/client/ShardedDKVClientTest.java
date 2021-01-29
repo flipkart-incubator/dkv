@@ -8,6 +8,7 @@ import org.junit.Test;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.HashMap;
 
 import static dkv.serverpb.Api.ReadConsistency.LINEARIZABLE;
 import static dkv.serverpb.Api.ReadConsistency.SEQUENTIAL;
@@ -34,9 +35,11 @@ public class ShardedDKVClientTest {
     public void shouldPerformPutAndGet() {
         String[] keys = new String[NUM_KEYS];
         String[] expVals = new String[NUM_KEYS];
+        HashMap<String, String> expKVs = new HashMap<>(NUM_KEYS);
         for (int i = 0; i < NUM_KEYS; i++) {
             keys[i] = format("%s%d", KEY_PREFIX, i);
             expVals[i] = format("val_%d", i);
+            expKVs.put(keys[i], expVals[i]);
             dkvClient.put(keys[i], expVals[i]);
         }
 
@@ -45,11 +48,12 @@ public class ShardedDKVClientTest {
             assertEquals(format("Invalid value for key: %s", keys[i]), expVals[i], actVal);
         }
 
-        String[] actVals = dkvClient.multiGet(READ_CONSISTENCY, keys);
-        for (int i = 0; i < actVals.length; i++) {
-            String actVal = actVals[i];
-            String expVal = expVals[i];
-            assertEquals(format("Invalid value for key: %s", keys[i]), expVal, actVal);
+        KV.Strings[] actVals = dkvClient.multiGet(READ_CONSISTENCY, keys);
+        for (KV.Strings actVal : actVals) {
+            String actKey = actVal.getKey();
+            String actValue = actVal.getValue();
+            String expValue = expKVs.get(actKey);
+            assertEquals(format("Invalid value for key: %s", actKey), expValue, actValue);
         }
 
         try {

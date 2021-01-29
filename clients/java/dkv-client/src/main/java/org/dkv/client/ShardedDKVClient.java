@@ -7,6 +7,7 @@ import dkv.serverpb.Api;
 import java.io.Closeable;
 import java.util.*;
 
+import static java.util.Collections.addAll;
 import static org.dkv.client.DKVNodeType.*;
 import static org.dkv.client.Utils.checkf;
 
@@ -76,7 +77,7 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
-    public String[] multiGet(Api.ReadConsistency consistency, String[] keys) {
+    public KV.Strings[] multiGet(Api.ReadConsistency consistency, String[] keys) {
         checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for multi get");
         Map<DKVShard, List<String>> dkvShards = shardProvider.provideShards(keys);
         checkf(dkvShards != null && !dkvShards.isEmpty(), IllegalArgumentException.class, "unable to compute shard(s) for the given keys");
@@ -86,22 +87,14 @@ public class ShardedDKVClient implements DKVClient {
             checkf(consistency != Api.ReadConsistency.LINEARIZABLE, UnsupportedOperationException.class,
                     "DKV does not yet support cross shard linearizable multi get");
 
-            //noinspection ConstantConditions
-            HashMap<String, String> tempResult = new HashMap<>(keys.length);
+            LinkedList<KV.Strings> result = new LinkedList<>();
             for (Map.Entry<DKVShard, List<String>> entry : dkvShards.entrySet()) {
-                DKVShard dkvShard = entry.getKey();
-                DKVClient dkvClient = pool.getDKVClient(dkvShard, nodeType, UNKNOWN);
+                DKVClient dkvClient = pool.getDKVClient(entry.getKey(), nodeType, UNKNOWN);
                 String[] reqKeys = entry.getValue().toArray(new String[0]);
-                String[] reqVals = dkvClient.multiGet(consistency, reqKeys);
-                for (int i = 0, reqKeysLength = reqKeys.length; i < reqKeysLength; i++) {
-                    tempResult.put(reqKeys[i], reqVals[i]);
-                }
+                KV.Strings[] kvs = dkvClient.multiGet(consistency, reqKeys);
+                addAll(result, kvs);
             }
-            String[] resVals = new String[keys.length];
-            for (int i = 0, keysLength = keys.length; i < keysLength; i++) {
-                resVals[i] = tempResult.get(keys[i]);
-            }
-            return resVals;
+            return result.toArray(new KV.Strings[0]);
         } else {
             DKVShard dkvShard = Iterables.get(dkvShards.keySet(), 0);
             DKVClient dkvClient = pool.getDKVClient(dkvShard, nodeType, UNKNOWN);
@@ -110,7 +103,7 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
-    public byte[][] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
+    public KV.Bytes[] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
         checkf(keys != null && keys.length > 0, IllegalArgumentException.class, "must provide at least one key for multi get");
         Map<DKVShard, List<byte[]>> dkvShards = shardProvider.provideShards(keys);
         checkf(dkvShards != null && !dkvShards.isEmpty(), IllegalArgumentException.class, "unable to compute shard(s) for the given keys");
@@ -120,22 +113,14 @@ public class ShardedDKVClient implements DKVClient {
             checkf(consistency != Api.ReadConsistency.LINEARIZABLE, UnsupportedOperationException.class,
                     "DKV does not yet support cross shard linearizable multi get");
 
-            //noinspection ConstantConditions
-            IdentityHashMap<byte[], byte[]> tempResult = new IdentityHashMap<>(keys.length);
+            LinkedList<KV.Bytes> result = new LinkedList<>();
             for (Map.Entry<DKVShard, List<byte[]>> entry : dkvShards.entrySet()) {
-                DKVShard dkvShard = entry.getKey();
-                DKVClient dkvClient = pool.getDKVClient(dkvShard, nodeType, UNKNOWN);
-                byte[][] reqKeys = entry.getValue().toArray(new byte[0][0]);
-                byte[][] reqVals = dkvClient.multiGet(consistency, reqKeys);
-                for (int i = 0, reqKeysLength = reqKeys.length; i < reqKeysLength; i++) {
-                    tempResult.put(reqKeys[i], reqVals[i]);
-                }
+                DKVClient dkvClient = pool.getDKVClient(entry.getKey(), nodeType, UNKNOWN);
+                byte[][] reqKeys = entry.getValue().toArray(new byte[0][]);
+                KV.Bytes[] kvs = dkvClient.multiGet(consistency, reqKeys);
+                addAll(result, kvs);
             }
-            byte[][] resVals = new byte[keys.length][];
-            for (int i = 0, keysLength = keys.length; i < keysLength; i++) {
-                resVals[i] = tempResult.get(keys[i]);
-            }
-            return resVals;
+            return result.toArray(new KV.Bytes[0]);
         } else {
             DKVShard dkvShard = Iterables.get(dkvShards.keySet(), 0);
             DKVClient dkvClient = pool.getDKVClient(dkvShard, nodeType, UNKNOWN);

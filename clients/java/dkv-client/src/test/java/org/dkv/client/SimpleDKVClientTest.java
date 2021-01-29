@@ -32,7 +32,7 @@ public class SimpleDKVClientTest {
     public void shouldPerformMultiGet() {
         String keyPref = "K_", valPref = "V_";
         String[] keys = put(10, keyPref, valPref);
-        String[] vals = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
+        KV.Strings[] vals = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
         assertValues(keyPref, keys, vals);
     }
 
@@ -75,10 +75,10 @@ public class SimpleDKVClientTest {
         dkvCli.close();
     }
 
-    private void assertValues(String keyPref, String[] keys, String[] vals) {
+    private void assertValues(String keyPref, String[] keys, KV.Strings[] vals) {
         assertEquals("Incorrect number of values from MultiGet", keys.length, vals.length);
-        for (String val : vals) {
-            String[] vs = val.split("_");
+        for (KV.Strings val : vals) {
+            String[] vs = val.getValue().split("_");
             assertEquals(2, vs.length);
             int idx = Integer.parseInt(vs[1]);
             assertEquals(format("Incorrect key for value: %s", val), keys[idx-1], format("%s%d", keyPref, idx));

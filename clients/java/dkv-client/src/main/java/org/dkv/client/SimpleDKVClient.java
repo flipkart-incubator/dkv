@@ -162,32 +162,32 @@ public class SimpleDKVClient implements DKVClient {
         return value.toByteArray();
     }
 
-    public String[] multiGet(Api.ReadConsistency consistency, String[] keys) {
+    public KV.Strings[] multiGet(Api.ReadConsistency consistency, String[] keys) {
         LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (String key : keys) {
             keyByteStrs.add(copyFromUtf8(key));
         }
-        List<ByteString> valByteStrs = multiGet(consistency, keyByteStrs);
-        String[] values = new String[valByteStrs.size()];
+        List<Api.KVPair> kvPairs = multiGet(consistency, keyByteStrs);
+        KV.Strings[] result = new KV.Strings[kvPairs.size()];
         int idx = 0;
-        for (ByteString valByteStr : valByteStrs) {
-            values[idx++] = valByteStr.toStringUtf8();
+        for (Api.KVPair kvPair : kvPairs) {
+            result[idx++] = new KV.Strings(kvPair.getKey().toStringUtf8(), kvPair.getValue().toStringUtf8());
         }
-        return values;
+        return result;
     }
 
-    public byte[][] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
+    public KV.Bytes[] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
         LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (byte[] key : keys) {
             keyByteStrs.add(copyFrom(key));
         }
-        List<ByteString> valByteStrs = multiGet(consistency, keyByteStrs);
-        byte[][] values = new byte[valByteStrs.size()][];
+        List<Api.KVPair> kvPairs = multiGet(consistency, keyByteStrs);
+        KV.Bytes[] result = new KV.Bytes[kvPairs.size()];
         int idx = 0;
-        for (ByteString valByteStr : valByteStrs) {
-            values[idx++] = valByteStr.toByteArray();
+        for (Api.KVPair kvPair : kvPairs) {
+            result[idx++] = new KV.Bytes(kvPair.getKey().toByteArray(), kvPair.getValue().toByteArray());
         }
-        return values;
+        return result;
     }
 
     public Iterator<DKVEntry> iterate(String startKey) {
@@ -268,7 +268,7 @@ public class SimpleDKVClient implements DKVClient {
         return getRes.getValue();
     }
 
-    private List<ByteString> multiGet(Api.ReadConsistency consistency, List<ByteString> keyByteStrs) {
+    private List<Api.KVPair> multiGet(Api.ReadConsistency consistency, List<ByteString> keyByteStrs) {
         Api.MultiGetRequest.Builder multiGetReqBuilder = Api.MultiGetRequest.newBuilder();
         Api.MultiGetRequest multiGetReq = multiGetReqBuilder
                 .addAllKeys(keyByteStrs)
@@ -279,6 +279,6 @@ public class SimpleDKVClient implements DKVClient {
         if (status.getCode() != 0) {
             throw new DKVException(status, "MultiGet", new Object[]{consistency, keyByteStrs});
         }
-        return multiGetRes.getValuesList();
+        return multiGetRes.getKeyValuesList();
     }
 }
