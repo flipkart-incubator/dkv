@@ -49,7 +49,7 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 		} else {
 			if res, err := kvs.Get(key); err != nil {
 				t.Error(err)
-			} else if string(res[0]) != string(val) {
+			} else if string(res[0].Value) != string(val) {
 				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0])
 			}
 		}
@@ -67,8 +67,16 @@ func testGet(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 		} else {
 			if kvsVals, err := kvs.Get(key); err != nil {
 				t.Error(err)
-			} else if string(val) != string(kvsVals[0]) {
-				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0], val)
+			} else {
+				readResults := make([]*serverpb.KVPair, 1)
+				buf := bytes.NewBuffer(val)
+				if err := gob.NewDecoder(buf).Decode(&readResults); err != nil {
+					t.Error(err)
+				} else {
+					if string(readResults[0].Value) != string(kvsVals[0].Value) {
+						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0], readResults[0].Value)
+					}
+				}
 			}
 		}
 	}
@@ -83,7 +91,7 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 		if vals, err := dkvRepl.Load(reqBts); err != nil {
 			t.Error(err)
 		} else {
-			readResults := make([][]byte, len(keys))
+			readResults := make([]*serverpb.KVPair, len(keys))
 			buf := bytes.NewBuffer(vals)
 			if err := gob.NewDecoder(buf).Decode(&readResults); err != nil {
 				t.Error(err)
@@ -92,8 +100,8 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 					t.Error(err)
 				} else {
 					for i, readResult := range readResults {
-						if string(readResult) != string(kvsVals[i]) {
-							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i], readResult)
+						if string(readResult.Value) != string(kvsVals[i].Value) {
+							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i], readResult.Value)
 						}
 					}
 				}
@@ -119,12 +127,12 @@ func (ms *memStore) Put(key []byte, value []byte) error {
 	return nil
 }
 
-func (ms *memStore) Get(keys ...[]byte) ([][]byte, error) {
-	rss := make([][]byte, len(keys))
+func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
+	rss := make([]*serverpb.KVPair, len(keys))
 	for i, key := range keys {
 		storeKey := string(key)
 		if val, present := ms.store[storeKey]; present {
-			rss[i] = val
+			rss[i] = &serverpb.KVPair{Key: key, Value: val}
 		} else {
 			return nil, errors.New("Given key not found")
 		}

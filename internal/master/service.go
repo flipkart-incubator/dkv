@@ -67,7 +67,11 @@ func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetReques
 		ss.lg.Error("Unable to GET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Value = readResults[0]
+		// Needed to take care of the (valid) case when the
+		// given key is not found with DKV
+		if len(readResults) == 1 {
+			res.Value = readResults[0].Value
+		}
 	}
 	return res, err
 }
@@ -82,7 +86,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 		ss.lg.Error("Unable to MultiGET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Values = readResults
+		res.KeyValues = readResults
 	}
 	return res, err
 }
@@ -306,7 +310,10 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 			res.Status = newErrorStatus(err)
 			loadError = err
 		} else {
-			res.Value = val
+			kvs, _ := gobDecodeAsKVPairs(val)
+			if kvs != nil && len(kvs) == 1 {
+				res.Value = kvs[0].Value
+			}
 		}
 		return res, loadError
 	default:
@@ -327,7 +334,7 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 			res.Status = newErrorStatus(err)
 			readError = err
 		} else {
-			res.Values, readError = gobDecodeAs2DByteArray(val)
+			res.KeyValues, readError = gobDecodeAsKVPairs(val)
 		}
 		return res, readError
 	default:
@@ -335,9 +342,9 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 	}
 }
 
-func gobDecodeAs2DByteArray(val []byte) ([][]byte, error) {
+func gobDecodeAsKVPairs(val []byte) ([]*serverpb.KVPair, error) {
 	buf := bytes.NewBuffer(val)
-	res := new([][]byte)
+	res := new([]*serverpb.KVPair)
 	if err := gob.NewDecoder(buf).Decode(res); err != nil {
 		return nil, err
 	}

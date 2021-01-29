@@ -83,11 +83,18 @@ message MultiGetRequest {
   ReadConsistency readConsistency = 2;
 }
 
+message KVPair {
+  // Key is the DKV key
+  bytes key = 1;
+  // Value is the value associated with a given key
+  bytes value = 2;
+}
+
 message MultiGetResponse {
   // Status indicates the result of the bulk Get operation.
   Status status = 1;
-  // Values are the individual responses of the bulk Get operation.
-  repeated bytes values = 2;
+  // Association of keys and values of the bulk Get operation.
+  repeated KVPair keyValues = 2;
 }
 
 service DKVReplication {

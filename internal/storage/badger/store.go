@@ -168,20 +168,21 @@ func (bdb *badgerDB) Put(key []byte, value []byte) error {
 	return err
 }
 
-func (bdb *badgerDB) Get(keys ...[]byte) ([][]byte, error) {
+func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
-	var results [][]byte
+	var results []*serverpb.KVPair
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
 			item, err := txn.Get(key)
-			if err != nil {
+			switch err {
+			case nil:
+				value, _ := item.ValueCopy(nil)
+				results = append(results, &serverpb.KVPair{Key: key, Value: value})
+			case badger.ErrKeyNotFound:
+				continue
+			default:
 				return err
 			}
-			value, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			results = append(results, value)
 		}
 		return nil
 	})

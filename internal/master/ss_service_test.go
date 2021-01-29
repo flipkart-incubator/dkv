@@ -86,7 +86,7 @@ func testMultiGet(t *testing.T) {
 		t.Fatalf("Unable to MultiGet. Error: %v", err)
 	} else {
 		for i, result := range results {
-			if string(result) != vals[i] {
+			if string(result.Value) != vals[i] {
 				t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], result)
 			}
 		}

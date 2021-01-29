@@ -81,7 +81,7 @@ func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverp
 
 // MultiGet takes the keys as byte arrays along with the consistency
 // level and invokes the GRPC MultiGet method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) ([][]byte, error) {
+func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) ([]*serverpb.KVPair, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	multiGetReq := &serverpb.MultiGetRequest{Keys: keys, ReadConsistency: rc}
@@ -89,7 +89,7 @@ func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) 
 	if err != nil {
 		return nil, err
 	}
-	return res.Values, nil
+	return res.KeyValues, nil
 }
 
 // GetChanges retrieves changes since the given change number

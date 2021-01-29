@@ -131,14 +131,13 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	return err
 }
 
-func (rdb *rocksDB) Get(keys ...[]byte) ([][]byte, error) {
+func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
 
 	switch numKeys := len(keys); {
 	case numKeys == 1:
-		val, err := rdb.getSingleKey(ro, keys[0])
-		return [][]byte{val}, err
+		return rdb.getSingleKey(ro, keys[0])
 	default:
 		return rdb.getMultipleKeys(ro, keys)
 	}
@@ -432,27 +431,34 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 	return res
 }
 
-func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]byte, error) {
+func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
 	value, err := rdb.db.Get(ro, key)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
 		return nil, err
 	}
-	return toByteArray(value), nil
+	val := toByteArray(value)
+	if val != nil && len(val) > 0 {
+		return []*serverpb.KVPair{&serverpb.KVPair{Key: key, Value: val}}, nil
+	}
+	return nil, nil
 }
 
-func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([][]byte, error) {
+func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
 	values, err := rdb.db.MultiGet(ro, keys...)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
 		return nil, err
 	}
-	var results [][]byte
-	for _, value := range values {
-		results = append(results, toByteArray(value))
-		value.Free()
+	var results []*serverpb.KVPair
+	for i, value := range values {
+		if value != nil {
+			key, val := keys[i], toByteArray(value)
+			results = append(results, &serverpb.KVPair{Key: key, Value: val})
+			value.Free()
+		}
 	}
 	return results, nil
 }

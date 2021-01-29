@@ -64,7 +64,9 @@ func (dss *dkvSlaveService) Get(ctx context.Context, getReq *serverpb.GetRequest
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Value = readResults[0]
+		if len(readResults) == 1 {
+			res.Value = readResults[0].Value
+		}
 	}
 	return res, err
 }
@@ -75,7 +77,7 @@ func (dss *dkvSlaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Values = readResults
+		res.KeyValues = readResults
 	}
 	return res, err
 }
