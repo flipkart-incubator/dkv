@@ -2,7 +2,10 @@ package site.ycsb.db;
 
 import com.google.gson.Gson;
 import dkv.serverpb.Api;
-import org.dkv.client.*;
+import org.dkv.client.DKVEntry;
+import org.dkv.client.KeyHashBasedShardProvider;
+import org.dkv.client.ShardConfiguration;
+import org.dkv.client.ShardedDKVClient;
 import site.ycsb.*;
 
 import java.io.*;
@@ -12,8 +15,6 @@ import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
 import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static site.ycsb.StringByteIterator.getByteIteratorMap;
-import static site.ycsb.StringByteIterator.getStringMap;
 
 /**
  * YCSB binding for DKV.
@@ -148,18 +149,38 @@ public class DKVClient extends DB {
   private byte[] toDKVValue(Map<String, ByteIterator> values) throws IOException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     try (ObjectOutputStream oos = new ObjectOutputStream(bytes)) {
-      Map<String, String> vals = getStringMap(values);
-      oos.writeObject(vals);
+      oos.writeInt(values.size());
+      for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
+        String key = entry.getKey();
+        oos.writeInt(key.length());
+        oos.writeChars(key);
+        byte[] valBytes = entry.getValue().toArray();
+        oos.writeInt(valBytes.length);
+        oos.write(valBytes);
+      }
       oos.flush();
       return bytes.toByteArray();
     }
   }
 
-  private Map<String, ByteIterator> fromDKVValue(byte[] value) throws IOException, ClassNotFoundException {
+  private Map<String, ByteIterator> fromDKVValue(byte[] value) throws IOException {
     try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(value))) {
-      //noinspection unchecked
-      Map<String, String> vals = (Map<String, String>) ois.readObject();
-      return getByteIteratorMap(vals);
+      int numEntries = ois.readInt();
+      HashMap<String, ByteIterator> result = new HashMap<>(numEntries);
+      for (int i = 0; i < numEntries; i++) {
+        int keySize = ois.readInt();
+        char[] key = new char[keySize];
+        for (int j = 0; j < keySize; j++) {
+          key[j] = ois.readChar();
+        }
+        int valSize = ois.readInt();
+        byte[] val = new byte[valSize];
+        for (int j = 0; j < valSize; j++) {
+          val[j] = ois.readByte();
+        }
+        result.put(new String(key), new ByteArrayByteIterator(val));
+      }
+      return result;
     }
   }
 }
