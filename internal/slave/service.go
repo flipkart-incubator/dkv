@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -143,8 +144,23 @@ func (dss *dkvSlaveService) applyChangesFromMaster() error {
 				err = dss.applyChanges(res)
 			}
 		}
+	} else {
+		if isResourceExhausted(err) {
+			dss.lg.Warn("GetChanges call exceeded resource limits", zap.Error(err))
+			newMaxNumChngs := dss.maxNumChngs >> 1
+			dss.lg.Warn("Retrieving smaller batches of changes", zap.Uint32("before", dss.maxNumChngs), zap.Uint32("after", newMaxNumChngs))
+			dss.maxNumChngs = newMaxNumChngs
+			// We swallow this error since we retry with smaller batch in the next tick
+			return nil
+		}
 	}
 	return err
+}
+
+const ResourceExhaustedErr = "ResourceExhausted"
+
+func isResourceExhausted(err error) bool {
+	return strings.Contains(err.Error(), ResourceExhaustedErr)
 }
 
 func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) error {

@@ -29,6 +29,7 @@ type DKVClient struct {
 const (
 	ReadBufSize    = 10 << 20
 	WriteBufSize   = 10 << 20
+	MaxMsgSize     = 50 << 20
 	Timeout        = 10 * time.Second
 	ConnectTimeout = 10 * time.Second
 )
@@ -43,6 +44,7 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 	conn, err := grpc.DialContext(ctx, svcAddr,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
+		grpc.WithMaxMsgSize(MaxMsgSize),
 		grpc.WithReadBufferSize(ReadBufSize),
 		grpc.WithWriteBufferSize(WriteBufSize),
 		grpc.WithAuthority(authority))
