@@ -152,7 +152,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 
-	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(); err == nil {
+	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err == nil {
 		t.Error("Expected an error from slave instance")
 	} else {
 		t.Log(err)

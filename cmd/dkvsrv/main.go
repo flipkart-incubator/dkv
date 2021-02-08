@@ -300,7 +300,7 @@ func setFlagsForNexusDirs() {
 
 func setupStats() {
 	if statsdAddr != "" {
-		statsCli = stats.NewStatsDClient(statsdAddr, "nexus_redis")
+		statsCli = stats.NewStatsDClient(statsdAddr, "dkv")
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
