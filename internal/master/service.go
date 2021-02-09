@@ -362,7 +362,7 @@ func (ds *distributedService) Restore(ctx context.Context, restoreReq *serverpb.
 
 func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNodeRequest) (*serverpb.Status, error) {
 	// TODO: We can include any relevant checks on the joining node - like reachability, storage engine compatibility, etc.
-	if err := ds.raftRepl.AddMember(ctx, int(req.NodeId), req.NodeUrl); err != nil {
+	if err := ds.raftRepl.AddMember(ctx, req.NodeUrl); err != nil {
 		ds.lg.Error("Unable to add node", zap.Error(err))
 		return newErrorStatus(err), err
 	}
@@ -370,7 +370,7 @@ func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNode
 }
 
 func (ds *distributedService) RemoveNode(ctx context.Context, req *serverpb.RemoveNodeRequest) (*serverpb.Status, error) {
-	if err := ds.raftRepl.RemoveMember(ctx, int(req.NodeId)); err != nil {
+	if err := ds.raftRepl.RemoveMember(ctx, req.NodeUrl); err != nil {
 		ds.lg.Error("Unable to remove node", zap.Error(err))
 		return newErrorStatus(err), err
 	}

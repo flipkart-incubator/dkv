@@ -198,18 +198,15 @@ service DKVCluster {
 }
 
 message AddNodeRequest {
-  // NodeId represents the identifier of the node that needs to
-  // be added to the cluster.
-  uint32 nodeId = 1;
   // NodeUrl represents the URL for the Nexus service running on
   // the node that needs to be added to the cluster. Other Nexus
   // peers communicate with this node on this service.
-  string nodeUrl = 2;
+  string nodeUrl = 1;
 }
 
 message RemoveNodeRequest {
-  // NodeId represents the identifier of the node that needs to
-  // be removed from the cluster.
-  uint32 nodeId = 1;
+  // NodeUrl represents the URL for the Nexus service running on
+  // the node that needs to be removed from the cluster.
+  string nodeUrl = 1;
 }
 

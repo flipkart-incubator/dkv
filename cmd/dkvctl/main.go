@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
@@ -25,9 +24,8 @@ var cmds = []*cmd{
 	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, ""},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
-	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
-	{"removeNode", "<nodeId>", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
-	{"replica", "<add> <host:port> [zone]|<remove> <host:port> [zone]|<list> [zone]", "Add, remove or list replicas", (*cmd).replica, ""},
+	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, ""},
+	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, ""},
 }
 
 func (c *cmd) usage() {
@@ -107,15 +105,12 @@ func (c *cmd) restore(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) addNode(client *ctl.DKVClient, args ...string) {
-	if len(args) != 2 {
+	if len(args) != 1 {
 		c.usage()
 	} else {
-		if nodeID, err := strconv.ParseUint(args[0], 10, 32); err != nil {
-			fmt.Printf("Unable to convert %s into an unsigned 32-bit integer\n", args[0])
-		} else {
-			if err := client.AddNode(uint32(nodeID), args[1]); err != nil {
-				fmt.Printf("Unable to add node with ID: %d and URL: %s\n", nodeID, args[1])
-			}
+		nodeURL := args[0]
+		if err := client.AddNode(nodeURL); err != nil {
+			fmt.Printf("Unable to add node with URL: %s. Error: %v\n", nodeURL, err)
 		}
 	}
 }
@@ -124,65 +119,10 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
-		if nodeID, err := strconv.ParseUint(args[0], 10, 32); err != nil {
-			fmt.Printf("Unable to convert %s into an unsigned 32-bit integer\n", args[0])
-		} else {
-			if err := client.RemoveNode(uint32(nodeID)); err != nil {
-				fmt.Printf("Unable to remove node with ID: %d\n", nodeID)
-			}
+		nodeURL := args[0]
+		if err := client.RemoveNode(nodeURL); err != nil {
+			fmt.Printf("Unable to remove node with URL: %s. Error: %v\n", nodeURL, err)
 		}
-	}
-}
-
-func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
-	cmd, cmdArgs := args[0], args[1:]
-	switch trimLower(cmd) {
-	case "add":
-		repl, zone := "", ""
-		switch len(cmdArgs) {
-		case 1:
-			repl = cmdArgs[0]
-		case 2:
-			repl, zone = cmdArgs[0], cmdArgs[1]
-		default:
-			c.usage()
-			return
-		}
-		if err := client.AddReplica(repl, zone); err != nil {
-			fmt.Printf("Unable to add replica. Error: %v\n", err)
-		} else {
-			fmt.Println("OK")
-		}
-	case "remove":
-		repl, zone := "", ""
-		switch len(cmdArgs) {
-		case 1:
-			repl = cmdArgs[0]
-		case 2:
-			repl, zone = cmdArgs[0], cmdArgs[1]
-		default:
-			c.usage()
-			return
-		}
-		if err := client.RemoveReplica(repl, zone); err != nil {
-			fmt.Printf("Unable to remove replica. Error: %v\n", err)
-		} else {
-			fmt.Println("OK")
-		}
-	case "list":
-		zone := ""
-		if len(cmdArgs) > 0 {
-			zone = cmdArgs[0]
-		}
-		if repls, err := client.GetReplicas(zone); err != nil {
-			fmt.Printf("Unable to fetch replicas. Error: %v\n", err)
-		} else {
-			for _, repl := range repls {
-				fmt.Println(repl)
-			}
-		}
-	default:
-		c.usage()
 	}
 }
 

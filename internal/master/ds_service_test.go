@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -111,20 +112,21 @@ func testRestore(t *testing.T) {
 }
 
 func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
-	// Add new DKV node through the client of any other DKV node (1)
-	if err := dkvClis[1].AddNode(newNodeID, newNodeURL); err != nil {
-		t.Fatal(err)
-	}
-	<-time.After(3 * time.Second)
-	clusURL := fmt.Sprintf("%s,%s", clusterURL, newNodeURL)
-	// Create the new DKV node
-	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, true, clusURL)
+	// Create and start the new DKV node
+	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, newNodeURL, clusterURL)
 	defer dkvSvc.Close()
 	defer grpcSrv.GracefulStop()
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
 	<-time.After(3 * time.Second)
-	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[newNodeID])
+
+	// Add this new DKV node through the client of any other DKV node (1)
+	if err := dkvClis[1].AddNode(newNodeURL); err != nil {
+		t.Fatal(err)
+	}
+	<-time.After(3 * time.Second)
+
 	// Create the client for the new DKV node
+	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[newNodeID])
 	if dkvCli, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
 		t.Fatal(err)
 	} else {
@@ -139,7 +141,7 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 			}
 		}
 		// Remove new DKV node through the client of any other DKV Node (2)
-		if err := dkvClis[2].RemoveNode(newNodeID); err != nil {
+		if err := dkvClis[2].RemoveNode(newNodeURL); err != nil {
 			t.Fatal(err)
 		}
 		<-time.After(3 * time.Second)
@@ -173,20 +175,20 @@ func resetRaftStateDirs(t *testing.T) {
 }
 
 func initDKVServers(ids ...int) {
+	clusURLs := strings.Split(clusterURL, ",")
 	for id := 1; id <= clusterSize; id++ {
-		go serveDistributedDKV(id)
+		go serveDistributedDKV(id, clusURLs[id-1])
 	}
 }
 
-func newReplicator(id int, kvs storage.KVStore, joining bool, clusterURL string) nexus_api.RaftReplicator {
+func newReplicator(kvs storage.KVStore, nodeURL, clusterURL string) nexus_api.RaftReplicator {
 	replStore := dkv_sync.NewDKVReplStore(kvs)
 	opts := []nexus.Option{
-		nexus.NodeId(id),
+		nexus.ListenAddr(nodeURL),
 		nexus.LogDir(logDir),
 		nexus.SnapDir(snapDir),
 		nexus.ClusterUrl(clusterURL),
 		nexus.ReplicationTimeout(replTimeout),
-		nexus.Join(joining),
 		//nexus.LeaseBasedReads(),
 	}
 	if nexusRepl, err := nexus_api.NewRaftReplicator(replStore, opts...); err != nil {
@@ -227,9 +229,9 @@ func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storag
 	}
 }
 
-func newDistributedDKVNode(id int, join bool, clusURL string) (DKVService, *grpc.Server) {
+func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server) {
 	kvs, cp, br := newKVStoreWithID(id)
-	dkvRepl := newReplicator(id, kvs, join, clusURL)
+	dkvRepl := newReplicator(kvs, nodeURL, clusURL)
 	dkvRepl.Start()
 	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, zap.NewNop(), stats.NewNoOpClient())
 	grpcSrv := grpc.NewServer()
@@ -238,8 +240,8 @@ func newDistributedDKVNode(id int, join bool, clusURL string) (DKVService, *grpc
 	return distSrv, grpcSrv
 }
 
-func serveDistributedDKV(id int) {
-	dkvSvc, grpcSvc := newDistributedDKVNode(id, false, clusterURL)
+func serveDistributedDKV(id int, nodeURL string) {
+	dkvSvc, grpcSvc := newDistributedDKVNode(id, nodeURL, clusterURL)
 	mutex.Lock()
 	dkvSvcs[id] = dkvSvc
 	grpcSrvs[id] = grpcSvc
