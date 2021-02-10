@@ -17,6 +17,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
 )
 
@@ -375,6 +376,11 @@ func (ds *distributedService) RemoveNode(ctx context.Context, req *serverpb.Remo
 		return newErrorStatus(err), err
 	}
 	return newEmptyStatus(), nil
+}
+
+func (ds *distributedService) ListNodes(ctx context.Context, _ *empty.Empty) (*serverpb.ListNodesResponse, error) {
+	leader, members := ds.raftRepl.ListMembers()
+	return &serverpb.ListNodesResponse{Status: newEmptyStatus(), Leader: leader, Nodes: members}, nil
 }
 
 func (ds *distributedService) Close() error {

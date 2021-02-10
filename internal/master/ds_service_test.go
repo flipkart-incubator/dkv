@@ -184,7 +184,7 @@ func initDKVServers(ids ...int) {
 func newReplicator(kvs storage.KVStore, nodeURL, clusterURL string) nexus_api.RaftReplicator {
 	replStore := dkv_sync.NewDKVReplStore(kvs)
 	opts := []nexus.Option{
-		nexus.ListenAddr(nodeURL),
+		nexus.NodeUrl(nodeURL),
 		nexus.LogDir(logDir),
 		nexus.SnapDir(snapDir),
 		nexus.ClusterUrl(clusterURL),

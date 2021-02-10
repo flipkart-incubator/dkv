@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
@@ -11,25 +12,31 @@ import (
 )
 
 type cmd struct {
-	name    string
-	argDesc string
-	cmdDesc string
-	fn      func(*cmd, *ctl.DKVClient, ...string)
-	value   string
+	name       string
+	argDesc    string
+	cmdDesc    string
+	fn         func(*cmd, *ctl.DKVClient, ...string)
+	value      string
+	emptyValue bool
 }
 
 var cmds = []*cmd{
-	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, ""},
-	{"get", "<key>", "Get value for the given key", (*cmd).get, ""},
-	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, ""},
-	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
-	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
-	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, ""},
-	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, ""},
+	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
+	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
+	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
+	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
+	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
+	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
+	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
+	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
 }
 
 func (c *cmd) usage() {
-	fmt.Printf("  -%s %s - %s\n", c.name, c.argDesc, c.cmdDesc)
+	if c.argDesc == "" {
+		fmt.Printf("  -%s - %s\n", c.name, c.cmdDesc)
+	} else {
+		fmt.Printf("  -%s %s - %s\n", c.name, c.argDesc, c.cmdDesc)
+	}
 }
 
 func (c *cmd) set(client *ctl.DKVClient, args ...string) {
@@ -126,13 +133,41 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	}
 }
 
+func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
+	if leader, nodes, err := client.ListNodes(); err != nil {
+		fmt.Printf("Unable to retrieve the nodes of DKV cluster. Error: %v\n", err)
+	} else {
+		var ids []uint64
+		for id := range nodes {
+			if id != leader {
+				ids = append(ids, id)
+			}
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		if leaderUrl, present := nodes[leader]; present {
+			fmt.Println("Current DKV cluster members:")
+			fmt.Printf("%x => %s (leader)\n", leader, leaderUrl)
+		} else {
+			fmt.Println("WARNING: DKV cluster unhealthy, leader unknown")
+			fmt.Println("Current cluster members:")
+		}
+		for _, id := range ids {
+			fmt.Printf("%x => %s\n", id, nodes[id])
+		}
+	}
+}
+
 var dkvAddr, dkvAuthority string
 
 func init() {
 	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
 	for _, c := range cmds {
-		flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
+		if c.argDesc == "" {
+			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
+		} else {
+			flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
+		}
 	}
 	flag.Usage = usage
 }
@@ -174,7 +209,7 @@ func main() {
 
 	var validCmd bool
 	for _, c := range cmds {
-		if c.value != "" {
+		if c.value != "" || c.emptyValue {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)
 			c.fn(c, client, args...)

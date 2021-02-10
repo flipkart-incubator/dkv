@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
 )
 
@@ -142,6 +143,16 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 	remNodeReq := &serverpb.RemoveNodeRequest{NodeUrl: nodeURL}
 	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
 	return errorFromStatus(res, err)
+}
+
+func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})
+	if err := errorFromStatus(res.Status, err); err != nil {
+		return 0, nil, err
+	}
+	return res.Leader, res.Nodes, nil
 }
 
 // KVPair is convenience wrapper that captures a key and its value.

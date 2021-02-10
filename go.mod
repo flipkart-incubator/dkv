@@ -12,7 +12,7 @@ require (
 	github.com/facebookgo/ensure v0.0.0-20160127193407-b4ab57deab51 // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
-	github.com/flipkart-incubator/nexus v0.0.0-20210113123830-734b434344f7
+	github.com/flipkart-incubator/nexus v0.0.0-20210209102156-8954a192654e
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.2 // indirect
