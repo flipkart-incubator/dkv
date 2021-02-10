@@ -66,7 +66,6 @@ $ make GOOS=linux build
 Once DKV is built, the `<PROJECT_ROOT>/bin` folder should contain the following binaries:
 - `dkvsrv` - DKV server program
 - `dkvctl` - DKV client program
-- `dkvbench` - DKV benchmarking program
 
 ### Launching the DKV server in standalone mode
 
