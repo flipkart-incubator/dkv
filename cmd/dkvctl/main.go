@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
@@ -12,26 +12,31 @@ import (
 )
 
 type cmd struct {
-	name    string
-	argDesc string
-	cmdDesc string
-	fn      func(*cmd, *ctl.DKVClient, ...string)
-	value   string
+	name       string
+	argDesc    string
+	cmdDesc    string
+	fn         func(*cmd, *ctl.DKVClient, ...string)
+	value      string
+	emptyValue bool
 }
 
 var cmds = []*cmd{
-	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, ""},
-	{"get", "<key>", "Get value for the given key", (*cmd).get, ""},
-	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, ""},
-	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, ""},
-	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, ""},
-	{"addNode", "<nodeId> <nodeUrl>", "Add a DKV node to cluster", (*cmd).addNode, ""},
-	{"removeNode", "<nodeId>", "Remove a DKV node from cluster", (*cmd).removeNode, ""},
-	{"replica", "<add> <host:port> [zone]|<remove> <host:port> [zone]|<list> [zone]", "Add, remove or list replicas", (*cmd).replica, ""},
+	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
+	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
+	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
+	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
+	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
+	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
+	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
+	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
 }
 
 func (c *cmd) usage() {
-	fmt.Printf("  -%s %s - %s\n", c.name, c.argDesc, c.cmdDesc)
+	if c.argDesc == "" {
+		fmt.Printf("  -%s - %s\n", c.name, c.cmdDesc)
+	} else {
+		fmt.Printf("  -%s %s - %s\n", c.name, c.argDesc, c.cmdDesc)
+	}
 }
 
 func (c *cmd) set(client *ctl.DKVClient, args ...string) {
@@ -107,15 +112,12 @@ func (c *cmd) restore(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) addNode(client *ctl.DKVClient, args ...string) {
-	if len(args) != 2 {
+	if len(args) != 1 {
 		c.usage()
 	} else {
-		if nodeID, err := strconv.ParseUint(args[0], 10, 32); err != nil {
-			fmt.Printf("Unable to convert %s into an unsigned 32-bit integer\n", args[0])
-		} else {
-			if err := client.AddNode(uint32(nodeID), args[1]); err != nil {
-				fmt.Printf("Unable to add node with ID: %d and URL: %s\n", nodeID, args[1])
-			}
+		nodeURL := args[0]
+		if err := client.AddNode(nodeURL); err != nil {
+			fmt.Printf("Unable to add node with URL: %s. Error: %v\n", nodeURL, err)
 		}
 	}
 }
@@ -124,65 +126,34 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
-		if nodeID, err := strconv.ParseUint(args[0], 10, 32); err != nil {
-			fmt.Printf("Unable to convert %s into an unsigned 32-bit integer\n", args[0])
-		} else {
-			if err := client.RemoveNode(uint32(nodeID)); err != nil {
-				fmt.Printf("Unable to remove node with ID: %d\n", nodeID)
-			}
+		nodeURL := args[0]
+		if err := client.RemoveNode(nodeURL); err != nil {
+			fmt.Printf("Unable to remove node with URL: %s. Error: %v\n", nodeURL, err)
 		}
 	}
 }
 
-func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
-	cmd, cmdArgs := args[0], args[1:]
-	switch trimLower(cmd) {
-	case "add":
-		repl, zone := "", ""
-		switch len(cmdArgs) {
-		case 1:
-			repl = cmdArgs[0]
-		case 2:
-			repl, zone = cmdArgs[0], cmdArgs[1]
-		default:
-			c.usage()
-			return
-		}
-		if err := client.AddReplica(repl, zone); err != nil {
-			fmt.Printf("Unable to add replica. Error: %v\n", err)
-		} else {
-			fmt.Println("OK")
-		}
-	case "remove":
-		repl, zone := "", ""
-		switch len(cmdArgs) {
-		case 1:
-			repl = cmdArgs[0]
-		case 2:
-			repl, zone = cmdArgs[0], cmdArgs[1]
-		default:
-			c.usage()
-			return
-		}
-		if err := client.RemoveReplica(repl, zone); err != nil {
-			fmt.Printf("Unable to remove replica. Error: %v\n", err)
-		} else {
-			fmt.Println("OK")
-		}
-	case "list":
-		zone := ""
-		if len(cmdArgs) > 0 {
-			zone = cmdArgs[0]
-		}
-		if repls, err := client.GetReplicas(zone); err != nil {
-			fmt.Printf("Unable to fetch replicas. Error: %v\n", err)
-		} else {
-			for _, repl := range repls {
-				fmt.Println(repl)
+func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
+	if leader, nodes, err := client.ListNodes(); err != nil {
+		fmt.Printf("Unable to retrieve the nodes of DKV cluster. Error: %v\n", err)
+	} else {
+		var ids []uint64
+		for id := range nodes {
+			if id != leader {
+				ids = append(ids, id)
 			}
 		}
-	default:
-		c.usage()
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		if leaderUrl, present := nodes[leader]; present {
+			fmt.Println("Current DKV cluster members:")
+			fmt.Printf("%x => %s (leader)\n", leader, leaderUrl)
+		} else {
+			fmt.Println("WARNING: DKV cluster unhealthy, leader unknown")
+			fmt.Println("Current cluster members:")
+		}
+		for _, id := range ids {
+			fmt.Printf("%x => %s\n", id, nodes[id])
+		}
 	}
 }
 
@@ -192,7 +163,11 @@ func init() {
 	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
 	for _, c := range cmds {
-		flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
+		if c.argDesc == "" {
+			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
+		} else {
+			flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
+		}
 	}
 	flag.Usage = usage
 }
@@ -234,7 +209,7 @@ func main() {
 
 	var validCmd bool
 	for _, c := range cmds {
-		if c.value != "" {
+		if c.value != "" || c.emptyValue {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)
 			c.fn(c, client, args...)
