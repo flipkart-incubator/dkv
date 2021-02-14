@@ -33,13 +33,17 @@ const (
 	ConnectTimeout = 10 * time.Second
 )
 
-// NewInSecureDKVClient creates an insecure GRPC client against the
+// NewDKVClient creates an insecure GRPC client against the
 // given DKV service address.
-func NewInSecureDKVClient(svcAddr string) (*DKVClient, error) {
+func NewDKVClient(svcAddr string, opts ...grpc.DialOption) (*DKVClient, error) {
 	var dkvClnt *DKVClient
 	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
+	optsCopy := opts
+	optsCopy = append(optsCopy, grpc.WithBlock())
+	optsCopy = append(optsCopy, grpc.WithReadBufferSize(ReadBufSize))
+	optsCopy = append(optsCopy, grpc.WithWriteBufferSize(WriteBufSize))
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, svcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize), grpc.WithWriteBufferSize(WriteBufSize))
+	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
