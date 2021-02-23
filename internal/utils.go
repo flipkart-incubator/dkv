@@ -22,7 +22,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -40,10 +39,6 @@ type DKVConfig struct {
 	KeyPath        string
 	CertPath       string
 	CaCertPath     string
-}
-
-func ToServerMode(mode string) ConnectionMode {
-	return ConnectionMode(strings.TrimSpace(mode))
 }
 
 func NewDKVClient(clientConfig DKVConfig) (*ctl.DKVClient, error) {
@@ -148,7 +143,7 @@ func loadTLSCredentials(clientConfig DKVConfig) (credentials.TransportCredential
 	return credentials.NewTLS(config), nil
 }
 
-func generateSelfSignedCert(generatedCertDir string, generatedCertValidity int) (string, string, error) {
+func GenerateSelfSignedCert(generatedCertDir string, generatedCertValidity int) (string, string, error) {
 	var err error
 	if _, errCreate := os.Stat(generatedCertDir); os.IsNotExist(errCreate) {
 		err = os.MkdirAll(generatedCertDir, os.ModePerm)

@@ -27,18 +27,18 @@ import (
 )
 
 var (
-	disklessMode          bool
-	dbEngine              string
-	dbFolder              string
-	dbListenAddr          string
-	peerListenAddr            string
-	dbRole                string
-	statsdAddr            string
-	replMasterAddr        string
-	replPollInterval      time.Duration
-	certPath              string
-	keyPath               string
-	caCertPath            string
+	disklessMode     bool
+	dbEngine         string
+	dbFolder         string
+	dbListenAddr     string
+	peerListenAddr   string
+	dbRole           string
+	statsdAddr       string
+	replMasterAddr   string
+	replPollInterval time.Duration
+	certPath         string
+	keyPath          string
+	caCertPath       string
 
 	// Logging vars
 	dbAccessLog    string
@@ -147,8 +147,8 @@ func main() {
 		if replCli, err := utils.NewDKVClient(utils.DKVConfig{ConnectionMode: replClientMode,
 			SrvrAddr: replMasterAddr, KeyPath: keyPath, CertPath: certPath,
 			CaCertPath: caCertPath});
-		
-		err != nil {
+
+			err != nil {
 			panic(err)
 		} else {
 			defer replCli.Close()

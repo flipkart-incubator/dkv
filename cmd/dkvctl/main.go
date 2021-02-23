@@ -188,8 +188,8 @@ func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
 }
 
 var (
-	dkvAddr string
-	caCertPath            string
+	dkvAddr    string
+	caCertPath string
 )
 
 func init() {
@@ -203,7 +203,7 @@ func init() {
 
 func usage() {
 	fmt.Printf("Usage of %s:\n", os.Args[0])
-	printUsage([]string {"dkvAddr", "dkvMode", "certPath", "keyPath", "caCertPath"})
+	printUsage([]string{"dkvAddr", "caCertPath"})
 	for _, cmd := range cmds {
 		cmd.usage()
 	}
