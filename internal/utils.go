@@ -183,7 +183,6 @@ func generateSelfSignedCert(generatedCertDir string, generatedCertValidity int) 
 		BasicConstraintsValid: true,
 	}
 
-
 	log.Println("automatically generate certificates",
 		zap.Time("certificate-validity-bound-not-after", tmpl.NotAfter))
 
