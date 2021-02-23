@@ -1,24 +1,12 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/credentials"
-	"io/ioutil"
 	"log"
-	"math/big"
-	"net"
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -34,11 +22,8 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 var (
@@ -46,17 +31,14 @@ var (
 	dbEngine              string
 	dbFolder              string
 	dbListenAddr          string
+	peerListenAddr            string
 	dbRole                string
 	statsdAddr            string
 	replMasterAddr        string
-	masterMode			  string
 	replPollInterval      time.Duration
-	mode               string
 	certPath              string
 	keyPath               string
 	caCertPath            string
-	generatedCertValidity int
-	generatedCertDir      string
 
 	// Logging vars
 	dbAccessLog    string
@@ -73,20 +55,17 @@ func init() {
 	flag.BoolVar(&disklessMode, "dbDiskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
 	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
+	flag.StringVar(&peerListenAddr, "peerListenAddr", "127.0.0.1:8083", "Address on which the DKV replication service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
-	flag.StringVar(&masterMode, "masterMode", "insecure", "Service address of DKV master node for replication")
 	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
-	flag.StringVar(&mode, "mode", "insecure", "Security mode for this node - insecure|autoTLS|serverTLS|mutualTLS")
 	flag.StringVar(&certPath, "certPath", "", "Path for certificate file of this node")
 	flag.StringVar(&keyPath, "keyPath", "", "Path for key file of this node")
 	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.IntVar(&generatedCertValidity, "generatedCertValidity", 365, "Validity(in days) for the generated certificate")
-	flag.StringVar(&generatedCertDir, "generatedCertDir", "/tmp/dkv-certs", "Directory to store the generate key and certificates")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -106,8 +85,22 @@ func main() {
 	setFlagsForNexusDirs()
 	setupStats()
 
+	var secure = false
+	if caCertPath != "" && keyPath != "" && certPath != "" {
+		secure = true
+	}
+
+	var srvrMode utils.ConnectionMode
+	if secure {
+		srvrMode = utils.ServerTLS
+	} else {
+		srvrMode = utils.Insecure
+	}
+
 	kvs, cp, ca, br := newKVStore()
-	grpcSrvr, lstnr := newGrpcServerListener()
+	grpcSrvr, lstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
+		SrvrAddr: dbListenAddr, KeyPath: keyPath, CertPath: certPath,
+		CaCertPath: caCertPath}, accessLogger)
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
 	srvrRole.printFlags()
@@ -132,9 +125,26 @@ func main() {
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+		var replSrvrMode utils.ConnectionMode
+		if secure {
+			replSrvrMode = utils.MutualTLS
+		} else {
+			replSrvrMode = utils.Insecure
+		}
+		replGrpcSrvr, replLstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: replSrvrMode,
+			SrvrAddr: peerListenAddr, KeyPath: keyPath, CertPath: certPath,
+			CaCertPath: caCertPath}, accessLogger)
+		defer replGrpcSrvr.GracefulStop()
+		serverpb.RegisterDKVReplicationServer(replGrpcSrvr, dkvSvc)
+		go replGrpcSrvr.Serve(replLstnr)
 	case slaveRole:
-		if replCli, err := utils.NewDKVClient(utils.DKVConfig{ServerMode: masterMode,
+		var replClientMode utils.ConnectionMode
+		if secure {
+			replClientMode = utils.MutualTLS
+		} else {
+			replClientMode = utils.Insecure
+		}
+		if replCli, err := utils.NewDKVClient(utils.DKVConfig{ConnectionMode: replClientMode,
 			SrvrAddr: replMasterAddr, KeyPath: keyPath, CertPath: certPath,
 			CaCertPath: caCertPath});
 		
@@ -158,6 +168,9 @@ func validateFlags() {
 	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
 		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
 	}
+	if peerListenAddr != "" && strings.IndexRune(peerListenAddr, ':') < 0 {
+		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
+	}
 	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
 		log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
 	}
@@ -167,37 +180,14 @@ func validateFlags() {
 	if disklessMode && (strings.ToLower(dbEngine) == "rocksdb" || strings.ToLower(dbRole) == masterRole) {
 		log.Panicf("diskless is available only on Badger storage and for standalone and slave roles")
 	}
-	if strings.ToLower(dbRole) == slaveRole && (replMasterAddr == "" || masterMode == "") {
+	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
 		log.Panicf("replMasterAddr must be given in slave mode")
 	}
-
-	if strings.ToLower(dbRole) == slaveRole {
-		utils.ValidateDKVConfig(utils.DKVConfig{ServerMode: masterMode,
-			SrvrAddr: replMasterAddr, KeyPath: keyPath, CertPath: certPath,
-			CaCertPath: caCertPath})
-	}
-
-	validateServerModeCompliantFlags()
-}
-
-func validateServerModeCompliantFlags()  {
-	utils.ValidateDKVConfig(utils.DKVConfig{ServerMode: mode,
-		SrvrAddr: replMasterAddr, KeyPath: keyPath, CertPath: certPath,
-		CaCertPath: caCertPath})
-	srvrMode := utils.ToServerMode(mode)
-	switch srvrMode {
-	case utils.AutoTLS:
-		if generatedCertValidity <= 0 {
-			log.Panicf("Validaty period for the generated certificates(generatedCertValidity) should be > 0")
-		}
-
-		if generatedCertDir == "" {
-			log.Panicf("Directory for certificate generation(generatedCertDir) must not be empty")
-		}
+	nonNullAuthFlags := btou(certPath != "") + btou(keyPath != "") + btou(caCertPath != "")
+	if nonNullAuthFlags > 0 && nonNullAuthFlags < 3 {
+		log.Panicf("Missing TLS attributes, set all flags (caCertPath, keyPath, certPath) to run DKV in secure mode")
 	}
 }
-
-
 
 func setupAccessLogger() {
 	accessLogger = zap.NewNop()
@@ -270,152 +260,6 @@ func setupDKVLogger() {
 	}
 }
 
-func newGrpcServerListener() (*grpc.Server, net.Listener) {
-	var grpcSrvr *grpc.Server
-
-	if mode == utils.Insecure {
-		grpcSrvr = grpc.NewServer(
-			grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
-			grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
-		)
-	} else {
-		srvrCred, err := loadTLSCredentials()
-		if err != nil {
-			dkvLogger.Sugar().Fatal("Unable to load tls credentials", err)
-		}
-		grpcSrvr = grpc.NewServer(
-			grpc.Creds(srvrCred),
-			grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
-			grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
-		)
-	}
-	reflection.Register(grpcSrvr)
-	return grpcSrvr, newListener()
-}
-
-func loadTLSCredentials() (credentials.TransportCredentials, error) {
-	var serverCert tls.Certificate
-	var err error
-	if mode == utils.AutoTLS {
-		err = generateSelfSignedCert()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	serverCert, err = tls.LoadX509KeyPair(certPath, keyPath)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var config *tls.Config
-
-	if mode == utils.MutualTLS {
-		pemClientCA, err := ioutil.ReadFile(caCertPath)
-		if err != nil {
-			return nil, err
-		}
-
-		certPool := x509.NewCertPool()
-		if !certPool.AppendCertsFromPEM(pemClientCA) {
-			return nil, fmt.Errorf("failed to add client CA's certificate")
-		}
-
-		config = &tls.Config{
-			Certificates: []tls.Certificate{serverCert},
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			ClientCAs:    certPool,
-		}
-	} else {
-		config = &tls.Config{
-			Certificates: []tls.Certificate{serverCert},
-			ClientAuth:   tls.NoClientCert,
-		}
-	}
-	return credentials.NewTLS(config), nil
-}
-
-func generateSelfSignedCert() error {
-	var err error
-	if _, errCreate := os.Stat(generatedCertDir); os.IsNotExist(errCreate) {
-		err = os.MkdirAll(generatedCertDir, os.ModePerm)
-	}
-
-	if err != nil {
-		return err
-	}
-	certPath = filepath.Join(generatedCertDir, "cert.pem")
-	keyPath = filepath.Join(generatedCertDir, "key.pem")
-
-	_, errcert := os.Stat(certPath)
-	_, errkey := os.Stat(keyPath)
-	if errcert == nil && errkey == nil {
-		return nil
-	}
-
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return err
-	}
-
-	tmpl := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject:      pkix.Name{Organization: []string{"DKV"}},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(time.Duration(generatedCertValidity) * (24 * time.Hour)),
-
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-
-	log.Println("automatically generate certificates",
-			zap.Time("certificate-validity-bound-not-after", tmpl.NotAfter))
-
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return err
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
-	if err != nil {
-		return err
-	}
-
-	certOut, err := os.Create(certPath)
-	if err != nil {
-		return err
-	}
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	certOut.Close()
-	log.Println("created cert file", zap.String("path", certPath))
-
-	b, err := x509.MarshalECPrivateKey(priv)
-	if err != nil {
-		return err
-	}
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-
-	pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
-	keyOut.Close()
-	return nil
-}
-
-func newListener() (lis net.Listener) {
-	var err error
-	if lis, err = net.Listen("tcp", dbListenAddr); err != nil {
-		log.Panicf("failed to listen: %v", err)
-		return
-	}
-	return
-}
-
 func setupSignalHandler() <-chan os.Signal {
 	signals := []os.Signal{syscall.SIGINT, syscall.SIGQUIT, syscall.SIGSTOP, syscall.SIGTERM}
 	stopChan := make(chan os.Signal, len(signals))
@@ -454,9 +298,9 @@ func (role dkvSrvrRole) printFlags() {
 		printFlagsWithPrefix("db")
 	case masterRole:
 		if haveFlagsWithPrefix("nexus") {
-			printFlagsWithPrefix("db", "nexus")
+			printFlagsWithPrefix("db", "nexus", "peer")
 		} else {
-			printFlagsWithPrefix("db")
+			printFlagsWithPrefix("db", "peer")
 		}
 	case slaveRole:
 		printFlagsWithPrefix("db", "repl")
@@ -553,4 +397,11 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 		nexusRepl.Start()
 		return nexusRepl
 	}
+}
+
+func btou(b bool) uint8 {
+	if b {
+		return 1
+	}
+	return 0
 }

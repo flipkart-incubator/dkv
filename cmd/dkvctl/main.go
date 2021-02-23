@@ -189,17 +189,11 @@ func (c *cmd) replica(client *ctl.DKVClient, args ...string) {
 
 var (
 	dkvAddr string
-	dkvMode               string
-	certPath              string
-	keyPath               string
 	caCertPath            string
 )
 
 func init() {
 	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
-	flag.StringVar(&dkvMode, "dkvMode", "insecure", "Security mode for the DKV server node - insecure|autoTLS|serverTLS|mutualTLS")
-	flag.StringVar(&certPath, "certPath", "", "Path for certificate file of this node")
-	flag.StringVar(&keyPath, "keyPath", "", "Path for key file of this node")
 	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
 	for _, c := range cmds {
 		flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
@@ -235,13 +229,9 @@ func main() {
 	}
 
 	flag.Parse()
-	utils.ValidateDKVConfig(utils.DKVConfig{ServerMode: dkvMode,
-		SrvrAddr: dkvAddr, KeyPath: keyPath, CertPath: certPath,
-		CaCertPath: caCertPath})
 	fmt.Printf("Connecting to DKV service at %s...", dkvAddr)
-	client, err := utils.NewDKVClient(utils.DKVConfig{ServerMode: dkvMode,
-		SrvrAddr: dkvAddr, KeyPath: keyPath, CertPath: certPath,
-		CaCertPath: caCertPath})
+	client, err := utils.NewDKVClient(utils.DKVConfig{ConnectionMode: modeFromFlags(),
+		SrvrAddr: dkvAddr, CaCertPath: caCertPath})
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
@@ -261,5 +251,13 @@ func main() {
 	}
 	if !validCmd {
 		usage()
+	}
+}
+
+func modeFromFlags() utils.ConnectionMode {
+	if caCertPath != "" {
+		return utils.ServerTLS
+	} else {
+		return utils.Insecure
 	}
 }

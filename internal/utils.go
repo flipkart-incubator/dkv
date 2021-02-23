@@ -1,77 +1,56 @@
 package internal
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
+	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
 	"io/ioutil"
 	"log"
+	"math/big"
+	"net"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
-type ServerMode string
+type ConnectionMode string
 
 const (
-	ServerTLS     ServerMode = "serverTLS"
-	AutoTLS             = "autoTLS"
-	MutualTLS           = "mutualTLS"
-	Insecure = "insecure"
+	ServerTLS ConnectionMode = "serverTLS"
+	MutualTLS                = "mutualTLS"
+	Insecure                 = "insecure"
 )
 
 type DKVConfig struct {
-	ServerMode string
-	SrvrAddr string
-	KeyPath string
-	CertPath string
-	CaCertPath string
+	ConnectionMode ConnectionMode
+	SrvrAddr       string
+	KeyPath        string
+	CertPath       string
+	CaCertPath     string
 }
 
-func ValidateCertAndKeyPath(keyPath string, certPath string)  {
-	if keyPath == "" {
-		log.Panicf("Key path(keyPath) must not be empty for non-auto TLS mode")
-	}
-
-	if certPath == "" {
-		log.Panicf("Certificate path(certPath) must not be empty for non-auto TLS mode")
-	}
-}
-
-func ValidateDKVConfig(config DKVConfig)  {
-	serverMode := ToServerMode(config.ServerMode)
-	switch serverMode {
-	case AutoTLS:
-	case MutualTLS:
-		if config.CaCertPath == "" {
-			log.Panicf("CA certifacte path(caCertPath) must not be empty for mutualTLS mode")
-		}
-		ValidateCertAndKeyPath(config.KeyPath, config.CertPath)
-	case ServerTLS:
-		ValidateCertAndKeyPath(config.KeyPath, config.CertPath)
-	case Insecure:
-	default:
-		log.Panicf("Invalid server mode. Allowed values are insecure|autoTLS|serverTLS|mutualTLS")
-	}
-}
-
-
-func ToServerMode(mode string) ServerMode {
-	return ServerMode(strings.TrimSpace(mode))
+func ToServerMode(mode string) ConnectionMode {
+	return ConnectionMode(strings.TrimSpace(mode))
 }
 
 func NewDKVClient(clientConfig DKVConfig) (*ctl.DKVClient, error) {
-	srvrMode := ToServerMode(clientConfig.ServerMode)
 	var opt grpc.DialOption
 	var err error = nil
 	var config *tls.Config
-	switch srvrMode {
-	case AutoTLS:
-		config = &tls.Config{
-			InsecureSkipVerify: true,
-		}
-		opt = grpc.WithTransportCredentials(credentials.NewTLS(config))
+	switch clientConfig.ConnectionMode {
 	case MutualTLS:
 		config, err = getTLSConfigWithCertPool(clientConfig.CaCertPath)
 		if err == nil {
@@ -107,4 +86,144 @@ func getTLSConfigWithCertPool(caCertPath string) (*tls.Config, error) {
 		return nil, errors.New("failed to append certs")
 	}
 	return &tls.Config{InsecureSkipVerify: false, RootCAs: certPool}, err
+}
+
+func NewGrpcServerListener(config DKVConfig, loogger *zap.Logger) (*grpc.Server, net.Listener) {
+	var grpcSrvr *grpc.Server
+
+	if config.ConnectionMode == Insecure {
+		grpcSrvr = grpc.NewServer(
+			grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(loogger)),
+			grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(loogger)),
+		)
+	} else {
+		srvrCred, err := loadTLSCredentials(config)
+		if err != nil {
+			log.Fatal("Unable to load tls credentials", err)
+		}
+		grpcSrvr = grpc.NewServer(
+			grpc.Creds(srvrCred),
+			grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(loogger)),
+			grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(loogger)),
+		)
+	}
+	reflection.Register(grpcSrvr)
+	return grpcSrvr, NewListener(config.SrvrAddr)
+}
+
+func loadTLSCredentials(clientConfig DKVConfig) (credentials.TransportCredentials, error) {
+	var serverCert tls.Certificate
+	var err error
+
+	serverCert, err = tls.LoadX509KeyPair(clientConfig.CertPath, clientConfig.KeyPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var config *tls.Config
+
+	if clientConfig.ConnectionMode == MutualTLS {
+		pemClientCA, err := ioutil.ReadFile(clientConfig.CaCertPath)
+		if err != nil {
+			return nil, err
+		}
+
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(pemClientCA) {
+			return nil, fmt.Errorf("failed to add client CA's certificate")
+		}
+
+		config = &tls.Config{
+			Certificates: []tls.Certificate{serverCert},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    certPool,
+		}
+	} else {
+		config = &tls.Config{
+			Certificates: []tls.Certificate{serverCert},
+			ClientAuth:   tls.NoClientCert,
+		}
+	}
+	return credentials.NewTLS(config), nil
+}
+
+func generateSelfSignedCert(generatedCertDir string, generatedCertValidity int) (string, string, error) {
+	var err error
+	if _, errCreate := os.Stat(generatedCertDir); os.IsNotExist(errCreate) {
+		err = os.MkdirAll(generatedCertDir, os.ModePerm)
+	}
+
+	if err != nil {
+		return "", "", err
+	}
+	certPath := filepath.Join(generatedCertDir, "cert.pem")
+	keyPath := filepath.Join(generatedCertDir, "key.pem")
+
+	_, errcert := os.Stat(certPath)
+	_, errkey := os.Stat(keyPath)
+	if errcert == nil && errkey == nil {
+		return "", "", nil
+	}
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return "", "", err
+	}
+
+	tmpl := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject:      pkix.Name{Organization: []string{"DKV"}},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Duration(generatedCertValidity) * (24 * time.Hour)),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+
+	log.Println("automatically generate certificates",
+		zap.Time("certificate-validity-bound-not-after", tmpl.NotAfter))
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return "", "", err
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		return "", "", err
+	}
+
+	certOut, err := os.Create(certPath)
+	if err != nil {
+		return "", "", err
+	}
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certOut.Close()
+	log.Println("created cert file", zap.String("path", certPath))
+
+	b, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return "", "", err
+	}
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", "", err
+	}
+
+	pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
+	keyOut.Close()
+	return certPath, keyPath, nil
+}
+
+func NewListener(listenAddr string) (lis net.Listener) {
+	var err error
+	if lis, err = net.Listen("tcp", listenAddr); err != nil {
+		log.Panicf("failed to listen: %v", err)
+		return
+	}
+	return
 }
