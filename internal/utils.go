@@ -84,24 +84,17 @@ func getTLSConfigWithCertPool(caCertPath string) (*tls.Config, error) {
 }
 
 func NewGrpcServerListener(config DKVConfig, loogger *zap.Logger) (*grpc.Server, net.Listener) {
-	var grpcSrvr *grpc.Server
-
-	if config.ConnectionMode == Insecure {
-		grpcSrvr = grpc.NewServer(
-			grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(loogger)),
-			grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(loogger)),
-		)
-	} else {
+	opts := []grpc.ServerOption{
+		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(loogger)),
+		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(loogger))}
+	if config.ConnectionMode != Insecure {
 		srvrCred, err := loadTLSCredentials(config)
 		if err != nil {
 			log.Fatal("Unable to load tls credentials", err)
 		}
-		grpcSrvr = grpc.NewServer(
-			grpc.Creds(srvrCred),
-			grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(loogger)),
-			grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(loogger)),
-		)
+		opts = append(opts, grpc.Creds(srvrCred))
 	}
+	grpcSrvr := grpc.NewServer(opts...)
 	reflection.Register(grpcSrvr)
 	return grpcSrvr, NewListener(config.SrvrAddr)
 }
@@ -116,7 +109,9 @@ func loadTLSCredentials(clientConfig DKVConfig) (credentials.TransportCredential
 		return nil, err
 	}
 
-	var config *tls.Config
+	var config = &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+	}
 
 	if clientConfig.ConnectionMode == MutualTLS {
 		pemClientCA, err := ioutil.ReadFile(clientConfig.CaCertPath)
@@ -129,16 +124,10 @@ func loadTLSCredentials(clientConfig DKVConfig) (credentials.TransportCredential
 			return nil, fmt.Errorf("failed to add client CA's certificate")
 		}
 
-		config = &tls.Config{
-			Certificates: []tls.Certificate{serverCert},
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			ClientCAs:    certPool,
-		}
+		config.ClientAuth = tls.RequireAndVerifyClientCert
+		config.ClientCAs = certPool
 	} else {
-		config = &tls.Config{
-			Certificates: []tls.Certificate{serverCert},
-			ClientAuth:   tls.NoClientCert,
-		}
+		config.ClientAuth = tls.NoClientCert
 	}
 	return credentials.NewTLS(config), nil
 }
