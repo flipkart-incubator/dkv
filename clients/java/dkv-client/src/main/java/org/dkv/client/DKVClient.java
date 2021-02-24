@@ -90,7 +90,7 @@ public interface DKVClient extends Closeable {
      *
      * @see Api.ReadConsistency
      */
-    String[] multiGet(Api.ReadConsistency consistency, String[] keys);
+    KV.Strings[] multiGet(Api.ReadConsistency consistency, String[] keys);
 
     /**
      * Retrieves all the values associated with the given keys from the
@@ -109,7 +109,7 @@ public interface DKVClient extends Closeable {
      *
      * @see Api.ReadConsistency
      */
-    byte[][] multiGet(Api.ReadConsistency consistency, byte[][] keys);
+    KV.Bytes[] multiGet(Api.ReadConsistency consistency, byte[][] keys);
 
     /**
      * Iterates through the various key value associations found in the

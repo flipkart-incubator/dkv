@@ -66,7 +66,6 @@ $ make GOOS=linux build
 Once DKV is built, the `<PROJECT_ROOT>/bin` folder should contain the following binaries:
 - `dkvsrv` - DKV server program
 - `dkvctl` - DKV client program
-- `dkvbench` - DKV benchmarking program
 
 ### Launching the DKV server in standalone mode
 
@@ -120,7 +119,7 @@ $ ./bin/dkvsrv \
     -dbFolder <folder_path> \
     -dbListenAddr <host:port> \
     -dbRole master \
-    -nexusNodeId <node_id> \
+    -nexusNodeUrl http://<host:port> \
     -nexusClusterUrl <cluster_url>
 ```
 
@@ -151,7 +150,7 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n1 \
     -dbListenAddr 127.0.0.1:9081 \
     -dbRole master \
-    -nexusNodeId 1 \
+    -nexusNodeUrl http://127.0.0.1:9021 \
     -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
@@ -161,7 +160,7 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n2 \
     -dbListenAddr 127.0.0.1:9082 \
     -dbRole master \
-    -nexusNodeId 2 \
+    -nexusNodeUrl http://127.0.0.1:9022 \
     -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
@@ -171,24 +170,51 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n3 \
     -dbListenAddr 127.0.0.1:9083 \
     -dbRole master \
-    -nexusNodeId 3 \
+    -nexusNodeUrl http://127.0.0.1:9023 \
     -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
-Add a fourth node to the above 3 node cluster:
-```bash
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:9081 -addNode 4 "http://127.0.0.1:9024"
-```
-
-Launch Node 4:
+Launch Node 4, not yet part of the cluster:
 ```bash
 $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n4 \
     -dbListenAddr 127.0.0.1:9084 \
     -dbRole master \
-    -nexusNodeId 4 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023,http://127.0.0.1:9024" \
+    -nexusNodeUrl http://127.0.0.1:9024 \
+    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
     -nexusJoin
+```
+
+Add this node to the existing 3 node cluster:
+```bash
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:9081 -addNode "http://127.0.0.1:9024"
+```
+
+List members of the cluster from any member:
+```bash
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:9082 -listNodes
+Connecting to DKV service at 127.0.0.1:9082...DONE
+Current DKV cluster members:
+6ab6bfdf9f29bd1a => http://127.0.0.1:9094 (leader)
+619f1e32973e3e7a => http://127.0.0.1:9092
+785bb0a54cd7f8d5 => http://127.0.0.1:9093
+c63380dd0a493345 => http://127.0.0.1:9091
+```
+
+Remove a node from the cluster:
+```bash
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:9082 -removeNode http://127.0.0.1:9091
+Connecting to DKV service at 127.0.0.1:9082...DONE
+```
+
+Confirm node removal from the cluster:
+```bash
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:9082 -listNodes
+Connecting to DKV service at 127.0.0.1:9082...DONE
+Current DKV cluster members:
+6ab6bfdf9f29bd1a => http://127.0.0.1:9094 (leader)
+619f1e32973e3e7a => http://127.0.0.1:9092
+785bb0a54cd7f8d5 => http://127.0.0.1:9093
 ```
 
 ### Launching the DKV server for asynchronous replication

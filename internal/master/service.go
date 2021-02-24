@@ -17,6 +17,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
 )
 
@@ -67,7 +68,11 @@ func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetReques
 		ss.lg.Error("Unable to GET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Value = readResults[0]
+		// Needed to take care of the (valid) case when the
+		// given key is not found with DKV
+		if len(readResults) == 1 {
+			res.Value = readResults[0].Value
+		}
 	}
 	return res, err
 }
@@ -82,7 +87,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 		ss.lg.Error("Unable to MultiGET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Values = readResults
+		res.KeyValues = readResults
 	}
 	return res, err
 }
@@ -306,7 +311,10 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 			res.Status = newErrorStatus(err)
 			loadError = err
 		} else {
-			res.Value = val
+			kvs, _ := gobDecodeAsKVPairs(val)
+			if kvs != nil && len(kvs) == 1 {
+				res.Value = kvs[0].Value
+			}
 		}
 		return res, loadError
 	default:
@@ -327,7 +335,7 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 			res.Status = newErrorStatus(err)
 			readError = err
 		} else {
-			res.Values, readError = gobDecodeAs2DByteArray(val)
+			res.KeyValues, readError = gobDecodeAsKVPairs(val)
 		}
 		return res, readError
 	default:
@@ -335,9 +343,9 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 	}
 }
 
-func gobDecodeAs2DByteArray(val []byte) ([][]byte, error) {
+func gobDecodeAsKVPairs(val []byte) ([]*serverpb.KVPair, error) {
 	buf := bytes.NewBuffer(val)
-	res := new([][]byte)
+	res := new([]*serverpb.KVPair)
 	if err := gob.NewDecoder(buf).Decode(res); err != nil {
 		return nil, err
 	}
@@ -355,7 +363,7 @@ func (ds *distributedService) Restore(ctx context.Context, restoreReq *serverpb.
 
 func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNodeRequest) (*serverpb.Status, error) {
 	// TODO: We can include any relevant checks on the joining node - like reachability, storage engine compatibility, etc.
-	if err := ds.raftRepl.AddMember(ctx, int(req.NodeId), req.NodeUrl); err != nil {
+	if err := ds.raftRepl.AddMember(ctx, req.NodeUrl); err != nil {
 		ds.lg.Error("Unable to add node", zap.Error(err))
 		return newErrorStatus(err), err
 	}
@@ -363,11 +371,16 @@ func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNode
 }
 
 func (ds *distributedService) RemoveNode(ctx context.Context, req *serverpb.RemoveNodeRequest) (*serverpb.Status, error) {
-	if err := ds.raftRepl.RemoveMember(ctx, int(req.NodeId)); err != nil {
+	if err := ds.raftRepl.RemoveMember(ctx, req.NodeUrl); err != nil {
 		ds.lg.Error("Unable to remove node", zap.Error(err))
 		return newErrorStatus(err), err
 	}
 	return newEmptyStatus(), nil
+}
+
+func (ds *distributedService) ListNodes(ctx context.Context, _ *empty.Empty) (*serverpb.ListNodesResponse, error) {
+	leader, members := ds.raftRepl.ListMembers()
+	return &serverpb.ListNodesResponse{Status: newEmptyStatus(), Leader: leader, Nodes: members}, nil
 }
 
 func (ds *distributedService) Close() error {

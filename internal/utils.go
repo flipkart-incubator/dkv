@@ -41,7 +41,7 @@ type DKVConfig struct {
 	CaCertPath     string
 }
 
-func NewDKVClient(clientConfig DKVConfig) (*ctl.DKVClient, error) {
+func NewDKVClient(clientConfig DKVConfig, authority string) (*ctl.DKVClient, error) {
 	var opt grpc.DialOption
 	var err error = nil
 	var config *tls.Config
@@ -67,7 +67,7 @@ func NewDKVClient(clientConfig DKVConfig) (*ctl.DKVClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ctl.NewDKVClient(clientConfig.SrvrAddr, opt)
+	return ctl.NewDKVClient(clientConfig.SrvrAddr, authority, opt)
 }
 
 func getTLSConfigWithCertPool(caCertPath string) (*tls.Config, error) {

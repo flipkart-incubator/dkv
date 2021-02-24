@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -64,7 +65,9 @@ func (dss *dkvSlaveService) Get(ctx context.Context, getReq *serverpb.GetRequest
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Value = readResults[0]
+		if len(readResults) == 1 {
+			res.Value = readResults[0].Value
+		}
 	}
 	return res, err
 }
@@ -75,7 +78,7 @@ func (dss *dkvSlaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		res.Values = readResults
+		res.KeyValues = readResults
 	}
 	return res, err
 }
@@ -118,7 +121,8 @@ func (dss *dkvSlaveService) pollAndApplyChanges() {
 		select {
 		case <-dss.replTckr.C:
 			dss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", dss.replLag))
-			if err := dss.applyChangesFromMaster(); err != nil {
+			dss.statsCli.Gauge("replication.lag", int64(dss.replLag))
+			if err := dss.applyChangesFromMaster(dss.maxNumChngs); err != nil {
 				dss.lg.Fatal("Unable to retrieve changes from master", zap.Error(err))
 			}
 		case <-dss.replStop:
@@ -128,17 +132,34 @@ func (dss *dkvSlaveService) pollAndApplyChanges() {
 	}
 }
 
-func (dss *dkvSlaveService) applyChangesFromMaster() error {
-	dss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", dss.fromChngNum))
-	res, err := dss.replCli.GetChanges(dss.fromChngNum, dss.maxNumChngs)
+func (dss *dkvSlaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
+	dss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", dss.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
+	res, err := dss.replCli.GetChanges(dss.fromChngNum, chngsPerBatch)
 	if err == nil {
 		if res.Status.Code != 0 {
+			// this is an error from DKV master's end
 			err = errors.New(res.Status.Message)
 		} else {
 			if res.MasterChangeNumber < (dss.fromChngNum - 1) {
 				err = errors.New("change number of the master node can not be lesser than the change number of the slave node")
 			} else {
 				err = dss.applyChanges(res)
+			}
+		}
+	} else {
+		if strings.Contains(err.Error(), "ResourceExhausted") {
+			// This is an error from DKV slave's end where the GRPC
+			// receive buffer is exhausted. We now attempt to retrieve
+			// the changes by halving the batch size. We try this until
+			// the batch size can no longer be halved (= 0) and then
+			// give up with an error. In such cases, this method is
+			// invoked recursively utmost log2[dss.maxNumChngs] times.
+			dss.lg.Warn("GetChanges call exceeded resource limits", zap.Error(err))
+			if newMaxNumChngs := chngsPerBatch >> 1; newMaxNumChngs > 0 {
+				dss.lg.Warn("Retrieving smaller batches of changes", zap.Uint32("before", chngsPerBatch), zap.Uint32("after", newMaxNumChngs))
+				err = dss.applyChangesFromMaster(newMaxNumChngs)
+			} else {
+				err = errors.New("unable to retrieve changes from master due to GRPC resource exhaustion on slave")
 			}
 		}
 	}

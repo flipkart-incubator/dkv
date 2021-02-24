@@ -19,7 +19,7 @@ type KVStore interface {
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
-	Get(keys ...[]byte) ([][]byte, error)
+	Get(keys ...[]byte) ([]*serverpb.KVPair, error)
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
 	GetSnapshot() ([]byte, error)

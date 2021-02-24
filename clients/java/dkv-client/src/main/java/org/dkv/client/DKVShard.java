@@ -30,11 +30,15 @@ public class DKVShard {
         return name;
     }
 
-    public DKVNodeSet getNodesByType(DKVNodeType nodeType) {
-        checkf(nodeType != null && this.topology.containsKey(nodeType), IllegalArgumentException.class, "valid DKV node type must be given");
+    public DKVNodeSet getNodesByType(DKVNodeType... nodeType) {
         checkf(this.topology != null, IllegalStateException.class, "topology is not initialized");
-        //noinspection ConstantConditions
-        return this.topology.get(nodeType);
+        for (DKVNodeType dkvNodeType : nodeType) {
+            //noinspection ConstantConditions
+            if (this.topology.containsKey(dkvNodeType)) {
+                return this.topology.get(dkvNodeType);
+            }
+        }
+        throw new IllegalArgumentException("valid DKV node type must be given");
     }
 
     @Override

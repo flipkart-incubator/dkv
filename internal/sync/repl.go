@@ -61,7 +61,7 @@ func (dr *dkvReplStore) get(getReq *serverpb.GetRequest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return vals[0], nil
+	return gobEncode(vals)
 }
 
 func (dr *dkvReplStore) multiGet(multiGetReq *serverpb.MultiGetRequest) ([]byte, error) {

@@ -144,10 +144,12 @@ func main() {
 		} else {
 			replClientMode = utils.Insecure
 		}
+
+		// TODO: Check if authority override option is needed for slaves
+		// while they connect with masters
 		if replCli, err := utils.NewDKVClient(utils.DKVConfig{ConnectionMode: replClientMode,
 			SrvrAddr: replMasterAddr, KeyPath: keyPath, CertPath: certPath,
-			CaCertPath: caCertPath});
-
+			CaCertPath: caCertPath}, "");
 			err != nil {
 			panic(err)
 		} else {
@@ -326,7 +328,7 @@ func setFlagsForNexusDirs() {
 
 func setupStats() {
 	if statsdAddr != "" {
-		statsCli = stats.NewStatsDClient(statsdAddr, "nexus_redis")
+		statsCli = stats.NewStatsDClient(statsdAddr, "dkv")
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}

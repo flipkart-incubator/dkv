@@ -3,13 +3,11 @@ package ctl
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
 )
 
@@ -29,19 +27,23 @@ type DKVClient struct {
 const (
 	ReadBufSize    = 10 << 20
 	WriteBufSize   = 10 << 20
+	MaxMsgSize     = 50 << 20
 	Timeout        = 10 * time.Second
 	ConnectTimeout = 10 * time.Second
 )
 
-// NewDKVClient creates an insecure GRPC client against the
-// given DKV service address.
-func NewDKVClient(svcAddr string, opts ...grpc.DialOption) (*DKVClient, error) {
+// NewDKVClient creates a GRPC client against the
+// given DKV service address and dial options. Optionally the authority param can be
+//// used to send a :authority psuedo-header for routing purposes
+func NewDKVClient(svcAddr string, authority string, opts ...grpc.DialOption) (*DKVClient, error) {
 	var dkvClnt *DKVClient
 	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
 	optsCopy := opts
 	optsCopy = append(optsCopy, grpc.WithBlock())
 	optsCopy = append(optsCopy, grpc.WithReadBufferSize(ReadBufSize))
 	optsCopy = append(optsCopy, grpc.WithWriteBufferSize(WriteBufSize))
+	optsCopy = append(optsCopy, grpc.WithAuthority(authority))
+	optsCopy = append(optsCopy, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)))
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
 	if err == nil {
@@ -79,7 +81,7 @@ func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverp
 
 // MultiGet takes the keys as byte arrays along with the consistency
 // level and invokes the GRPC MultiGet method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) ([][]byte, error) {
+func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) ([]*serverpb.KVPair, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	multiGetReq := &serverpb.MultiGetRequest{Keys: keys, ReadConsistency: rc}
@@ -87,7 +89,7 @@ func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) 
 	if err != nil {
 		return nil, err
 	}
-	return res.Values, nil
+	return res.KeyValues, nil
 }
 
 // GetChanges retrieves changes since the given change number
@@ -99,56 +101,6 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 	defer cancel()
 	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
 	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
-}
-
-var errInvalidReplica = errors.New("invalid replica address, must be host:port format")
-
-// AddReplica adds the given replica in host:port format using the
-// underlying GRPC AddReplica method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) AddReplica(replicaAddr, zone string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	comps := strings.Split(replicaAddr, ":")
-	if len(comps) != 2 {
-		return errInvalidReplica
-	}
-	port, _ := strconv.ParseUint(comps[1], 10, 32)
-	addReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port), Zone: zone}
-	status, err := dkvClnt.dkvReplCli.AddReplica(ctx, addReplReq)
-	return errorFromStatus(status, err)
-}
-
-// RemoveReplica removes the given replica in host:port format using the
-// underlying GRPC RemoveReplica method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) RemoveReplica(replicaAddr, zone string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	comps := strings.Split(replicaAddr, ":")
-	if len(comps) != 2 {
-		return errInvalidReplica
-	}
-	port, _ := strconv.ParseUint(comps[1], 10, 32)
-	remReplReq := &serverpb.Replica{Hostname: comps[0], Port: uint32(port), Zone: zone}
-	status, err := dkvClnt.dkvReplCli.RemoveReplica(ctx, remReplReq)
-	return errorFromStatus(status, err)
-}
-
-// GetReplicas retrieves all the replica from master in host:port
-// format using the underlying GRPC GetReplicas method. This is a
-// convenience wrapper.
-func (dkvClnt *DKVClient) GetReplicas(zone string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	res, err := dkvClnt.dkvReplCli.GetReplicas(ctx, &serverpb.GetReplicasRequest{Zone: zone})
-	if err != nil {
-		return nil, err
-	}
-	var replicas []string
-	for _, replica := range res.Replicas {
-		repl := fmt.Sprintf("%s:%d", replica.Hostname, replica.Port)
-		replicas = append(replicas, repl)
-	}
-	return replicas, nil
 }
 
 // Backup backs up the entire keyspace into the given filesystem
@@ -173,24 +125,34 @@ func (dkvClnt *DKVClient) Restore(path string) error {
 	return errorFromStatus(res, err)
 }
 
-// AddNode adds the node with the given identifier and Nexus URL to
+// AddNode adds the node with the given Nexus URL to
 // the Nexus cluster of which the current node is a member of.
-func (dkvClnt *DKVClient) AddNode(nodeID uint32, nodeURL string) error {
+func (dkvClnt *DKVClient) AddNode(nodeURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	addNodeReq := &serverpb.AddNodeRequest{NodeId: nodeID, NodeUrl: nodeURL}
+	addNodeReq := &serverpb.AddNodeRequest{NodeUrl: nodeURL}
 	res, err := dkvClnt.dkvClusCli.AddNode(ctx, addNodeReq)
 	return errorFromStatus(res, err)
 }
 
-// RemoveNode removes the node with the given identifier from the
+// RemoveNode removes the node with the given URL from the
 // Nexus cluster of which the current node is a member of.
-func (dkvClnt *DKVClient) RemoveNode(nodeID uint32) error {
+func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
-	remNodeReq := &serverpb.RemoveNodeRequest{NodeId: nodeID}
+	remNodeReq := &serverpb.RemoveNodeRequest{NodeUrl: nodeURL}
 	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
 	return errorFromStatus(res, err)
+}
+
+func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})
+	if err := errorFromStatus(res.Status, err); err != nil {
+		return 0, nil, err
+	}
+	return res.Leader, res.Nodes, nil
 }
 
 // KVPair is convenience wrapper that captures a key and its value.

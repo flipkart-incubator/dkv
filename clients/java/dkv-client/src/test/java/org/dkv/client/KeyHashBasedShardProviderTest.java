@@ -5,7 +5,9 @@ import com.google.common.collect.ImmutableSet;
 import org.junit.Before;
 import org.junit.Test;
 
-import static com.google.common.collect.Iterables.size;
+import java.util.List;
+import java.util.Map;
+
 import static java.lang.String.format;
 import static org.junit.Assert.assertEquals;
 
@@ -37,8 +39,8 @@ public class KeyHashBasedShardProviderTest {
         for (int i = 0; i < NUM_SHARDS; i++) {
             keys[i] = format("%s%d", KEY_PREFIX, i);
         }
-        Iterable<DKVShard> dkvShards = shardProvider.provideShards(keys);
-        assertEquals("Expected keys to distribute equally in all shards", NUM_SHARDS, size(dkvShards));
+        Map<DKVShard, List<String>> dkvShards = shardProvider.provideShards(keys);
+        assertEquals("Expected keys to distribute equally in all shards", NUM_SHARDS, dkvShards.size());
     }
 
     @Test(expected = IllegalArgumentException.class)

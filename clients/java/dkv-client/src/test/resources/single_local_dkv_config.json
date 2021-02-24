@@ -1,0 +1,18 @@
+{
+  "dkvShards": [
+    {
+      "name": "default",
+      "topology": {
+        "UNKNOWN": {
+          "name": "default",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 8080
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -12,13 +12,12 @@ import static org.junit.Assert.assertEquals;
 
 public class SimpleDKVClientTest {
 
-    private static final String AUTHORITY = "dkv-master";
-    private static final String DKV_TARGET = "127.0.0.1:9091";
+    private static final String DKV_TARGET = "127.0.0.1:8080";
     private DKVClient dkvCli;
 
     @Before
     public void setUp() {
-        dkvCli = new SimpleDKVClient(DKV_TARGET, AUTHORITY);
+        dkvCli = new SimpleDKVClient(DKV_TARGET);
     }
 
     @Test
@@ -33,7 +32,7 @@ public class SimpleDKVClientTest {
     public void shouldPerformMultiGet() {
         String keyPref = "K_", valPref = "V_";
         String[] keys = put(10, keyPref, valPref);
-        String[] vals = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
+        KV.Strings[] vals = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
         assertValues(keyPref, keys, vals);
     }
 
@@ -47,7 +46,7 @@ public class SimpleDKVClientTest {
         put(numKeys, keyPref2, valPref2);
         put(numKeys, keyPref3, valPref3);
         String startKey = format("%s%d", keyPref2, startIdx);
-        Iterator<DKVEntry> iterRes = dkvCli.iterate(startKey, keyPref2);
+        Iterator<DKVEntry> iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey, keyPref2);
         while (iterRes.hasNext()) {
             DKVEntry entry = iterRes.next();
             entry.checkStatus();
@@ -59,7 +58,7 @@ public class SimpleDKVClientTest {
 
         startIdx = 1;
         startKey = format("%s%d", keyPref1, startIdx);
-        iterRes = dkvCli.iterate(startKey);
+        iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey);
         while (iterRes.hasNext()) {
             DKVEntry entry = iterRes.next();
             entry.checkStatus();
@@ -76,10 +75,10 @@ public class SimpleDKVClientTest {
         dkvCli.close();
     }
 
-    private void assertValues(String keyPref, String[] keys, String[] vals) {
+    private void assertValues(String keyPref, String[] keys, KV.Strings[] vals) {
         assertEquals("Incorrect number of values from MultiGet", keys.length, vals.length);
-        for (String val : vals) {
-            String[] vs = val.split("_");
+        for (KV.Strings val : vals) {
+            String[] vs = val.getValue().split("_");
             assertEquals(2, vs.length);
             int idx = Integer.parseInt(vs[1]);
             assertEquals(format("Incorrect key for value: %s", val), keys[idx-1], format("%s%d", keyPref, idx));

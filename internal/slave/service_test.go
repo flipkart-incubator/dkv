@@ -1,6 +1,8 @@
 package slave
 
 import (
+	"bytes"
+	"crypto/rand"
 	"fmt"
 	"net"
 	"os/exec"
@@ -51,6 +53,62 @@ func TestMasterRocksDBSlaveBadger(t *testing.T) {
 	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
+func TestLargePayloadsDuringRepl(t *testing.T) {
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newBadgerDBStore(slaveDBFolder)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go serveStandaloneDKVMaster(&wg, masterRDB, masterRDB, masterRDB)
+	wg.Wait()
+
+	masterCli = newDKVClient(masterSvcPort)
+	defer masterCli.Close()
+	defer masterSvc.Close()
+	defer masterGrpcSrvr.GracefulStop()
+
+	wg.Add(1)
+	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli)
+	wg.Wait()
+
+	// Reduce the max number of changes for testing
+	slaveSvc.(*dkvSlaveService).maxNumChngs = 100
+	slaveCli = newDKVClient(slaveSvcPort)
+	defer slaveCli.Close()
+	defer slaveSvc.Close()
+	defer slaveGrpcSrvr.GracefulStop()
+
+	// We insert data more than 50 MB on master that
+	// results in the ResourceExhausted error on slave,
+	// which when not handled properly causes assertion
+	// failures on these key look ups.
+	keySize, valSize := 1<<10, 1<<20
+	numKeys := 50
+	keys, vals := make([][]byte, numKeys), make([][]byte, numKeys)
+	for i := 0; i < numKeys; i++ {
+		keys[i] = make([]byte, keySize)
+		rand.Read(keys[i])
+		vals[i] = make([]byte, valSize)
+		rand.Read(vals[i])
+	}
+
+	for i := 0; i < numKeys; i++ {
+		if err := masterCli.Put(keys[i], vals[i]); err != nil {
+			t.Fatalf("Unable to PUT key value pair at index: %d. Error: %v", i, err)
+		}
+	}
+
+	// wait for atleast couple of replPollInterval to ensure slave replication
+	sleepInSecs(10)
+
+	for i := 0; i < numKeys; i++ {
+		getRes, _ := slaveCli.Get(0, keys[i])
+		if !bytes.Equal(vals[i], getRes.Value) {
+			t.Errorf("Value mismatch for key value pair at index: %d", i)
+		}
+	}
+}
+
 func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -94,7 +152,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 
-	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(); err == nil {
+	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err == nil {
 		t.Error("Expected an error from slave instance")
 	} else {
 		t.Log(err)
@@ -124,7 +182,7 @@ func getKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPre
 
 func newDKVClient(port int) *ctl.DKVClient {
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
-	if client, err := ctl.NewDKVClient(dkvSvcAddr, grpc.WithInsecure()); err != nil {
+	if client, err := ctl.NewDKVClient(dkvSvcAddr, "", grpc.WithInsecure()); err != nil {
 		panic(err)
 	} else {
 		return client
@@ -155,7 +213,8 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, bu, zap.NewNop(), stats.NewNoOpClient())
+	lgr, _ := zap.NewDevelopment()
+	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient())
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -166,7 +225,8 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
-	if ss, err := NewService(store, ca, masterCli, replPollInterval, zap.NewNop(), stats.NewNoOpClient()); err != nil {
+	lgr, _ := zap.NewDevelopment()
+	if ss, err := NewService(store, ca, masterCli, replPollInterval, lgr, stats.NewNoOpClient()); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss

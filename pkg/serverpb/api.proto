@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "google/protobuf/empty.proto";
 package dkv.serverpb;
 option go_package = "serverpb";
 
@@ -83,11 +84,18 @@ message MultiGetRequest {
   ReadConsistency readConsistency = 2;
 }
 
+message KVPair {
+  // Key is the DKV key
+  bytes key = 1;
+  // Value is the value associated with a given key
+  bytes value = 2;
+}
+
 message MultiGetResponse {
   // Status indicates the result of the bulk Get operation.
   Status status = 1;
-  // Values are the individual responses of the bulk Get operation.
-  repeated bytes values = 2;
+  // Association of keys and values of the bulk Get operation.
+  repeated KVPair keyValues = 2;
 }
 
 service DKVReplication {
@@ -188,21 +196,31 @@ service DKVCluster {
   // RemoveNode removes the given DKV node from the cluster that
   // the current node is a member of.
   rpc RemoveNode (RemoveNodeRequest) returns (Status);
+  // ListNodes retrieves the current set of DKV nodes from
+  // the Nexus cluster.
+  rpc ListNodes (google.protobuf.Empty) returns (ListNodesResponse);
+}
+
+message ListNodesResponse {
+  // Status indicates the status of the list nodes operation.
+  Status status = 1;
+  // Leader represents the identifier of the leader node.
+  uint64 leader = 2;
+  // Nodes represents the members of the cluster identified by
+  // their respective identifier and the Nexus URL.
+  map<uint64, string> nodes = 3;
 }
 
 message AddNodeRequest {
-  // NodeId represents the identifier of the node that needs to
-  // be added to the cluster.
-  uint32 nodeId = 1;
   // NodeUrl represents the URL for the Nexus service running on
   // the node that needs to be added to the cluster. Other Nexus
   // peers communicate with this node on this service.
-  string nodeUrl = 2;
+  string nodeUrl = 1;
 }
 
 message RemoveNodeRequest {
-  // NodeId represents the identifier of the node that needs to
-  // be removed from the cluster.
-  uint32 nodeId = 1;
+  // NodeUrl represents the URL for the Nexus service running on
+  // the node that needs to be removed from the cluster.
+  string nodeUrl = 1;
 }
 
