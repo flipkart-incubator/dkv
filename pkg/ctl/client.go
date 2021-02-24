@@ -39,11 +39,9 @@ func NewDKVClient(svcAddr string, authority string, opts ...grpc.DialOption) (*D
 	var dkvClnt *DKVClient
 	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
 	optsCopy := opts
-	optsCopy = append(optsCopy, grpc.WithBlock())
-	optsCopy = append(optsCopy, grpc.WithReadBufferSize(ReadBufSize))
-	optsCopy = append(optsCopy, grpc.WithWriteBufferSize(WriteBufSize))
-	optsCopy = append(optsCopy, grpc.WithAuthority(authority))
-	optsCopy = append(optsCopy, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)))
+	optsCopy = append(optsCopy, grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize),
+		grpc.WithWriteBufferSize(WriteBufSize), grpc.WithAuthority(authority),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)))
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
 	if err == nil {

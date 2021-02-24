@@ -159,8 +159,8 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 }
 
 var (
-	dkvAddr    string
-	caCertPath string
+	dkvAddr      string
+	caCertPath   string
 	dkvAuthority string
 )
 
@@ -208,13 +208,13 @@ func main() {
 
 	flag.Parse()
 	fmt.Printf("Connecting to DKV service at %s...", dkvAddr)
-		fmt.Printf("Connecting to DKV service at %s", dkvAddr)
-		if dkvAuthority = strings.TrimSpace(dkvAuthority); dkvAuthority != "" {
-			fmt.Printf(" (:authority = %s)", dkvAuthority)
-		}
-		fmt.Printf("...")
+	fmt.Printf("Connecting to DKV service at %s", dkvAddr)
+	if dkvAuthority = strings.TrimSpace(dkvAuthority); dkvAuthority != "" {
+		fmt.Printf(" (:authority = %s)", dkvAuthority)
+	}
+	fmt.Printf("...")
 	client, err := utils.NewDKVClient(utils.DKVConfig{ConnectionMode: modeFromFlags(),
-		SrvrAddr: dkvAddr, CaCertPath: caCertPath}, "")
+		SrvrAddr: dkvAddr, CaCertPath: caCertPath}, dkvAuthority)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
