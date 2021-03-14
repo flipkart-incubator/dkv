@@ -438,6 +438,7 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
 		return nil, err
 	}
+	defer value.Free()
 	val := toByteArray(value)
 	if val != nil && len(val) > 0 {
 		return []*serverpb.KVPair{&serverpb.KVPair{Key: key, Value: val}}, nil
