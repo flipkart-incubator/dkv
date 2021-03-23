@@ -106,6 +106,14 @@ func WithoutKeepL0InMemory() DBOption {
 	}
 }
 
+// WithCacheSize sets the value in bytes the amount of
+// cache used for data blocks.
+func WithCacheSize(size uint64) DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts.WithBlockCacheSize(int64(size))
+	}
+}
+
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {

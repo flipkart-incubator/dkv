@@ -72,7 +72,11 @@ func WithStats(statsCli stats.Client) DBOption {
 // WithCacheSize is used to set the block cache size.
 func WithCacheSize(size uint64) DBOption {
 	return func(opts *rocksDBOpts) {
-		opts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
+		if size > 0 {
+			opts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
+		} else {
+			opts.blockTableOpts.SetNoBlockCache(true)
+		}
 	}
 }
 
