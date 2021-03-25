@@ -20,6 +20,8 @@ type KVStore interface {
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
 	Get(keys ...[]byte) ([]*serverpb.KVPair, error)
+	// Delete deletes the given key.
+	Delete(key []byte) error
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
 	GetSnapshot() ([]byte, error)

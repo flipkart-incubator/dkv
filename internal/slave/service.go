@@ -59,6 +59,10 @@ func (dss *dkvSlaveService) Put(ctx context.Context, putReq *serverpb.PutRequest
 	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }
 
+func (dss *dkvSlaveService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
+	return nil, errors.New("DKV slave service does not support keyspace mutations")
+}
+
 func (dss *dkvSlaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
 	readResults, err := dss.store.Get(getReq.Key)
 	res := &serverpb.GetResponse{Status: newEmptyStatus()}

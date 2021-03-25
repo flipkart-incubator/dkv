@@ -58,6 +58,17 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
 }
 
+func (ss *standaloneService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	if err := ss.store.Delete(delReq.Key); err != nil {
+		ss.lg.Error("Unable to DELETE", zap.Error(err))
+		return &serverpb.DeleteResponse{Status: newErrorStatus(err)}, err
+	}
+	return &serverpb.DeleteResponse{Status: newEmptyStatus()}, nil
+}
+
 func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()

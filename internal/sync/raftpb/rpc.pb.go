@@ -80,7 +80,9 @@ func init() {
 	proto.RegisterType((*InternalRaftRequest)(nil), "dkv.raftpb.InternalRaftRequest")
 }
 
-func init() { proto.RegisterFile("internal/sync/raftpb/rpc.proto", fileDescriptor_3c180fc0df45f14f) }
+func init() {
+	proto.RegisterFile("internal/sync/raftpb/rpc.proto", fileDescriptor_3c180fc0df45f14f)
+}
 
 var fileDescriptor_3c180fc0df45f14f = []byte{
 	// 223 bytes of a gzipped FileDescriptorProto

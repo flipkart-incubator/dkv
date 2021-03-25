@@ -22,6 +22,7 @@ type cmd struct {
 
 var cmds = []*cmd{
 	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
+	{"del", "<key>", "Delete the given key", (*cmd).del, "", false},
 	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
 	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
@@ -45,6 +46,18 @@ func (c *cmd) set(client *ctl.DKVClient, args ...string) {
 	} else {
 		if err := client.Put([]byte(args[0]), []byte(args[1])); err != nil {
 			fmt.Printf("Unable to perform SET. Error: %v\n", err)
+		} else {
+			fmt.Println("OK")
+		}
+	}
+}
+
+func (c *cmd) del(client *ctl.DKVClient, args ...string) {
+	if len(args) != 1 {
+		c.usage()
+	} else {
+		if err := client.Delete([]byte(args[0])); err != nil {
+			fmt.Printf("Unable to perform DEL. Error: %v\n", err)
 		} else {
 			fmt.Println("OK")
 		}

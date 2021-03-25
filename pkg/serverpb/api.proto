@@ -7,6 +7,9 @@ service DKV {
   // Put puts the given key into the key value store.
   rpc Put (PutRequest) returns (PutResponse);
 
+  // Delete deletes the given key from the key value store.
+  rpc Delete (DeleteRequest) returns (DeleteResponse);
+
   // Get gets the value associated with the given key from the key value store.
   rpc Get (GetRequest) returns (GetResponse);
 
@@ -51,6 +54,16 @@ message PutRequest {
 
 message PutResponse {
   // Status indicates the result of the Put operation.
+  Status status = 1;
+}
+
+message DeleteRequest {
+  // Key is the key, in bytes, to delete from the key value store.
+  bytes key = 1;
+}
+
+message DeleteResponse {
+  // Status indicates the result of the Delete operation.
   Status status = 1;
 }
 
