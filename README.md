@@ -10,6 +10,7 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 ## Supported APIs
 - createVBucket(replicationFactor)
 - put(K,V,vBucket)
+- del(K,vBucket)
 - get(K,consistency)
 
 ## Design
@@ -85,15 +86,15 @@ $ ./bin/dkvctl -dkvAddr <host:port> -get <key>
 
 Example session:
 ```bash
-$ ./bin/dkvsrv -dbFolder /tmp/db -dkvSvcPort 8080 -storage rocksdb
+$ ./bin/dkvsrv -dbFolder /tmp/db -dbListenAddr 127.0.0.1:8080 -dbEngine rocksdb
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
 bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set hello world
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
 world
+$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -del foo
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -iter "*"
-foo => bar
 hello => world
 ```
 
