@@ -131,10 +131,12 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	numKeys, keyPrefix, valPrefix := 10, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
+	testDelete(t, masterCli, keyPrefix)
 	// wait for atleast couple of replPollInterval to ensure slave replication
 	sleepInSecs(5)
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+	getNonExistentKey(t, slaveCli, keyPrefix)
 
 	backupFolder := fmt.Sprintf("%s/backup", masterDBFolder)
 	if err := masterCli.Backup(backupFolder); err != nil {
@@ -143,10 +145,12 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
+	testDelete(t, masterCli, keyPrefix)
 	// wait for atleast couple of replPollInterval to ensure slave replication
 	sleepInSecs(5)
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+	getNonExistentKey(t, slaveCli, keyPrefix)
 
 	if err := masterCli.Restore(backupFolder); err != nil {
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
@@ -177,6 +181,30 @@ func getKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPre
 		} else if string(res.Value) != value {
 			t.Errorf("GET value mismatch for Key: %s, Expected: %s, Actual: %s", key, value, res.Value)
 		}
+	}
+}
+
+func getNonExistentKey(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
+	rc := serverpb.ReadConsistency_SEQUENTIAL
+	key := keyPrefix + "DeletedKey"
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
+func testDelete(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
+	key, value := keyPrefix+"DeletedKey", "SomeValue"
+	rc := serverpb.ReadConsistency_SEQUENTIAL
+	if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+	}
+
+	if err := dkvCli.Delete([]byte(key)); err != nil {
+		t.Fatalf("Unable to DELETE. Key: %s, Error: %v", key, err)
+	}
+
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}
 }
 

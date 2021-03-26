@@ -309,6 +309,21 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 	return res, err
 }
 
+func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
+	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Delete: delReq})
+	res := &serverpb.DeleteResponse{Status: newEmptyStatus()}
+	if err != nil {
+		ds.lg.Error("Unable to DEL over Nexus", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	} else {
+		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
+			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			res.Status = newErrorStatus(err)
+		}
+	}
+	return res, err
+}
+
 func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
 	switch getReq.ReadConsistency {
 	case serverpb.ReadConsistency_SEQUENTIAL:

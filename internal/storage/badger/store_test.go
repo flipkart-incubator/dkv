@@ -85,6 +85,30 @@ func TestPutEmptyValue(t *testing.T) {
 	}
 }
 
+func TestDelete(t *testing.T) {
+	key, val := "SomeKey", "SomeValue"
+	if err := store.Put([]byte(key), []byte(val)); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s", key)
+	}
+
+	if res, err := store.Get([]byte(key)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s", key)
+	} else {
+		t.Logf("Got value: '%s'", string(res[0].Value))
+	}
+
+	// delete key
+	if err := store.Delete([]byte(key)); err != nil {
+		t.Fatalf("Unable to Delete Key: %s", key)
+	}
+
+	if res, err := store.Get([]byte(key)); err != nil {
+		t.Fatalf("Got Exception while trying to GET deleted key value. Key: %s", key)
+	} else if len(res) != 0 {
+		t.Fatalf("Got Result while trying to GET deleted key value. Key: %s", key)
+	}
+}
+
 func TestMultiGet(t *testing.T) {
 	numKeys := 10
 	keys, vals := make([][]byte, numKeys), make([][]byte, numKeys)

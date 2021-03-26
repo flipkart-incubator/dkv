@@ -31,6 +31,8 @@ func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
 	switch {
 	case intReq.Put != nil:
 		return dr.put(intReq.Put)
+	case intReq.Delete != nil:
+		return dr.delete(intReq.Delete)
 	default:
 		return nil, errors.New("Unknown Save request in dkv")
 	}
@@ -53,6 +55,11 @@ func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 
 func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
 	err := dr.kvs.Put(putReq.Key, putReq.Value)
+	return nil, err
+}
+
+func (dr *dkvReplStore) delete(delReq *serverpb.DeleteRequest) ([]byte, error) {
+	err := dr.kvs.Delete(delReq.Key)
 	return nil, err
 }
 
