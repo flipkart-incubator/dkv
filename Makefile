@@ -13,7 +13,7 @@ GO := GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) CGO_CFLAGS=$(CGO_
 
 PACKAGES = $(shell $(GO) list ./... | grep -v '/vendor/' | grep -v '/extras/')
 
-PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
+PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/ | grep -v /clients/)
 
 TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
 

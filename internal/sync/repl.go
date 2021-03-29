@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
-	"github.com/gogo/protobuf/proto"
 )
 
 type dkvReplStore struct {
