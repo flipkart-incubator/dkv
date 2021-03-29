@@ -70,6 +70,20 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	return errorFromStatus(status, err)
 }
 
+// Delete takes the key as byte arrays and invokes the
+// GRPC Delete method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) Delete(key []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	delReq := &serverpb.DeleteRequest{Key: key}
+	res, err := dkvClnt.dkvCli.Delete(ctx, delReq)
+	var status *serverpb.Status
+	if res != nil {
+		status = res.Status
+	}
+	return errorFromStatus(status, err)
+}
+
 // Get takes the key as byte array along with the consistency
 // level and invokes the GRPC Get method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverpb.GetResponse, error) {

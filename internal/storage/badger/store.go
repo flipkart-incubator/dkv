@@ -176,6 +176,17 @@ func (bdb *badgerDB) Put(key []byte, value []byte) error {
 	return err
 }
 
+func (bdb *badgerDB) Delete(key []byte) error {
+	defer bdb.opts.statsCli.Timing("badger.delete.latency.ms", time.Now())
+	err := bdb.db.Update(func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	})
+	if err != nil {
+		bdb.opts.statsCli.Incr("badger.delete.errors", 1)
+	}
+	return err
+}
+
 func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
 	var results []*serverpb.KVPair

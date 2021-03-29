@@ -45,6 +45,7 @@ func TestStandaloneService(t *testing.T) {
 		defer dkvSvc.Close()
 		defer grpcSrvr.Stop()
 		t.Run("testPutAndGet", testPutAndGet)
+		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
@@ -119,6 +120,22 @@ func testIteration(t *testing.T) {
 
 func testMissingGet(t *testing.T) {
 	key := "MissingKey"
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
+func testDelete(t *testing.T) {
+	key, value := "DeletedKey", "SomeValue"
+
+	if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+	}
+
+	if err := dkvCli.Delete([]byte(key)); err != nil {
+		t.Fatalf("Unable to DELETE. Key: %s, Error: %v", key, err)
+	}
+
 	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
 		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}

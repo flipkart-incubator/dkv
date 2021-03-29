@@ -8,4 +8,5 @@ message InternalRaftRequest {
   serverpb.PutRequest put = 10;
   serverpb.GetRequest get = 11;
   serverpb.MultiGetRequest multi_get = 12;
+  serverpb.DeleteRequest delete = 13;
 }

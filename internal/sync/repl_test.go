@@ -26,6 +26,10 @@ func TestDKVReplStoreSave(t *testing.T) {
 	testGet(t, kvs, dkvRepl, []byte("kit"))
 
 	testMultiGet(t, kvs, dkvRepl, []byte("foo"), []byte("hello"), []byte("kit"))
+
+	testDelete(t, kvs, dkvRepl, []byte("foo"))
+	testDelete(t, kvs, dkvRepl, []byte("hello"))
+	testDelete(t, kvs, dkvRepl, []byte("kit"))
 }
 
 func TestDKVReplStoreClose(t *testing.T) {
@@ -51,6 +55,22 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 				t.Error(err)
 			} else if string(res[0].Value) != string(val) {
 				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0])
+			}
+		}
+	}
+}
+
+func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
+	intReq := new(raftpb.InternalRaftRequest)
+	intReq.Delete = &serverpb.DeleteRequest{Key: key}
+	if reqBts, err := proto.Marshal(intReq); err != nil {
+		t.Error(err)
+	} else {
+		if _, err := dkvRepl.Save(reqBts); err != nil {
+			t.Error(err)
+		} else {
+			if _, err := kvs.Get(key); err.Error() != "Given key not found" {
+				t.Error(err)
 			}
 		}
 	}
@@ -124,6 +144,12 @@ func (ms *memStore) Put(key []byte, value []byte) error {
 		return errors.New("Given key already exists")
 	}
 	ms.store[storeKey] = value
+	return nil
+}
+
+func (ms *memStore) Delete(key []byte) error {
+	storeKey := string(key)
+	delete(ms.store, storeKey)
 	return nil
 }
 

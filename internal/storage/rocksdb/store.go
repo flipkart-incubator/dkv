@@ -135,6 +135,18 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	return err
 }
 
+func (rdb *rocksDB) Delete(key []byte) error {
+	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
+	wo := gorocksdb.NewDefaultWriteOptions()
+	wo.SetSync(true)
+	defer wo.Destroy()
+	err := rdb.db.Delete(wo, key)
+	if err != nil {
+		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
+	}
+	return err
+}
+
 func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	ro := gorocksdb.NewDefaultReadOptions()
 	defer ro.Destroy()
