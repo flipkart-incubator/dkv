@@ -1,6 +1,6 @@
 package org.dkv.client;
 
-import gnu.crypto.hash.RipeMD160;
+import net.openhft.hashing.LongHashFunction;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,14 +68,8 @@ public class KeyHashBasedShardProvider implements ShardProvider {
     }
 
     private int getShardId(byte[] key) {
-        RipeMD160 hash = new RipeMD160();
-        hash.update(key, 0, key.length);
-        byte[] digest = hash.digest();
-        int digestNum = 0;
-        for (int i = 0; i < 4; i++) {
-            digestNum |= (digest[i] & 0xFF) << (8 * i);
-        }
-        // digestNum can be negative, hence first AND turns it positive
-        return (int) ((digestNum & 0xFFFF) % shardConfiguration.getNumShards());
+        LongHashFunction xx = LongHashFunction.xx();
+        long hsh = xx.hashBytes(key);
+        return (int) ((hsh & 0xFFFF) % shardConfiguration.getNumShards());
     }
 }

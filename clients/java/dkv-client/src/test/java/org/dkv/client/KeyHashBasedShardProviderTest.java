@@ -13,7 +13,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KeyHashBasedShardProviderTest {
 
-    private static final String KEY_PREFIX = "key_851";
+    private static final String KEY_PREFIX = "key_2561";
     private static final int NUM_SHARDS = 10;
 
     private ShardProvider shardProvider;
