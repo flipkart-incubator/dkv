@@ -1,0 +1,29 @@
+on: [push]
+
+jobs:
+  hello_world_job:
+    runs-on: ubuntu-latest
+    name: Build Docker Image & Run Tests
+    steps:
+      # To use this repository's private action,
+      # you must check out the repository
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Prepopulate Docker file
+        run:  |
+          cat Dockerfile > ./.github/actions/build-image/Dockerfile
+          cat ./.github/actions/build-image/_Dockerfile >> ./.github/actions/build-image/Dockerfile
+          cat ./.github/actions/build-image/Dockerfile
+      - name: Build Docker Container
+        uses: docker/build-push-action@v2
+        with:
+          # using "load: true" forces the docker driver
+          # not necessary here, because we set it before
+          #load: true
+          push: false
+          tags: dkv/dkv:latest
+          context: .
+          file: ./.github/actions/build-image/Dockerfile
+      - name: Run tests
+        run: |
+          docker run dkv/dkv:latest "cd /code && make test"

@@ -1,0 +1,16 @@
+# action.yml
+name: 'Build DKV Image'
+description: 'Build DKV Image'
+inputs:
+  command:  # id of input
+    description: 'Command'
+    required: true
+    default: ''
+outputs:
+  time: # id of output
+    description: 'The time we ran the command'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.command }}
