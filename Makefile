@@ -8,6 +8,7 @@ VERSION ?=
 BIN_EXT ?=
 JAVA_CLI_PATH = ./clients/java
 CLI_NAME = dkv-client
+BIN_PATH = $(shell pwd)/bin/
 
 GO := GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) GO111MODULE=on go
 
@@ -69,6 +70,7 @@ bench:
 
 .PHONY: build
 build:
+	@echo "BIN_PATH >> $(BIN_PATH)"
 	@echo ">> building binaries"
 	@echo "   GOOS        = $(GOOS)"
 	@echo "   GOARCH      = $(GOARCH)"
@@ -77,7 +79,7 @@ build:
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   VERSION     = $(VERSION)"
-	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) build -tags="$(BUILD_TAGS)" $(LDFLAGS) -o ./bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
+	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; pushd $$target_pkg > /dev/null; $(GO) build -tags="$(BUILD_TAGS)" $(LDFLAGS) -o $(BIN_PATH)/`basename $$target_pkg`$(BIN_EXT) . || exit 1; popd > /dev/null; done
 
 .PHONY: install
 install:
@@ -89,7 +91,7 @@ install:
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   VERSION     = $(VERSION)"
-	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) install -tags="$(BUILD_TAGS)" $(LDFLAGS) $$target_pkg || exit 1; done
+	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; pushd $$target_pkg > /dev/null; $(GO) install -tags="$(BUILD_TAGS)" $(LDFLAGS) . || exit 1; popd > /dev/null; done
 
 .PHONY: dist
 dist:
@@ -102,7 +104,7 @@ dist:
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   VERSION     = $(VERSION)"
 	mkdir -p ./dist/$(GOOS)-$(GOARCH)/bin
-	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) build -tags="$(BUILD_TAGS)" $(LDFLAGS) -o ./dist/$(GOOS)-$(GOARCH)/bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
+	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; pushd $$target_pkg > /dev/null; $(GO) build -tags="$(BUILD_TAGS)" $(LDFLAGS) -o ./dist/$(GOOS)-$(GOARCH)/bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
 	(cd ./dist/$(GOOS)-$(GOARCH); tar zcfv ../dkv-${VERSION}.$(GOOS)-$(GOARCH).tar.gz .)
 
 .PHONY: git-tag
