@@ -9,7 +9,6 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 )
@@ -25,7 +24,7 @@ type dkvSlaveService struct {
 	ca          storage.ChangeApplier
 	lg          *zap.Logger
 	statsCli    stats.Client
-	replCli     *ctl.DKVClient
+	replCli     *DKVInternalClient
 	replTckr    *time.Ticker
 	replStop    chan struct{}
 	replLag     uint64
@@ -40,7 +39,7 @@ const maxNumChangesRepl = 10000
 // for changes from master node and replicates them onto its local
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
-func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, replPollInterval time.Duration,
+func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *DKVInternalClient, replPollInterval time.Duration,
 	lgr *zap.Logger, statsCli stats.Client) (DKVService, error) {
 	if replPollInterval == 0 || replCli == nil || store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca`, `replCli` and `replPollInterval` are all mandatory")
@@ -48,7 +47,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DK
 	return newSlaveService(store, ca, replCli, replPollInterval, lgr, statsCli), nil
 }
 
-func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration,
+func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *DKVInternalClient, pollInterval time.Duration,
 	lgr *zap.Logger, statsCli stats.Client) *dkvSlaveService {
 	dss := &dkvSlaveService{store: store, ca: ca, replCli: replCli, lg: lgr, statsCli: statsCli}
 	dss.startReplication(pollInterval)
@@ -103,7 +102,6 @@ func (dss *dkvSlaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrv
 func (dss *dkvSlaveService) Close() error {
 	dss.replStop <- struct{}{}
 	dss.replTckr.Stop()
-	dss.replCli.Close()
 	dss.store.Close()
 	return nil
 }

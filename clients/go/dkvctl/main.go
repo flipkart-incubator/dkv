@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/clients/go/dkv"
 	"os"
 	"sort"
 	"strings"
 
-	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
@@ -15,7 +15,7 @@ type cmd struct {
 	name       string
 	argDesc    string
 	cmdDesc    string
-	fn         func(*cmd, *ctl.DKVClient, ...string)
+	fn         func(*cmd, *dkv.DKVClient, ...string)
 	value      string
 	emptyValue bool
 }
@@ -40,7 +40,7 @@ func (c *cmd) usage() {
 	}
 }
 
-func (c *cmd) set(client *ctl.DKVClient, args ...string) {
+func (c *cmd) set(client *dkv.DKVClient, args ...string) {
 	if len(args) != 2 {
 		c.usage()
 	} else {
@@ -52,7 +52,7 @@ func (c *cmd) set(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) del(client *ctl.DKVClient, args ...string) {
+func (c *cmd) del(client *dkv.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
@@ -64,7 +64,7 @@ func (c *cmd) del(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) get(client *ctl.DKVClient, args ...string) {
+func (c *cmd) get(client *dkv.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
@@ -77,7 +77,7 @@ func (c *cmd) get(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) iter(client *ctl.DKVClient, args ...string) {
+func (c *cmd) iter(client *dkv.DKVClient, args ...string) {
 	strtKy, kyPrfx := "", ""
 	switch {
 	case len(args) == 1:
@@ -100,7 +100,7 @@ func (c *cmd) iter(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) backup(client *ctl.DKVClient, args ...string) {
+func (c *cmd) backup(client *dkv.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
@@ -112,7 +112,7 @@ func (c *cmd) backup(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) restore(client *ctl.DKVClient, args ...string) {
+func (c *cmd) restore(client *dkv.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
@@ -124,7 +124,7 @@ func (c *cmd) restore(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) addNode(client *ctl.DKVClient, args ...string) {
+func (c *cmd) addNode(client *dkv.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
@@ -135,7 +135,7 @@ func (c *cmd) addNode(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
+func (c *cmd) removeNode(client *dkv.DKVClient, args ...string) {
 	if len(args) != 1 {
 		c.usage()
 	} else {
@@ -146,7 +146,7 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
+func (c *cmd) listNodes(client *dkv.DKVClient, args ...string) {
 	if leader, nodes, err := client.ListNodes(); err != nil {
 		fmt.Printf("Unable to retrieve the nodes of DKV cluster. Error: %v\n", err)
 	} else {
@@ -212,7 +212,7 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority)
+	client, err := dkv.NewInSecureDKVClient(dkvAddr, dkvAuthority)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return

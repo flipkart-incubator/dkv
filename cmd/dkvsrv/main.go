@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/slave"
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -19,7 +20,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/internal/sync"
-	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
@@ -115,7 +115,7 @@ func main() {
 	case slaveRole:
 		// TODO: Check if authority override option is needed for slaves
 		// while they connect with masters
-		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr, ""); err != nil {
+		if replCli, err := slave.NewInSecureDKVInternalClient(replMasterAddr, ""); err != nil {
 			panic(err)
 		} else {
 			defer replCli.Close()

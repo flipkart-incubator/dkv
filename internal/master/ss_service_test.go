@@ -2,6 +2,7 @@ package master
 
 import (
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/slave"
 	"net"
 	"os/exec"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
-	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -28,7 +28,7 @@ const (
 )
 
 var (
-	dkvCli   *ctl.DKVClient
+	dkvCli   *slave.DKVInternalClient
 	dkvSvc   DKVService
 	grpcSrvr *grpc.Server
 )
@@ -37,7 +37,7 @@ func TestStandaloneService(t *testing.T) {
 	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+	if client, err := slave.NewInSecureDKVInternalClient(dkvSvcAddr, ""); err != nil {
 		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
 	} else {
 		dkvCli = client

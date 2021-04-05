@@ -1,13 +1,13 @@
-package ctl
+package dkv
 
 import (
 	"context"
 	"errors"
+	"github.com/flipkart-incubator/dkv/internal/slave"
 	"io"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
 )
 
@@ -16,11 +16,10 @@ import (
 // exposes a simpler API to its users without having to deal with timeouts,
 // contexts and other GRPC semantics.
 type DKVClient struct {
+	internal   *slave.DKVInternalClient
 	cliConn    *grpc.ClientConn
 	dkvCli     serverpb.DKVClient
-	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
-	dkvClusCli serverpb.DKVClusterClient
 }
 
 // TODO: Should these be paramterised ?
@@ -48,10 +47,12 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 		grpc.WithAuthority(authority))
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
-		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
-		dkvClusCli := serverpb.NewDKVClusterClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli}
+		dkvInternalClient, err := slave.NewInSecureDKVInternalClient(svcAddr, authority)
+		if err != nil {
+			return dkvClnt, err
+		}
+		dkvClnt = &DKVClient{internal: dkvInternalClient, cliConn: conn, dkvCli: dkvCli, dkvBRCli: dkvBRCli}
 	}
 	return dkvClnt, err
 }
@@ -106,16 +107,6 @@ func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) 
 	return res.KeyValues, nil
 }
 
-// GetChanges retrieves changes since the given change number
-// using the underlying GRPC GetChanges method. One can limit the
-// number of changes retrieved using the maxNumChanges parameter.
-// This is a convenience wrapper.
-func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32) (*serverpb.GetChangesResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
-	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
-}
 
 // Backup backs up the entire keyspace into the given filesystem
 // location using the underlying GRPC Backup method. This is a
@@ -142,31 +133,17 @@ func (dkvClnt *DKVClient) Restore(path string) error {
 // AddNode adds the node with the given Nexus URL to
 // the Nexus cluster of which the current node is a member of.
 func (dkvClnt *DKVClient) AddNode(nodeURL string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	addNodeReq := &serverpb.AddNodeRequest{NodeUrl: nodeURL}
-	res, err := dkvClnt.dkvClusCli.AddNode(ctx, addNodeReq)
-	return errorFromStatus(res, err)
+	return dkvClnt.internal.AddNode(nodeURL)
 }
 
 // RemoveNode removes the node with the given URL from the
 // Nexus cluster of which the current node is a member of.
 func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	remNodeReq := &serverpb.RemoveNodeRequest{NodeUrl: nodeURL}
-	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
-	return errorFromStatus(res, err)
+	return dkvClnt.internal.RemoveNode(nodeURL)
 }
 
 func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})
-	if err := errorFromStatus(res.Status, err); err != nil {
-		return 0, nil, err
-	}
-	return res.Leader, res.Nodes, nil
+	return dkvClnt.internal.ListNodes()
 }
 
 // KVPair is convenience wrapper that captures a key and its value.
@@ -202,11 +179,16 @@ func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, e
 
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
+	//TODO: Think of something to merge this two connections.
+	if err := dkvClnt.internal.Close(); err != nil {
+		return err
+	}
 	if dkvClnt.cliConn != nil {
 		return dkvClnt.cliConn.Close()
 	}
 	return nil
 }
+
 
 func errorFromStatus(res *serverpb.Status, err error) error {
 	switch {
@@ -218,3 +200,4 @@ func errorFromStatus(res *serverpb.Status, err error) error {
 		return nil
 	}
 }
+
