@@ -11,7 +11,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"github.com/tecbot/gorocksdb"
+	"github.com/flipkart-incubator/gorocksdb"
 )
 
 const (

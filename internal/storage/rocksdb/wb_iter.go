@@ -2,7 +2,7 @@ package rocksdb
 
 import (
 	"errors"
-	"github.com/tecbot/gorocksdb"
+	"github.com/flipkart-incubator/gorocksdb"
 	"io"
 )
 
