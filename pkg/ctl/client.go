@@ -159,6 +159,8 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 	return errorFromStatus(res, err)
 }
 
+// ListNodes retrieves the current members of the Nexus cluster
+// along with identifying the leader.
 func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()

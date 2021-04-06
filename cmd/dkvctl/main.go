@@ -157,9 +157,9 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 			}
 		}
 		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-		if leaderUrl, present := nodes[leader]; present {
+		if leaderURL, present := nodes[leader]; present {
 			fmt.Println("Current DKV cluster members:")
-			fmt.Printf("%x => %s (leader)\n", leader, leaderUrl)
+			fmt.Printf("%x => %s (leader)\n", leader, leaderURL)
 		} else {
 			fmt.Println("WARNING: DKV cluster unhealthy, leader unknown")
 			fmt.Println("Current cluster members:")
