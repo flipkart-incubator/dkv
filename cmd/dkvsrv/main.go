@@ -350,11 +350,13 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		var badgerDb badger.DB
 		var err error
 		if disklessMode {
-			badgerDb, err = badger.OpenInMemDB(
+			badgerDb, err = badger.OpenDB(
+				badger.WithInMemory(),
 				badger.WithLogger(dkvLogger),
 				badger.WithStats(statsCli))
 		} else {
-			badgerDb, err = badger.OpenDB(dbDir,
+			badgerDb, err = badger.OpenDB(
+				badger.WithDBDir(dbDir),
 				badger.WithCacheSize(blockCacheSize),
 				badger.WithLogger(dkvLogger),
 				badger.WithSyncWrites(),
