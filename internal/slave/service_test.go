@@ -152,6 +152,10 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 	getNonExistentKey(t, slaveCli, keyPrefix)
 
+	// stop the slave poller so as to avoid race with this poller
+	// and the explicit call to applyChangesFromMaster later
+	slaveSvc.(*dkvSlaveService).replStop <- struct{}{}
+
 	if err := masterCli.Restore(backupFolder); err != nil {
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
