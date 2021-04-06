@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	ini "gopkg.in/ini.v1"
 )
 
 // DB interface represents the capabilities exposed
@@ -114,11 +116,19 @@ func WithCacheSize(size uint64) DBOption {
 	}
 }
 
-// WithStorageOpts sets the given Badger storage
-// options.
-func WithStorageOpts(stOpts badger.Options) DBOption {
+// WithBadgerConfig can be used to override internal badger
+// storage settings through the given .ini file.
+func WithBadgerConfig(iniFile string) DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts = stOpts
+		if cfg, err := ini.Load(iniFile); err != nil {
+			panic(fmt.Errorf("unable to load Badger configuration from given file: %s, error: %v", iniFile, err))
+		} else {
+			stOpts := badger.Options{}
+			if err := cfg.StrictMapTo(&stOpts); err != nil {
+				panic(fmt.Errorf("unable to parse Badger configuration from given file: %s, error: %v", iniFile, err))
+			}
+			opts.opts = stOpts
+		}
 	}
 }
 

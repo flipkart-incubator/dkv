@@ -33,6 +33,7 @@ import (
 var (
 	disklessMode     bool
 	dbEngine         string
+	dbEngineIni      string
 	dbFolder         string
 	dbListenAddr     string
 	dbRole           string
@@ -57,6 +58,7 @@ func init() {
 	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
+	flag.StringVar(&dbEngineIni, "dbEngineIni", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
@@ -146,6 +148,11 @@ func validateFlags() {
 	}
 	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
 		log.Panicf("replMasterAddr must be given in slave mode")
+	}
+	if dbEngineIni != "" {
+		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
+			log.Panicf("given storage configuration file: %s does not exist", dbEngineIni)
+		}
 	}
 }
 
@@ -349,19 +356,24 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	case "badger":
 		var badgerDb badger.DB
 		var err error
-		if disklessMode {
-			badgerDb, err = badger.OpenDB(
-				badger.WithInMemory(),
-				badger.WithLogger(dkvLogger),
-				badger.WithStats(statsCli))
-		} else {
-			badgerDb, err = badger.OpenDB(
-				badger.WithDBDir(dbDir),
-				badger.WithCacheSize(blockCacheSize),
-				badger.WithLogger(dkvLogger),
-				badger.WithSyncWrites(),
-				badger.WithStats(statsCli))
+		bdbOpts := []badger.DBOption{
+			badger.WithLogger(dkvLogger),
+			badger.WithStats(statsCli),
 		}
+		if dbEngineIni != "" {
+			bdbOpts = append(bdbOpts, badger.WithBadgerConfig(dbEngineIni))
+		} else {
+			if disklessMode {
+				bdbOpts = append(bdbOpts, badger.WithInMemory())
+			} else {
+				bdbOpts = append(bdbOpts,
+					badger.WithDBDir(dbDir),
+					badger.WithCacheSize(blockCacheSize),
+					badger.WithSyncWrites(),
+				)
+			}
+		}
+		badgerDb, err = badger.OpenDB(bdbOpts...)
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
