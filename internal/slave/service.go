@@ -174,12 +174,15 @@ func (dss *dkvSlaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) 
 	if chngsRes.NumberOfChanges > 0 {
 		dss.lg.Info("Applying the changes received from master", zap.Uint32("NumberOfChanges", chngsRes.NumberOfChanges))
 		actChngNum, err := dss.ca.SaveChanges(chngsRes.Changes)
+		if err != nil {
+			return err
+		}
 		dss.fromChngNum = actChngNum + 1
-		dss.lg.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", dss.fromChngNum), zap.Error(err))
+		dss.lg.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", dss.fromChngNum))
 		dss.replLag = chngsRes.MasterChangeNumber - actChngNum
-		return err
+	} else {
+		dss.lg.Info("Not received any changes from master")
 	}
-	dss.lg.Info("Not received any changes from master")
 	return nil
 }
 

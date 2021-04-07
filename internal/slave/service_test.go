@@ -126,7 +126,9 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	// stop the slave poller so as to avoid race with this poller
 	// and the explicit call to applyChangesFromMaster later
+	slaveSvc.(*dkvSlaveService).replTckr.Stop()
 	slaveSvc.(*dkvSlaveService).replStop <- struct{}{}
+	sleepInSecs(2)
 
 	slaveCli = newDKVClient(slaveSvcPort)
 	defer slaveCli.Close()
