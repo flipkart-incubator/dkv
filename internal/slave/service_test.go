@@ -124,6 +124,10 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli)
 	wg.Wait()
 
+	// stop the slave poller so as to avoid race with this poller
+	// and the explicit call to applyChangesFromMaster later
+	slaveSvc.(*dkvSlaveService).replStop <- struct{}{}
+
 	slaveCli = newDKVClient(slaveSvcPort)
 	defer slaveCli.Close()
 	defer slaveSvc.Close()
@@ -132,8 +136,11 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	numKeys, keyPrefix, valPrefix := 10, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	testDelete(t, masterCli, keyPrefix)
-	// wait for atleast couple of replPollInterval to ensure slave replication
-	sleepInSecs(5)
+
+	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
+		t.Error(err)
+	}
+
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 	getNonExistentKey(t, slaveCli, keyPrefix)
@@ -146,15 +153,14 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	testDelete(t, masterCli, keyPrefix)
-	// wait for atleast couple of replPollInterval to ensure slave replication
-	sleepInSecs(5)
+
+	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
+		t.Error(err)
+	}
+
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
 	getNonExistentKey(t, slaveCli, keyPrefix)
-
-	// stop the slave poller so as to avoid race with this poller
-	// and the explicit call to applyChangesFromMaster later
-	slaveSvc.(*dkvSlaveService).replStop <- struct{}{}
 
 	if err := masterCli.Restore(backupFolder); err != nil {
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
