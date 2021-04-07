@@ -10,7 +10,7 @@ require (
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210406120841-186bd401ef95
-	github.com/flipkart-incubator/nexus v0.0.0-20210209102156-8954a192654e
+	github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.2 // indirect
@@ -18,6 +18,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
+	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/smira/go-statsd v1.3.1
 	go.uber.org/zap v1.14.1
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
@@ -26,6 +27,7 @@ require (
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
 	google.golang.org/grpc v1.28.0
+	gopkg.in/ini.v1 v1.62.0
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
 

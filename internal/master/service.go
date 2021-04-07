@@ -337,9 +337,14 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 			res.Status = newErrorStatus(err)
 			loadError = err
 		} else {
-			kvs, _ := gobDecodeAsKVPairs(val)
-			if kvs != nil && len(kvs) == 1 {
-				res.Value = kvs[0].Value
+			if kvs, err := gobDecodeAsKVPairs(val); err != nil {
+				loadError = err
+			} else {
+				if kvs != nil && len(kvs) == 1 {
+					res.Value = kvs[0].Value
+				} else {
+					loadError = fmt.Errorf("unable to compute value for given key from %v", kvs)
+				}
 			}
 		}
 		return res, loadError

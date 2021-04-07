@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	ini "gopkg.in/ini.v1"
 )
 
 // DB interface represents the capabilities exposed
@@ -55,7 +57,7 @@ func WithLogger(lgr *zap.Logger) DBOption {
 	return func(opts *bdgrOpts) {
 		if lgr != nil {
 			opts.lgr = lgr
-			opts.opts.WithLogger(&zapBadgerLogger{lgr: lgr})
+			opts.opts = opts.opts.WithLogger(&zapBadgerLogger{lgr: lgr})
 		}
 	}
 }
@@ -75,7 +77,7 @@ func WithStats(statsCli stats.Client) DBOption {
 // write is flushed to disk before acking back.
 func WithSyncWrites() DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts.WithSyncWrites(true)
+		opts.opts = opts.opts.WithSyncWrites(true)
 	}
 }
 
@@ -83,7 +85,7 @@ func WithSyncWrites() DBOption {
 // flush to disk for every write.
 func WithoutSyncWrites() DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts.WithSyncWrites(false)
+		opts.opts = opts.opts.WithSyncWrites(false)
 	}
 }
 
@@ -94,7 +96,7 @@ func WithoutSyncWrites() DBOption {
 // enabled by default in DKV.
 func WithKeepL0InMemory() DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts.WithKeepL0InMemory(true)
+		opts.opts = opts.opts.WithKeepL0InMemory(true)
 	}
 }
 
@@ -102,7 +104,7 @@ func WithKeepL0InMemory() DBOption {
 // placing L0 SSTable in memory.
 func WithoutKeepL0InMemory() DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts.WithKeepL0InMemory(false)
+		opts.opts = opts.opts.WithKeepL0InMemory(false)
 	}
 }
 
@@ -110,39 +112,47 @@ func WithoutKeepL0InMemory() DBOption {
 // cache used for data blocks.
 func WithCacheSize(size uint64) DBOption {
 	return func(opts *bdgrOpts) {
-		opts.opts.WithBlockCacheSize(int64(size))
+		opts.opts = opts.opts.WithBlockCacheSize(int64(size))
+	}
+}
+
+// WithBadgerConfig can be used to override internal badger
+// storage settings through the given .ini file.
+func WithBadgerConfig(iniFile string) DBOption {
+	return func(opts *bdgrOpts) {
+		if cfg, err := ini.Load(iniFile); err != nil {
+			panic(fmt.Errorf("unable to load Badger configuration from given file: %s, error: %v", iniFile, err))
+		} else {
+			stOpts := badger.Options{}
+			if err := cfg.StrictMapTo(&stOpts); err != nil {
+				panic(fmt.Errorf("unable to parse Badger configuration from given file: %s, error: %v", iniFile, err))
+			}
+			opts.opts = stOpts
+		}
+	}
+}
+
+// WithDBDir sets the respective Badger storage folders.
+func WithDBDir(dir string) DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts = opts.opts.WithDir(dir).WithValueDir(dir)
+	}
+}
+
+// WithInMemory sets Badger storage to operate entirely
+// in memory. No files are created on disk whatsoever.
+func WithInMemory() DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts = opts.opts.WithInMemory(true)
 	}
 }
 
 // OpenDB initializes a new instance of BadgerDB with the specified
-// options. It uses the given folder for storing the data files.
-func OpenDB(dbFolder string, dbOpts ...DBOption) (kvs DB, err error) {
+// options.
+func OpenDB(dbOpts ...DBOption) (kvs DB, err error) {
 	noopLgr := zap.NewNop()
-	defOpts := badger.
-		DefaultOptions(dbFolder).
-		WithKeepL0InMemory(true).
-		WithLogger(&zapBadgerLogger{lgr: noopLgr})
 	opts := &bdgrOpts{
-		opts:     defOpts,
-		lgr:      noopLgr,
-		statsCli: stats.NewNoOpClient(),
-	}
-	for _, dbOpt := range dbOpts {
-		dbOpt(opts)
-	}
-	return openStore(opts)
-}
-
-// OpenInMemDB initializes a new instance of BadgerDB with the specified
-// options. It does not use the disk for storing data.
-func OpenInMemDB(dbOpts ...DBOption) (kvs DB, err error) {
-	noopLgr := zap.NewNop()
-	defOpts := badger.
-		DefaultOptions("").
-		WithInMemory(true).
-		WithLogger(&zapBadgerLogger{lgr: noopLgr})
-	opts := &bdgrOpts{
-		opts:     defOpts,
+		opts:     badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}),
 		lgr:      noopLgr,
 		statsCli: stats.NewNoOpClient(),
 	}
