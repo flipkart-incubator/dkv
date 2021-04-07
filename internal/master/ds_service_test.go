@@ -92,7 +92,7 @@ func testLinearizableGet(t *testing.T) {
 				if actualValue, err := dkvClnt.Get(getRC, []byte(key)); err != nil {
 					t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", idx, key, err)
 				} else if string(actualValue.Value) != value {
-					t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", idx, key, value, actualValue)
+					t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %v", idx, key, value, actualValue)
 				}
 			}(j, dkvCli)
 		}
