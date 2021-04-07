@@ -236,7 +236,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := badger.OpenDB(dbFolder)
+	store, err := badger.OpenDB(badger.WithDBDir(dbFolder))
 	if err != nil {
 		panic(err)
 	}

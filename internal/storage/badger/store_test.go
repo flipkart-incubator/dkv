@@ -51,7 +51,7 @@ func TestPutAndGet(t *testing.T) {
 }
 
 func TestInMemPutAndGet(t *testing.T) {
-	if kvs, err := OpenInMemDB(); err != nil {
+	if kvs, err := OpenDB(WithInMemory()); err != nil {
 		t.Fatalf("Unable to open Badger with in-memory mode. Error: %v", err)
 	} else {
 		numTrxns := 50
@@ -136,7 +136,7 @@ func TestMissingGet(t *testing.T) {
 
 func TestSaveChangesForPutAndDelete(t *testing.T) {
 	testSaveChangesForPutAndDelete(t, store)
-	inMemStore, _ := OpenInMemDB()
+	inMemStore, _ := OpenDB(WithInMemory())
 	testSaveChangesForPutAndDelete(t, inMemStore)
 }
 
@@ -184,7 +184,7 @@ func testSaveChangesForPutAndDelete(t *testing.T, bdb DB) {
 
 func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 	testSaveChangesForInterleavedPutAndDelete(t, store)
-	inMemStore, _ := OpenInMemDB()
+	inMemStore, _ := OpenDB(WithInMemory())
 	testSaveChangesForInterleavedPutAndDelete(t, inMemStore)
 }
 
@@ -254,7 +254,7 @@ func TestBackupAndRestore(t *testing.T) {
 }
 
 func TestBackupAndRestoreForInMemBadger(t *testing.T) {
-	bdb, _ := OpenInMemDB()
+	bdb, _ := OpenDB(WithInMemory())
 	numTrxns := 50
 	keyPrefix, valPrefix := "brKey", "brVal"
 	putKeys(t, bdb, numTrxns, keyPrefix, valPrefix)
@@ -718,6 +718,6 @@ func openBadgerDB() (*badgerDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	kvs, err := OpenDB(dbFolder)
+	kvs, err := OpenDB(WithDBDir(dbFolder))
 	return kvs.(*badgerDB), err
 }

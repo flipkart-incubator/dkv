@@ -219,7 +219,7 @@ func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storag
 		}
 		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		bdgrDb, err := badger.OpenDB(dbFolder)
+		bdgrDb, err := badger.OpenDB(badger.WithDBDir(dbFolder))
 		if err != nil {
 			panic(err)
 		}
