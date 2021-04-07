@@ -68,7 +68,7 @@ func testDistributedPut(t *testing.T) {
 		key, expectedValue := fmt.Sprintf("K_CLI_%d", i), fmt.Sprintf("V_CLI_%d", i)
 		for j, dkvCli := range dkvClis {
 			if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
-				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", j, key, err)
+				t.Errorf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", j, key, err)
 			} else if string(actualValue.Value) != expectedValue {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", j, key, expectedValue, actualValue)
 			}
@@ -90,7 +90,7 @@ func testLinearizableGet(t *testing.T) {
 			go func(idx int, dkvClnt *ctl.DKVClient) {
 				defer wg.Done()
 				if actualValue, err := dkvClnt.Get(getRC, []byte(key)); err != nil {
-					t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", idx, key, err)
+					t.Errorf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", idx, key, err)
 				} else if string(actualValue.Value) != value {
 					t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %v", idx, key, value, actualValue)
 				}
