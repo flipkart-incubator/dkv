@@ -116,7 +116,7 @@ func WithCacheSize(size uint64) DBOption {
 	}
 }
 
-// WithBadgerConfig can be used to override internal badger
+// WithBadgerConfig can be used to override internal Badger
 // storage settings through the given .ini file.
 func WithBadgerConfig(iniFile string) DBOption {
 	return func(opts *bdgrOpts) {

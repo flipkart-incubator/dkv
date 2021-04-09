@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +20,12 @@ import (
 
 const dbFolder = "/tmp/badger_storage_test"
 
+var (
+	_, fp, _, _ = runtime.Caller(0)
+	basepath    = filepath.Dir(fp)
+	iniFilePath = fmt.Sprintf("%s/badger.ini", basepath)
+)
+
 var store *badgerDB
 
 func TestMain(m *testing.M) {
@@ -28,6 +36,13 @@ func TestMain(m *testing.M) {
 		res := m.Run()
 		store.Close()
 		os.Exit(res)
+	}
+}
+
+func TestINIFileOption(t *testing.T) {
+	_, err := OpenDB(WithBadgerConfig(iniFilePath))
+	if err != nil {
+		t.Error(err)
 	}
 }
 

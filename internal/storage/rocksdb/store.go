@@ -2,6 +2,7 @@ package rocksdb
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -14,6 +15,7 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/tecbot/gorocksdb"
 	"go.uber.org/zap"
+	"gopkg.in/ini.v1"
 )
 
 // DB interface represents the capabilities exposed
@@ -69,6 +71,14 @@ func WithStats(statsCli stats.Client) DBOption {
 	}
 }
 
+// WithFSync ensures all writes to RocksDB are
+// immediatey flushed to disk from OS buffers.
+func WithFSync() DBOption {
+	return func(opts *rocksDBOpts) {
+		opts.rocksDBOpts.SetUseFsync(true)
+	}
+}
+
 // WithCacheSize is used to set the block cache size.
 func WithCacheSize(size uint64) DBOption {
 	return func(opts *rocksDBOpts) {
@@ -76,6 +86,28 @@ func WithCacheSize(size uint64) DBOption {
 			opts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
 		} else {
 			opts.blockTableOpts.SetNoBlockCache(true)
+		}
+	}
+}
+
+// WithRocksDBConfig can be used to override internal RocksDB
+// storage settings through the given .ini file.
+func WithRocksDBConfig(iniFile string) DBOption {
+	return func(opts *rocksDBOpts) {
+		if cfg, err := ini.Load(iniFile); err != nil {
+			panic(fmt.Errorf("unable to load RocksDB configuration from given file: %s, error: %v", iniFile, err))
+		} else {
+			var buff strings.Builder
+			sect := cfg.Section("")
+			sectConf := sect.KeysHash()
+			for key, val := range sectConf {
+				fmt.Fprintf(&buff, "%s=%s;", key, val)
+			}
+			if rdbOpts, err := gorocksdb.GetOptionsFromString(opts.rocksDBOpts, buff.String()); err != nil {
+				panic(fmt.Errorf("unable to parge RocksDB configuration from given file: %s, error: %v", iniFile, err))
+			} else {
+				opts.rocksDBOpts = rdbOpts
+			}
 		}
 	}
 }
@@ -126,7 +158,6 @@ func (rdb *rocksDB) Close() error {
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
 	wo := gorocksdb.NewDefaultWriteOptions()
-	wo.SetSync(true)
 	defer wo.Destroy()
 	err := rdb.db.Put(wo, key, value)
 	if err != nil {
@@ -138,7 +169,6 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
 	wo := gorocksdb.NewDefaultWriteOptions()
-	wo.SetSync(true)
 	defer wo.Destroy()
 	err := rdb.db.Delete(wo, key)
 	if err != nil {
@@ -331,7 +361,6 @@ func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.save.changes.latency.ms", time.Now())
 	wo := gorocksdb.NewDefaultWriteOptions()
-	wo.SetSync(true)
 	defer wo.Destroy()
 	appldChngNum := uint64(0)
 	for _, chng := range changes {

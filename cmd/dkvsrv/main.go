@@ -346,6 +346,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	switch dbEngine {
 	case "rocksdb":
 		rocksDb, err := rocksdb.OpenDB(dbDir,
+			rocksdb.WithFSync(),
 			rocksdb.WithCacheSize(blockCacheSize),
 			rocksdb.WithStats(statsCli),
 			rocksdb.WithLogger(dkvLogger))
