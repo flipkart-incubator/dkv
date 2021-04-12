@@ -37,6 +37,8 @@ type rocksDB struct {
 }
 
 type rocksDBOpts struct {
+	readOpts       *gorocksdb.ReadOptions
+	writeOpts      *gorocksdb.WriteOptions
 	blockTableOpts *gorocksdb.BlockBasedTableOptions
 	rocksDBOpts    *gorocksdb.Options
 	restoreOpts    *gorocksdb.RestoreOptions
@@ -71,11 +73,11 @@ func WithStats(statsCli stats.Client) DBOption {
 	}
 }
 
-// WithFSync ensures all writes to RocksDB are
+// WithSyncWrites ensures all writes to RocksDB are
 // immediatey flushed to disk from OS buffers.
-func WithFSync() DBOption {
+func WithSyncWrites() DBOption {
 	return func(opts *rocksDBOpts) {
-		opts.rocksDBOpts.SetUseFsync(true)
+		opts.writeOpts.SetSync(true)
 	}
 }
 
@@ -94,19 +96,21 @@ func WithCacheSize(size uint64) DBOption {
 // storage settings through the given .ini file.
 func WithRocksDBConfig(iniFile string) DBOption {
 	return func(opts *rocksDBOpts) {
-		if cfg, err := ini.Load(iniFile); err != nil {
-			panic(fmt.Errorf("unable to load RocksDB configuration from given file: %s, error: %v", iniFile, err))
-		} else {
-			var buff strings.Builder
-			sect := cfg.Section("")
-			sectConf := sect.KeysHash()
-			for key, val := range sectConf {
-				fmt.Fprintf(&buff, "%s=%s;", key, val)
-			}
-			if rdbOpts, err := gorocksdb.GetOptionsFromString(opts.rocksDBOpts, buff.String()); err != nil {
-				panic(fmt.Errorf("unable to parge RocksDB configuration from given file: %s, error: %v", iniFile, err))
+		if iniFile = strings.TrimSpace(iniFile); iniFile != "" {
+			if cfg, err := ini.Load(iniFile); err != nil {
+				panic(fmt.Errorf("unable to load RocksDB configuration from given file: %s, error: %v", iniFile, err))
 			} else {
-				opts.rocksDBOpts = rdbOpts
+				var buff strings.Builder
+				sect := cfg.Section("")
+				sectConf := sect.KeysHash()
+				for key, val := range sectConf {
+					fmt.Fprintf(&buff, "%s=%s;", key, val)
+				}
+				if rdbOpts, err := gorocksdb.GetOptionsFromString(opts.rocksDBOpts, buff.String()); err != nil {
+					panic(fmt.Errorf("unable to parge RocksDB configuration from given file: %s, error: %v", iniFile, err))
+				} else {
+					opts.rocksDBOpts = rdbOpts
+				}
 			}
 		}
 	}
@@ -132,13 +136,17 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	opts.SetCreateIfMissing(true)
 	opts.SetBlockBasedTableFactory(bbto)
 	rstOpts := gorocksdb.NewRestoreOptions()
-	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), statsCli: stats.NewNoOpClient()}
+	wrOpts := gorocksdb.NewDefaultWriteOptions()
+	rdOpts := gorocksdb.NewDefaultReadOptions()
+	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient()}
 }
 
 func (rdbOpts *rocksDBOpts) destroy() {
 	rdbOpts.blockTableOpts.Destroy()
 	rdbOpts.rocksDBOpts.Destroy()
 	rdbOpts.restoreOpts.Destroy()
+	rdbOpts.readOpts.Destroy()
+	rdbOpts.writeOpts.Destroy()
 }
 
 func openStore(opts *rocksDBOpts) (*rocksDB, error) {
@@ -150,16 +158,14 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 }
 
 func (rdb *rocksDB) Close() error {
-	//rdb.opts.destroy()
 	rdb.db.Close()
+	//rdb.opts.destroy()
 	return nil
 }
 
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
-	wo := gorocksdb.NewDefaultWriteOptions()
-	defer wo.Destroy()
-	err := rdb.db.Put(wo, key, value)
+	err := rdb.db.Put(rdb.opts.writeOpts, key, value)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
 	}
@@ -168,9 +174,7 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
-	wo := gorocksdb.NewDefaultWriteOptions()
-	defer wo.Destroy()
-	err := rdb.db.Delete(wo, key)
+	err := rdb.db.Delete(rdb.opts.writeOpts, key)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
 	}
@@ -178,9 +182,7 @@ func (rdb *rocksDB) Delete(key []byte) error {
 }
 
 func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
-	ro := gorocksdb.NewDefaultReadOptions()
-	defer ro.Destroy()
-
+	ro := rdb.opts.readOpts
 	switch numKeys := len(keys); {
 	case numKeys == 1:
 		return rdb.getSingleKey(ro, keys[0])
@@ -360,13 +362,11 @@ func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.save.changes.latency.ms", time.Now())
-	wo := gorocksdb.NewDefaultWriteOptions()
-	defer wo.Destroy()
 	appldChngNum := uint64(0)
 	for _, chng := range changes {
 		wb := gorocksdb.WriteBatchFrom(chng.SerialisedForm)
 		defer wb.Destroy()
-		err := rdb.db.Write(wo, wb)
+		err := rdb.db.Write(rdb.opts.writeOpts, wb)
 		if err != nil {
 			return appldChngNum, err
 		}
@@ -377,12 +377,11 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 
 type iter struct {
 	iterOpts storage.IterationOptions
-	readOpts *gorocksdb.ReadOptions
 	rdbIter  *gorocksdb.Iterator
 }
 
 func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
-	readOpts := gorocksdb.NewDefaultReadOptions()
+	readOpts := rdb.opts.readOpts
 	it := rdb.db.NewIterator(readOpts)
 
 	if sk, prsnt := iterOpts.StartKey(); prsnt {
@@ -390,7 +389,7 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, readOpts, it}
+	return &iter{iterOpts, it}
 }
 
 func (rdbIter *iter) HasNext() bool {
@@ -419,7 +418,6 @@ func (rdbIter *iter) Err() error {
 }
 
 func (rdbIter *iter) Close() error {
-	rdbIter.readOpts.Destroy()
 	rdbIter.rdbIter.Close()
 	return nil
 }
