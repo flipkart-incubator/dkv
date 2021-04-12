@@ -116,18 +116,20 @@ func WithCacheSize(size uint64) DBOption {
 	}
 }
 
-// WithBadgerConfig can be used to override internal badger
+// WithBadgerConfig can be used to override internal Badger
 // storage settings through the given .ini file.
 func WithBadgerConfig(iniFile string) DBOption {
 	return func(opts *bdgrOpts) {
-		if cfg, err := ini.Load(iniFile); err != nil {
-			panic(fmt.Errorf("unable to load Badger configuration from given file: %s, error: %v", iniFile, err))
-		} else {
-			stOpts := badger.Options{}
-			if err := cfg.StrictMapTo(&stOpts); err != nil {
-				panic(fmt.Errorf("unable to parse Badger configuration from given file: %s, error: %v", iniFile, err))
+		if iniFile = strings.TrimSpace(iniFile); iniFile != "" {
+			if cfg, err := ini.Load(iniFile); err != nil {
+				panic(fmt.Errorf("unable to load Badger configuration from given file: %s, error: %v", iniFile, err))
+			} else {
+				stOpts := badger.Options{}
+				if err := cfg.StrictMapTo(&stOpts); err != nil {
+					panic(fmt.Errorf("unable to parse Badger configuration from given file: %s, error: %v", iniFile, err))
+				}
+				opts.opts = stOpts
 			}
-			opts.opts = stOpts
 		}
 	}
 }

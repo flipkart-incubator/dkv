@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,6 +21,12 @@ const (
 	cacheSize = 3 << 30
 )
 
+var (
+	_, fp, _, _ = runtime.Caller(0)
+	basepath    = filepath.Dir(fp)
+	iniFilePath = fmt.Sprintf("%s/rocksdb.ini", basepath)
+)
+
 var store *rocksDB
 
 func TestMain(m *testing.M) {
@@ -29,6 +37,14 @@ func TestMain(m *testing.M) {
 		res := m.Run()
 		store.Close()
 		os.Exit(res)
+	}
+}
+
+func TestINIFileOption(t *testing.T) {
+	dbFolder := "/tmp/rdb_ini"
+	_, err := OpenDB(dbFolder, WithRocksDBConfig(iniFilePath))
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -663,6 +679,6 @@ func openRocksDB() (*rocksDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	db, err := OpenDB(dbFolder, WithCacheSize(cacheSize))
+	db, err := OpenDB(dbFolder, WithSyncWrites(), WithCacheSize(cacheSize))
 	return db.(*rocksDB), err
 }

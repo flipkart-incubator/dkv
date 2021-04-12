@@ -233,7 +233,8 @@ func newRocksDBStore(dbFolder string) rocksdb.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
+	store, err := rocksdb.OpenDB(dbFolder,
+		rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
 	if err != nil {
 		panic(err)
 	}
@@ -244,7 +245,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := badger.OpenDB(badger.WithDBDir(dbFolder))
+	store, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
 	if err != nil {
 		panic(err)
 	}

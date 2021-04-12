@@ -346,9 +346,11 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	switch dbEngine {
 	case "rocksdb":
 		rocksDb, err := rocksdb.OpenDB(dbDir,
+			rocksdb.WithSyncWrites(),
 			rocksdb.WithCacheSize(blockCacheSize),
-			rocksdb.WithStats(statsCli),
-			rocksdb.WithLogger(dkvLogger))
+			rocksdb.WithRocksDBConfig(dbEngineIni),
+			rocksdb.WithLogger(dkvLogger),
+			rocksdb.WithStats(statsCli))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
@@ -357,21 +359,16 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		var badgerDb badger.DB
 		var err error
 		bdbOpts := []badger.DBOption{
+			badger.WithSyncWrites(),
+			badger.WithCacheSize(blockCacheSize),
+			badger.WithBadgerConfig(dbEngineIni),
 			badger.WithLogger(dkvLogger),
 			badger.WithStats(statsCli),
 		}
-		if dbEngineIni != "" {
-			bdbOpts = append(bdbOpts, badger.WithBadgerConfig(dbEngineIni))
+		if disklessMode {
+			bdbOpts = append(bdbOpts, badger.WithInMemory())
 		} else {
-			if disklessMode {
-				bdbOpts = append(bdbOpts, badger.WithInMemory())
-			} else {
-				bdbOpts = append(bdbOpts,
-					badger.WithDBDir(dbDir),
-					badger.WithCacheSize(blockCacheSize),
-					badger.WithSyncWrites(),
-				)
-			}
+			bdbOpts = append(bdbOpts, badger.WithDBDir(dbDir))
 		}
 		badgerDb, err = badger.OpenDB(bdbOpts...)
 		if err != nil {

@@ -202,13 +202,14 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
+		rocksDb, err := rocksdb.OpenDB(dbFolder,
+			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}
 		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		bdgrDb, err := badger.OpenDB(badger.WithDBDir(dbFolder))
+		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
 		if err != nil {
 			panic(err)
 		}
