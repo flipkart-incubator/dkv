@@ -13,7 +13,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"github.com/tecbot/gorocksdb"
+	"github.com/flipkart-incubator/gorocksdb"
 )
 
 const (
@@ -538,6 +538,124 @@ func TestPreventParallelRestores(t *testing.T) {
 
 	if succ > 1 || fail < uint32(parallelism-1) {
 		t.Errorf("Only one restore must have succeeded.")
+	}
+}
+
+func TestOptimisticTransactions(t *testing.T) {
+	name := fmt.Sprintf("%s-TestOptimTrans", store.opts.folderName)
+	opts := store.opts.rocksDBOpts
+	ro := gorocksdb.NewDefaultReadOptions()
+	wo := gorocksdb.NewDefaultWriteOptions()
+	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
+
+	tdb, err := gorocksdb.OpenOptimisticTransactionDb(opts, name)
+	if err != nil {
+		t.Errorf("Unable to open optimistic transaction DB. Error: %v", err)
+	}
+	defer tdb.Close()
+
+	ctrKey := []byte("num")
+	bdb := tdb.GetBaseDb()
+	err = bdb.Put(wo, ctrKey, []byte{0})
+	if err != nil {
+		t.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
+	}
+
+	targetCnt := 10
+	var wg sync.WaitGroup
+	for i := 1; i <= targetCnt; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				txn := tdb.TransactionBegin(wo, to, nil)
+				cnt, err := txn.GetForUpdate(ro, ctrKey)
+				if err != nil {
+					t.Errorf("Unable to GetForUpdate. Error: %v", err)
+				}
+				val := cnt.Data()[0]
+				newVal := val + 1
+				err = txn.Put(ctrKey, []byte{newVal})
+				if err != nil {
+					t.Errorf("Unable to PUT. Error: %v", err)
+				}
+				err = txn.Commit()
+				cnt.Free()
+				txn.Destroy()
+				if err == nil {
+					break
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	cnt, err := bdb.Get(ro, ctrKey)
+	defer cnt.Free()
+	if err != nil {
+		t.Errorf("Unable to GET using base DB of optimistic transaction. Error: %v", err)
+	}
+	val := cnt.Data()[0]
+	if val != byte(targetCnt) {
+		t.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, targetCnt, val)
+	}
+}
+
+func TestPessimisticTransactions(t *testing.T) {
+	name := fmt.Sprintf("%s-TestPessTrans", store.opts.folderName)
+	opts := store.opts.rocksDBOpts
+	ro := gorocksdb.NewDefaultReadOptions()
+	wo := gorocksdb.NewDefaultWriteOptions()
+	tdbo := gorocksdb.NewDefaultTransactionDBOptions()
+	to := gorocksdb.NewDefaultTransactionOptions()
+
+	tdb, err := gorocksdb.OpenTransactionDb(opts, tdbo, name)
+	if err != nil {
+		t.Errorf("Unable to open transaction DB. Error: %v", err)
+	}
+	defer tdb.Close()
+
+	ctrKey := []byte("num")
+	err = tdb.Put(wo, ctrKey, []byte{0})
+	if err != nil {
+		t.Errorf("Unable to PUT. Error: %v", err)
+	}
+
+	targetCnt := 10
+	var wg sync.WaitGroup
+	for i := 1; i <= targetCnt; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				txn := tdb.TransactionBegin(wo, to, nil)
+				cnt, err := txn.GetForUpdate(ro, ctrKey)
+				if err != nil {
+					t.Errorf("Unable to GetForUpdate. Error: %v", err)
+				}
+				val := cnt.Data()[0]
+				newVal := val + 1
+				err = txn.Put(ctrKey, []byte{newVal})
+				if err != nil {
+					t.Errorf("Unable to PUT. Error: %v", err)
+				}
+				err = txn.Commit()
+				cnt.Free()
+				txn.Destroy()
+				if err == nil {
+					break
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	cnt, err := tdb.Get(ro, ctrKey)
+	defer cnt.Free()
+	if err != nil {
+		t.Errorf("Unable to GET. Error: %v", err)
+	}
+	val := cnt.Data()[0]
+	if val != byte(targetCnt) {
+		t.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, targetCnt, val)
 	}
 }
 
