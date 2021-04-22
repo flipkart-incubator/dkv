@@ -525,6 +525,65 @@ func TestPreventParallelRestores(t *testing.T) {
 	}
 }
 
+func TestOptimisticTransactions(t *testing.T) {
+	name := fmt.Sprintf("%s-TestOptimTrans", store.opts.folderName)
+	opts := store.opts.rocksDBOpts
+	ro := gorocksdb.NewDefaultReadOptions()
+	wo := gorocksdb.NewDefaultWriteOptions()
+	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
+
+	tdb, err := gorocksdb.OpenOptimisticTransactionDb(opts, name)
+	if err != nil {
+		t.Errorf("Unable to open optimistic transaction DB. Error: %v", err)
+	}
+	defer tdb.Close()
+
+	ctrKey := []byte("num")
+	bdb := tdb.GetBaseDb()
+	err = bdb.Put(wo, ctrKey, []byte{0})
+	if err != nil {
+		t.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
+	}
+
+	targetCnt := 10
+	var wg sync.WaitGroup
+	for i := 1; i <= targetCnt; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				txn := tdb.TransactionBegin(wo, to, nil)
+				cnt, err := txn.GetForUpdate(ro, ctrKey)
+				if err != nil {
+					t.Errorf("Unable to GetForUpdate. Error: %v", err)
+				}
+				val := cnt.Data()[0]
+				newVal := val + 1
+				err = txn.Put(ctrKey, []byte{newVal})
+				if err != nil {
+					t.Errorf("Unable to PUT. Error: %v", err)
+				}
+				err = txn.Commit()
+				cnt.Free()
+				txn.Destroy()
+				if err == nil {
+					break
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	cnt, err := bdb.Get(ro, ctrKey)
+	defer cnt.Free()
+	if err != nil {
+		t.Errorf("Unable to GET using base DB of optimistic transaction. Error: %v", err)
+	}
+	val := cnt.Data()[0]
+	if val != byte(targetCnt) {
+		t.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, targetCnt, val)
+	}
+}
+
 func BenchmarkPutNewKeys(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("BK%d", i), fmt.Sprintf("BV%d", i)
