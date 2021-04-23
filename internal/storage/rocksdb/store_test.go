@@ -668,6 +668,56 @@ func BenchmarkPutNewKeys(b *testing.B) {
 	}
 }
 
+type IncOp struct{}
+
+func (io *IncOp) FullMerge(key, existingValue []byte, operands [][]byte) ([]byte, bool) {
+	val := existingValue[0]
+	delta := operands[0][0]
+	newVal := val + delta
+	return []byte{newVal}, true
+}
+
+func (io *IncOp) Name() string {
+	return "increment-operator"
+}
+
+func BenchmarkMergeOperators(b *testing.B) {
+	name := fmt.Sprintf("%s-BenchMergeOpers", store.opts.folderName)
+	opts := store.opts.rocksDBOpts
+	opts.SetMergeOperator(&IncOp{})
+	ro := gorocksdb.NewDefaultReadOptions()
+	wo := gorocksdb.NewDefaultWriteOptions()
+
+	db, err := gorocksdb.OpenDb(opts, name)
+	if err != nil {
+		b.Errorf("Unable to open DB. Error: %v", err)
+	}
+	defer db.Close()
+
+	ctrKey := []byte("num")
+	err = db.Put(wo, ctrKey, []byte{0})
+	if err != nil {
+		b.Errorf("Unable to PUT. Error: %v", err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		err := db.Merge(wo, ctrKey, []byte{1})
+		if err != nil {
+			b.Errorf("Unable to merge. Error: %v", err)
+		}
+		db.CompactRange(gorocksdb.Range{nil, nil})
+	}
+	cnt, err := db.Get(ro, ctrKey)
+	defer cnt.Free()
+	if err != nil {
+		b.Errorf("Unable to GET. Error: %v", err)
+	}
+	val := cnt.Data()[0]
+	if val != byte(b.N) {
+		b.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, b.N, val)
+	}
+}
+
 func BenchmarkOptimisticTransactions(b *testing.B) {
 	name := fmt.Sprintf("%s-BenchOptimTrans", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
