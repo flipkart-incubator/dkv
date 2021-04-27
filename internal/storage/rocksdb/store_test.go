@@ -1,6 +1,7 @@
 package rocksdb
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -597,6 +598,98 @@ func TestOptimisticTransactions(t *testing.T) {
 	val := cnt.Data()[0]
 	if val != byte(targetCnt) {
 		t.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, targetCnt, val)
+	}
+}
+
+func TestLoadChangesForOptimisticTransactions(t *testing.T) {
+	name := fmt.Sprintf("%s-TestChngsOptimTrans", store.opts.folderName)
+	opts := store.opts.rocksDBOpts
+	ro := gorocksdb.NewDefaultReadOptions()
+	wo := gorocksdb.NewDefaultWriteOptions()
+	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
+
+	tdb, err := gorocksdb.OpenOptimisticTransactionDb(opts, name)
+	if err != nil {
+		t.Errorf("Unable to open optimistic transaction DB. Error: %v", err)
+	}
+	defer tdb.Close()
+
+	ctrKey := []byte("num")
+	bdb := tdb.GetBaseDb()
+	err = bdb.Put(wo, ctrKey, []byte{0})
+	if err != nil {
+		t.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
+	}
+
+	chngNum := bdb.GetLatestSequenceNumber() + 1
+	targetCnt := 5
+
+	// open a single transaction and insert 5 keys
+	txn := tdb.TransactionBegin(wo, to, nil)
+	for i := 1; i <= targetCnt; i++ {
+		cnt, err := txn.GetForUpdate(ro, ctrKey)
+		if err != nil {
+			t.Errorf("Unable to GetForUpdate. Error: %v", err)
+		}
+		val := cnt.Data()[0]
+		newVal := val + 1
+		err = txn.Put(ctrKey, []byte{newVal})
+		if err != nil {
+			t.Errorf("Unable to PUT. Error: %v", err)
+		}
+		cnt.Free()
+	}
+
+	// attempt to commit transaction
+	err = txn.Commit()
+	txn.Destroy()
+	if err != nil {
+		t.Errorf("Unable to commit. Error: %v", err)
+	}
+	cnt, err := bdb.Get(ro, ctrKey)
+	defer cnt.Free()
+	if err != nil {
+		t.Errorf("Unable to GET using base DB of optimistic transaction. Error: %v", err)
+	}
+	val := cnt.Data()[0]
+	if val != byte(targetCnt) {
+		t.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, targetCnt, val)
+	}
+	chngIter, err := bdb.GetUpdatesSince(chngNum)
+	if err != nil {
+		t.Errorf("Unable to retrieve change events. Error: %v", err)
+	}
+	defer chngIter.Destroy()
+	var chngs []*serverpb.ChangeRecord
+	for chngIter.Valid() {
+		wb, chngNum := chngIter.GetBatch()
+		defer wb.Destroy()
+		chngs = append(chngs, toChangeRecord(wb, chngNum))
+		chngIter.Next()
+	}
+
+	// expect a single change record
+	// corresponding to the lone transaction
+	if len(chngs) != 1 {
+		t.Errorf("Mismatch in number of change records. Expected: %v, Actual: %v", 1, len(chngs))
+	}
+
+	actualCnt := chngs[0].NumberOfTrxns
+	if actualCnt != uint32(targetCnt) {
+		t.Errorf("Mismatch in number of transactions per change record. Expected: %v, Actual: %v", targetCnt, actualCnt)
+	}
+
+	for i := 1; i <= int(actualCnt); i++ {
+		trxn := chngs[0].Trxns[i-1]
+		if trxn.Type != serverpb.TrxnRecord_Put {
+			t.Errorf("Mismatch in type for transaction: %d. Expected: %s, Actual: %s", i, serverpb.TrxnRecord_Put.String(), trxn.Type.String())
+		}
+		if !bytes.Equal(trxn.Key, ctrKey) {
+			t.Errorf("Mismatch in key for transaction: %d. Expected: %s, Actual: %s", i, string(trxn.Key), string(ctrKey))
+		}
+		if trxn.Value[0] != byte(i) {
+			t.Errorf("Mismatch in value for transaction: %d. Expected: %v, Actual: %v", i, trxn.Value[0], byte(i))
+		}
 	}
 }
 
