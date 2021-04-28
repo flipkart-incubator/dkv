@@ -223,6 +223,10 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	return results, err
 }
 
+func (bdb *badgerDB) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+	return false, errors.New("not implemented yet")
+}
+
 func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -132,13 +133,17 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 
 type memStore struct {
 	store map[string][]byte
+	mu    sync.Mutex
 }
 
 func newMemStore() *memStore {
-	return &memStore{store: make(map[string][]byte)}
+	return &memStore{store: make(map[string][]byte), mu: sync.Mutex{}}
 }
 
 func (ms *memStore) Put(key []byte, value []byte) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	storeKey := string(key)
 	if _, present := ms.store[storeKey]; present {
 		return errors.New("Given key already exists")
@@ -148,6 +153,9 @@ func (ms *memStore) Put(key []byte, value []byte) error {
 }
 
 func (ms *memStore) Delete(key []byte) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	storeKey := string(key)
 	delete(ms.store, storeKey)
 	return nil
@@ -164,6 +172,22 @@ func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 		}
 	}
 	return rss, nil
+}
+
+func (ms *memStore) CompareAndSet(key, expect, update []byte) (bool, error) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	storeKey := string(key)
+	exist, present := ms.store[storeKey]
+	if (!present && expect != nil) || (present && expect == nil) {
+		return false, nil
+	}
+
+	if !present && expect == nil || bytes.Equal(expect, exist) {
+		ms.store[storeKey] = update
+	}
+	return true, nil
 }
 
 func (ms *memStore) Close() error {

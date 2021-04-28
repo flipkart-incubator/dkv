@@ -1,6 +1,7 @@
 package rocksdb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -28,8 +29,9 @@ type DB interface {
 }
 
 type rocksDB struct {
-	db   *gorocksdb.DB
-	opts *rocksDBOpts
+	db          *gorocksdb.DB
+	optimTrxnDB *gorocksdb.OptimisticTransactionDB
+	opts        *rocksDBOpts
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
@@ -123,11 +125,7 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 	for _, dbOpt := range dbOpts {
 		dbOpt(opts)
 	}
-	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, dbFolder)
-	if err != nil {
-		return nil, err
-	}
-	return &rocksDB{db, opts, 0}, nil
+	return openStore(opts)
 }
 
 func newOptions(dbFolder string) *rocksDBOpts {
@@ -150,15 +148,15 @@ func (rdbOpts *rocksDBOpts) destroy() {
 }
 
 func openStore(opts *rocksDBOpts) (*rocksDB, error) {
-	db, err := gorocksdb.OpenDb(opts.rocksDBOpts, opts.folderName)
+	optimTrxnDB, err := gorocksdb.OpenOptimisticTransactionDb(opts.rocksDBOpts, opts.folderName)
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{db, opts, 0}, nil
+	return &rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0}, nil
 }
 
 func (rdb *rocksDB) Close() error {
-	rdb.db.Close()
+	rdb.optimTrxnDB.Close()
 	//rdb.opts.destroy()
 	return nil
 }
@@ -189,6 +187,37 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	default:
 		return rdb.getMultipleKeys(ro, keys)
 	}
+}
+
+func (rdb *rocksDB) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+	ro := rdb.opts.readOpts
+	wo := rdb.opts.writeOpts
+	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
+	txn := rdb.optimTrxnDB.TransactionBegin(wo, to, nil)
+	defer txn.Destroy()
+
+	exist, err := txn.GetForUpdate(ro, key)
+	if err != nil {
+		return false, err
+	}
+	defer exist.Free()
+
+	existVal := exist.Data()
+	if expect == nil {
+		if len(existVal) > 0 {
+			return false, nil
+		}
+	} else {
+		if !bytes.Equal(existVal, expect) {
+			return false, nil
+		}
+	}
+	err = txn.Put(key, update)
+	if err != nil {
+		return false, err
+	}
+	err = txn.Commit()
+	return err == nil, err
 }
 
 const tempFilePrefix = "rocksdb-sstfile-"
