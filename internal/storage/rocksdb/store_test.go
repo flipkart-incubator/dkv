@@ -834,51 +834,30 @@ func BenchmarkMergeOperators(b *testing.B) {
 	}
 }
 
-func BenchmarkOptimisticTransactions(b *testing.B) {
-	name := fmt.Sprintf("%s-BenchOptimTrans", store.opts.folderName)
-	opts := store.opts.rocksDBOpts
-	ro := gorocksdb.NewDefaultReadOptions()
-	wo := gorocksdb.NewDefaultWriteOptions()
-	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
-
-	tdb, err := gorocksdb.OpenOptimisticTransactionDb(opts, name)
-	if err != nil {
-		b.Errorf("Unable to open optimistic transaction DB. Error: %v", err)
-	}
-	defer tdb.Close()
-
+func BenchmarkCompareAndSet(b *testing.B) {
 	ctrKey := []byte("num")
-	bdb := tdb.GetBaseDb()
-	err = bdb.Put(wo, ctrKey, []byte{0})
+	err := store.Put(ctrKey, []byte{0})
 	if err != nil {
-		b.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
+		b.Errorf("Unable to PUT. Error: %v", err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		txn := tdb.TransactionBegin(wo, to, nil)
-		cnt, err := txn.GetForUpdate(ro, ctrKey)
+		cnt, err := store.Get(ctrKey)
 		if err != nil {
-			b.Errorf("Unable to GetForUpdate. Error: %v", err)
+			b.Errorf("Unable to Get. Error: %v", err)
 		}
-		val := cnt.Data()[0]
+		val := cnt[0].Value[0]
 		newVal := val + 1
-		err = txn.Put(ctrKey, []byte{newVal})
+		_, err = store.CompareAndSet(ctrKey, cnt[0].Value, []byte{newVal})
 		if err != nil {
-			b.Errorf("Unable to PUT. Error: %v", err)
+			b.Errorf("Unable to CAS. Error: %v", err)
 		}
-		err = txn.Commit()
-		if err != nil {
-			b.Errorf("Unable to commit. Error: %v", err)
-		}
-		cnt.Free()
-		txn.Destroy()
 	}
-	cnt, err := bdb.Get(ro, ctrKey)
-	defer cnt.Free()
+	cnt, err := store.Get(ctrKey)
 	if err != nil {
-		b.Errorf("Unable to GET using base DB of optimistic transaction. Error: %v", err)
+		b.Errorf("Unable to GET. Error: %v", err)
 	}
-	val := cnt.Data()[0]
+	val := cnt[0].Value[0]
 	if val != byte(b.N) {
 		b.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, b.N, val)
 	}
