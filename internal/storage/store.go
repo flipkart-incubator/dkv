@@ -40,7 +40,7 @@ type KVStore interface {
 	// hence is safe from a concurrency perspective.
 	// If the expected value is `nil`, then the key is created and
 	// initialized with the given value, atomically.
-	CompareAndSet(key []byte, expect []byte, update []byte) (bool, error)
+	CompareAndSet(key, expect, update []byte) (bool, error)
 }
 
 // A Backupable represents the capability of the underlying store

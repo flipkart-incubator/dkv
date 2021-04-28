@@ -72,7 +72,7 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	wg.Wait()
 
 	// Reduce the max number of changes for testing
-	slaveSvc.(*dkvSlaveService).maxNumChngs = 100
+	slaveSvc.(*slaveService).maxNumChngs = 100
 	slaveCli = newDKVClient(slaveSvcPort)
 	defer slaveCli.Close()
 	defer slaveSvc.Close()
@@ -126,8 +126,8 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	// stop the slave poller so as to avoid race with this poller
 	// and the explicit call to applyChangesFromMaster later
-	slaveSvc.(*dkvSlaveService).replTckr.Stop()
-	slaveSvc.(*dkvSlaveService).replStop <- struct{}{}
+	slaveSvc.(*slaveService).replTckr.Stop()
+	slaveSvc.(*slaveService).replStop <- struct{}{}
 	sleepInSecs(2)
 
 	slaveCli = newDKVClient(slaveSvcPort)
@@ -139,7 +139,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	testDelete(t, masterCli, keyPrefix)
 
-	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
+	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
 		t.Error(err)
 	}
 
@@ -156,7 +156,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	testDelete(t, masterCli, keyPrefix)
 
-	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
+	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
 		t.Error(err)
 	}
 
@@ -168,7 +168,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 
-	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err == nil {
+	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err == nil {
 		t.Error("Expected an error from slave instance")
 	} else {
 		t.Log(err)

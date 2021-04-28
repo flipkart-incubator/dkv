@@ -189,7 +189,7 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	}
 }
 
-func (rdb *rocksDB) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.cas.latency.ms", time.Now())
 	ro := rdb.opts.readOpts
 	wo := rdb.opts.writeOpts

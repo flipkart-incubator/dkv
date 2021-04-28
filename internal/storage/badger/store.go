@@ -223,7 +223,7 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	return results, err
 }
 
-func (bdb *badgerDB) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	defer bdb.opts.statsCli.Timing("badger.cas.latency.ms", time.Now())
 	casTrxn := bdb.db.NewTransaction(true)
 	defer casTrxn.Discard()
