@@ -71,8 +71,14 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli)
 	wg.Wait()
 
+	// stop the slave poller so as to avoid race with this poller
+	// and the explicit call to applyChangesFromMaster later
+	slaveSvc.(*slaveService).replTckr.Stop()
+	slaveSvc.(*slaveService).replStop <- struct{}{}
+	sleepInSecs(2)
 	// Reduce the max number of changes for testing
-	slaveSvc.(*slaveService).maxNumChngs = 100
+	//slaveSvc.(*slaveService).maxNumChngs = 100
+
 	slaveCli = newDKVClient(slaveSvcPort)
 	defer slaveCli.Close()
 	defer slaveSvc.Close()
@@ -98,8 +104,12 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 		}
 	}
 
-	// wait for atleast couple of replPollInterval to ensure slave replication
-	sleepInSecs(10)
+	// we try to sync with master 10 times before giving up
+	for i := 1; i <= 10; i++ {
+		if err := slaveSvc.(*slaveService).applyChangesFromMaster(100); err != nil {
+			t.Error(err)
+		}
+	}
 
 	for i := 0; i < numKeys; i++ {
 		getRes, _ := slaveCli.Get(0, keys[i])

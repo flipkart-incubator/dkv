@@ -233,7 +233,7 @@ func testGetChanges(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "GCK", "GCV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 
-	if chngsRes, err := dkvCli.GetChanges(0, 100); err != nil {
+	if chngsRes, err := dkvCli.GetChanges(0, 1000); err != nil {
 		t.Fatalf("Unable to get changes. Error: %v", err)
 	} else {
 		if chngsRes.MasterChangeNumber == 0 {
@@ -245,9 +245,10 @@ func testGetChanges(t *testing.T) {
 			t.Errorf("Expected at least %d changes. But got only %d changes.", numKeys, numChngs)
 		} else {
 			// Loop from the back since changes sent in chronological order.
-			for i, j := numKeys, numChngs; i >= 1; i, j = i-1, j-1 {
-				chng := chngs[j-1]
-				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
+			for i := 1; i <= numKeys; i++ {
+				chng := chngs[numChngs-i]
+				id := numKeys - i + 1
+				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, id), fmt.Sprintf("%s_%d", valPrefix, id)
 				if chng.NumberOfTrxns != 1 {
 					t.Errorf("Expected one transaction, but found %d transactions.", chng.NumberOfTrxns)
 				} else {
