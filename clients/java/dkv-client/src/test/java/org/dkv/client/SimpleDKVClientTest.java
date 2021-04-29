@@ -29,6 +29,17 @@ public class SimpleDKVClientTest {
     }
 
     @Test
+    public void shouldPerformIncrementAndGet() {
+        String key = "myCtr" + System.currentTimeMillis();
+        long val = dkvCli.incrementAndGet(key.getBytes());
+        assertEquals(1, val);
+        val = dkvCli.incrementAndGet(key.getBytes());
+        assertEquals(2, val);
+        val = dkvCli.incrementAndGet(key.getBytes());
+        assertEquals(3, val);
+    }
+
+    @Test
     public void shouldPerformMultiGet() {
         String keyPref = "K_", valPref = "V_";
         String[] keys = put(10, keyPref, valPref);

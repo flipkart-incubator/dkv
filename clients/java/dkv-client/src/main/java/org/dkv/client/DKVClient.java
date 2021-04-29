@@ -4,6 +4,8 @@ import dkv.serverpb.Api;
 
 import java.io.Closeable;
 import java.util.Iterator;
+import java.util.function.BinaryOperator;
+import java.util.function.UnaryOperator;
 
 /**
  * Provides the means to interact with DKV GRPC APIs. Implementors are
@@ -41,20 +43,32 @@ public interface DKVClient extends Closeable {
      */
     void put(byte[] key, byte[] value);
 
-    /**
-     * Retrieves the value associated with the given key from the DKV
-     * database. How recent the value needs to be can be controlled
-     * through the <tt>consistency</tt> parameter.
-     *
-     * @param consistency consistency controls how recent the result
-     *                    needs to be
-     * @param key key whose associated value needs to be retrieved
-     * @return the value associated with the given key in the database
-     * @throws DKVException if the underlying status in the response from
-     * the database is an error status
-     *
-     * @see Api.ReadConsistency
-     */
+    boolean compareAndSet(byte[] key, byte[] expect, byte[] update);
+
+    long incrementAndGet(byte[] key);
+
+    <T extends Number> T decrementAndGet(byte[] key);
+
+    <T extends Number> T addAndGet(byte[] key, T delta);
+
+    <T extends Number> T accumulateAndGet(byte[] key, BinaryOperator<T> operator);
+
+    <T extends Number> T updateAndGet(byte[] key, UnaryOperator<T> operator);
+
+        /**
+         * Retrieves the value associated with the given key from the DKV
+         * database. How recent the value needs to be can be controlled
+         * through the <tt>consistency</tt> parameter.
+         *
+         * @param consistency consistency controls how recent the result
+         *                    needs to be
+         * @param key key whose associated value needs to be retrieved
+         * @return the value associated with the given key in the database
+         * @throws DKVException if the underlying status in the response from
+         * the database is an error status
+         *
+         * @see Api.ReadConsistency
+         */
     String get(Api.ReadConsistency consistency, String key);
 
     /**

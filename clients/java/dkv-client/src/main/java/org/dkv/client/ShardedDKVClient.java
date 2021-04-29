@@ -6,6 +6,8 @@ import dkv.serverpb.Api;
 
 import java.io.Closeable;
 import java.util.*;
+import java.util.function.BinaryOperator;
+import java.util.function.UnaryOperator;
 
 import static java.util.Collections.addAll;
 import static org.dkv.client.DKVNodeType.*;
@@ -54,6 +56,36 @@ public class ShardedDKVClient implements DKVClient {
         //noinspection ConstantConditions
         DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
         dkvClient.put(key, value);
+    }
+
+    @Override
+    public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
+        return false;
+    }
+
+    @Override
+    public long incrementAndGet(byte[] key) {
+        return 0;
+    }
+
+    @Override
+    public <T extends Number> T decrementAndGet(byte[] key) {
+        return null;
+    }
+
+    @Override
+    public <T extends Number> T addAndGet(byte[] key, T delta) {
+        return null;
+    }
+
+    @Override
+    public <T extends Number> T accumulateAndGet(byte[] key, BinaryOperator<T> operator) {
+        return null;
+    }
+
+    @Override
+    public <T extends Number> T updateAndGet(byte[] key, UnaryOperator<T> operator) {
+        return null;
     }
 
     @Override
