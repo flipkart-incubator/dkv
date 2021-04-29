@@ -10,6 +10,7 @@ import (
 	"log"
 )
 
+//DKVServerRole defines the role of the DKV node
 type DKVServerRole string
 
 const (
@@ -18,29 +19,32 @@ const (
 	slaveRole                = "SLAVE"
 )
 
-func GetNodeTypeByReadConsistency(rc serverpb.ReadConsistency) DKVServerRole {
+func getNodeTypeByReadConsistency(rc serverpb.ReadConsistency) DKVServerRole {
 	if rc == serverpb.ReadConsistency_LINEARIZABLE {
 		return masterRole
 	}
 	return slaveRole
 }
 
+//DKVNode defines a DKV Node by a given Host & Port
 type DKVNode struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
 }
 
+//DKVNodeSet defines a group of DKV Node(s)
 type DKVNodeSet struct {
 	Name  string    `json:"name"`
 	Nodes []DKVNode `json:"nodes"`
 }
 
+//DKVShard defines a group of DKVNodeSet(s) along with their roles.
 type DKVShard struct {
 	Name     string                        `json:"name"`
 	Topology map[DKVServerRole]*DKVNodeSet `json:"topology"`
 }
 
-func (s DKVShard) GetNodesByType(nodeType ...DKVServerRole) (*DKVNodeSet, error) {
+func (s DKVShard) getNodesByType(nodeType ...DKVServerRole) (*DKVNodeSet, error) {
 	for _, v := range nodeType {
 		if val, ok := s.Topology[v]; ok {
 			return val, nil
@@ -49,59 +53,70 @@ func (s DKVShard) GetNodesByType(nodeType ...DKVServerRole) (*DKVNodeSet, error)
 	return nil, fmt.Errorf("valid DKV node type must be given")
 }
 
+type ListOfKeys [][]byte
+
+//ShardProvider Provides the ShardInformation for the given key(s)
 type ShardProvider interface {
 	ProvideShard(key []byte) (*DKVShard, error)
-	ProvideShards(keys ...[]byte) (map[*DKVShard][][]byte, error)
+	ProvideShards(keys ...[]byte) (map[*DKVShard]ListOfKeys, error)
 }
 
+//KeyHashBasedShardProvider A xxhash based shared provider.
 type KeyHashBasedShardProvider struct {
-	ShardConfiguration []DKVShard
+	shardConfiguration []DKVShard
 }
 
-func (p KeyHashBasedShardProvider) getShardID(key []byte) int {
+func (p *KeyHashBasedShardProvider) getShardID(key []byte) int {
 	h := xxhash.New64()
 	h.Write(key)
 	hash := h.Sum64()
-	var id = (hash & 0xFFFF) % uint64(len(p.ShardConfiguration))
+	var id = (hash & 0xFFFF) % uint64(len(p.shardConfiguration))
 	//LongHashFunction xx = LongHashFunction.xx();
 	//long hsh = xx.hashBytes(key);
 	//return (int) ((hsh & 0xFFFF) % shardConfiguration.getNumShards());
 	return int(id)
 }
-func (p KeyHashBasedShardProvider) ProvideShard(key []byte) (*DKVShard, error) {
+
+//ProvideShard provides shard based on input key
+func (p *KeyHashBasedShardProvider) ProvideShard(key []byte) (*DKVShard, error) {
 	shardId := p.getShardID(key)
-	return &p.ShardConfiguration[shardId], nil
+	return &p.shardConfiguration[shardId], nil
 }
 
-func (p KeyHashBasedShardProvider) ProvideShards(keys ...[]byte) (map[*DKVShard][][]byte, error) {
-	m := make(map[*DKVShard][][]byte)
+//ProvideShards provides list of pairs<shard, keys> for given list of keys.
+func (p *KeyHashBasedShardProvider) ProvideShards(keys ...[]byte) (map[*DKVShard]ListOfKeys, error) {
+	m := make(map[*DKVShard]ListOfKeys)
 	for _, key := range keys {
 		shardId := p.getShardID(key)
-		shard := &p.ShardConfiguration[shardId]
+		shard := &p.shardConfiguration[shardId]
 		m[shard] = append(m[shard], key)
 	}
 	return m, nil
 }
 
-type SimpleDKVClient struct {
+type simpleDKVClient struct {
 	*ctl.DKVClient
-	Addr string
+	addr string
 }
 
+// A ShardedDKVClient instance is used to communicate with a shared DKV cluster
+// over GRPC. It is an adapter to the underlying GRPC clients that
+// exposes a simpler API to its users without having to deal with timeouts,
+// contexts, sharding and other GRPC semantics.
 type ShardedDKVClient struct {
 	pool          *ristretto.Cache
 	shardProvider ShardProvider
-	shards        []DKVShard
 }
 
+// NewShardedDKVClient creates and returns a instance of ShardedDKVClient.
 func NewShardedDKVClient(shardProvider ShardProvider) (*ShardedDKVClient, error) {
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1000,
 		MaxCost:     1000,
 		BufferItems: 64,
 		OnExit: func(val interface{}) {
-			client := val.(*SimpleDKVClient)
-			log.Printf("Closing Client of %s \n", client.Addr)
+			client := val.(*simpleDKVClient)
+			log.Printf("[INFO] Closing Client of %s \n", client.addr)
 			client.Close()
 		},
 	})
@@ -119,16 +134,16 @@ func (dkvClnt *ShardedDKVClient) getShardNode(shard *DKVShard, role ...DKVServer
 	var nodeSet *DKVNodeSet
 	var err error
 	for _, serverRole := range role {
-		nodeSet, err = shard.GetNodesByType(serverRole)
+		nodeSet, err = shard.getNodesByType(serverRole)
 		if err == nil {
-			return nodeSet, err
+			return nodeSet, nil
 		}
 	}
 	return nodeSet, err
 }
 
-func (dkvClnt *ShardedDKVClient) getShardedClient(shard *DKVShard, role ...DKVServerRole) (*SimpleDKVClient, error) {
-	var client *SimpleDKVClient
+func (dkvClnt *ShardedDKVClient) getShardedClient(shard *DKVShard, role ...DKVServerRole) (*simpleDKVClient, error) {
+	var client *simpleDKVClient
 	nodeSet, err := dkvClnt.getShardNode(shard, role...)
 	if err != nil {
 		return nil, err
@@ -146,10 +161,10 @@ func (dkvClnt *ShardedDKVClient) getShardedClient(shard *DKVShard, role ...DKVSe
 		if err != nil {
 			return nil, err
 		}
-		client = &SimpleDKVClient{_client, svcAddr}
+		client = &simpleDKVClient{_client, svcAddr}
 		dkvClnt.pool.Set(svcAddr, client, 1)
 	} else {
-		client = value.(*SimpleDKVClient)
+		client = value.(*simpleDKVClient)
 	}
 	return client, nil
 }
@@ -193,7 +208,7 @@ func (dkvClnt *ShardedDKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*
 	if err != nil {
 		return nil, err
 	}
-	nodeRole := GetNodeTypeByReadConsistency(rc)
+	nodeRole := getNodeTypeByReadConsistency(rc)
 	clnt, err := dkvClnt.getShardedClient(dkvShard, nodeRole, noRole)
 
 	if err != nil {
@@ -210,7 +225,7 @@ func (dkvClnt *ShardedDKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[
 	if err != nil {
 		return nil, err
 	}
-	nodeType := GetNodeTypeByReadConsistency(rc)
+	nodeType := getNodeTypeByReadConsistency(rc)
 	for dkvShard, keys := range dkvShards {
 		_dkvClient, err := dkvClnt.getShardedClient(dkvShard, nodeType, noRole)
 		if err != nil {

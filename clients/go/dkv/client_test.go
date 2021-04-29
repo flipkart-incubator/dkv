@@ -57,9 +57,7 @@ func initClusterConfig(t *testing.T) {
 	b, _ := json.Marshal(Dkvshards)
 	t.Log("Shard Info ", string(b))
 
-	shardProvider := KeyHashBasedShardProvider{
-		ShardConfiguration: Dkvshards,
-	}
+	shardProvider := &KeyHashBasedShardProvider{Dkvshards}
 	dkvCli, err = NewShardedDKVClient(shardProvider)
 	if err != nil {
 		t.Fatal("ShardedDKVClient Create Failure")
