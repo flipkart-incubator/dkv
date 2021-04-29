@@ -1,6 +1,7 @@
 package rocksdb
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -541,8 +542,90 @@ func TestPreventParallelRestores(t *testing.T) {
 	}
 }
 
-func TestOptimisticTransactions(t *testing.T) {
-	name := fmt.Sprintf("%s-TestOptimTrans", store.opts.folderName)
+func TestAtomicKeyCreation(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		freqs          sync.Map
+		numThrs        = 10
+		casKey, casVal = []byte("casKey"), []byte{0}
+	)
+
+	// verify key creation under contention
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			res, err := store.CompareAndSet(casKey, nil, casVal)
+			freqs.Store(id, res && err == nil)
+		}(i)
+	}
+	wg.Wait()
+
+	expNumSucc := 1
+	expNumFail := numThrs - expNumSucc
+	actNumSucc, actNumFail := 0, 0
+	freqs.Range(func(_, val interface{}) bool {
+		if val.(bool) {
+			actNumSucc++
+		} else {
+			actNumFail++
+		}
+		return true
+	})
+
+	if expNumSucc != actNumSucc {
+		t.Errorf("Mismatch in number of successes. Expected: %d, Actual: %d", expNumSucc, actNumSucc)
+	}
+
+	if expNumFail != actNumFail {
+		t.Errorf("Mismatch in number of failures. Expected: %d, Actual: %d", expNumFail, actNumFail)
+	}
+}
+
+func TestAtomicIncrDecr(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("ctrKey"), []byte{0}
+	)
+	store.Put(casKey, casVal)
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, _ := store.Get(casKey)
+				expect := exist[0].Value
+				update := []byte{expect[0] + delta}
+				res, err := store.CompareAndSet(casKey, expect, update)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := store.Get(casKey)
+	actVal := actual[0].Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
+	}
+}
+
+func TestLoadChangesForOptimisticTransactions(t *testing.T) {
+	name := fmt.Sprintf("%s-TestChngsOptimTrans", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
 	ro := gorocksdb.NewDefaultReadOptions()
 	wo := gorocksdb.NewDefaultWriteOptions()
@@ -561,34 +644,31 @@ func TestOptimisticTransactions(t *testing.T) {
 		t.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
 	}
 
-	targetCnt := 10
-	var wg sync.WaitGroup
+	chngNum := bdb.GetLatestSequenceNumber() + 1
+	targetCnt := 5
+
+	// open a single transaction and insert 5 keys
+	txn := tdb.TransactionBegin(wo, to, nil)
 	for i := 1; i <= targetCnt; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				txn := tdb.TransactionBegin(wo, to, nil)
-				cnt, err := txn.GetForUpdate(ro, ctrKey)
-				if err != nil {
-					t.Errorf("Unable to GetForUpdate. Error: %v", err)
-				}
-				val := cnt.Data()[0]
-				newVal := val + 1
-				err = txn.Put(ctrKey, []byte{newVal})
-				if err != nil {
-					t.Errorf("Unable to PUT. Error: %v", err)
-				}
-				err = txn.Commit()
-				cnt.Free()
-				txn.Destroy()
-				if err == nil {
-					break
-				}
-			}
-		}()
+		cnt, err := txn.GetForUpdate(ro, ctrKey)
+		if err != nil {
+			t.Errorf("Unable to GetForUpdate. Error: %v", err)
+		}
+		val := cnt.Data()[0]
+		newVal := val + 1
+		err = txn.Put(ctrKey, []byte{newVal})
+		if err != nil {
+			t.Errorf("Unable to PUT. Error: %v", err)
+		}
+		cnt.Free()
 	}
-	wg.Wait()
+
+	// attempt to commit transaction
+	err = txn.Commit()
+	txn.Destroy()
+	if err != nil {
+		t.Errorf("Unable to commit. Error: %v", err)
+	}
 	cnt, err := bdb.Get(ro, ctrKey)
 	defer cnt.Free()
 	if err != nil {
@@ -597,6 +677,42 @@ func TestOptimisticTransactions(t *testing.T) {
 	val := cnt.Data()[0]
 	if val != byte(targetCnt) {
 		t.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, targetCnt, val)
+	}
+	chngIter, err := bdb.GetUpdatesSince(chngNum)
+	if err != nil {
+		t.Errorf("Unable to retrieve change events. Error: %v", err)
+	}
+	defer chngIter.Destroy()
+	var chngs []*serverpb.ChangeRecord
+	for chngIter.Valid() {
+		wb, chngNum := chngIter.GetBatch()
+		defer wb.Destroy()
+		chngs = append(chngs, toChangeRecord(wb, chngNum))
+		chngIter.Next()
+	}
+
+	// expect a single change record
+	// corresponding to the lone transaction
+	if len(chngs) != 1 {
+		t.Errorf("Mismatch in number of change records. Expected: %v, Actual: %v", 1, len(chngs))
+	}
+
+	actualCnt := chngs[0].NumberOfTrxns
+	if actualCnt != uint32(targetCnt) {
+		t.Errorf("Mismatch in number of transactions per change record. Expected: %v, Actual: %v", targetCnt, actualCnt)
+	}
+
+	for i := 1; i <= int(actualCnt); i++ {
+		trxn := chngs[0].Trxns[i-1]
+		if trxn.Type != serverpb.TrxnRecord_Put {
+			t.Errorf("Mismatch in type for transaction: %d. Expected: %s, Actual: %s", i, serverpb.TrxnRecord_Put.String(), trxn.Type.String())
+		}
+		if !bytes.Equal(trxn.Key, ctrKey) {
+			t.Errorf("Mismatch in key for transaction: %d. Expected: %s, Actual: %s", i, string(trxn.Key), string(ctrKey))
+		}
+		if trxn.Value[0] != byte(i) {
+			t.Errorf("Mismatch in value for transaction: %d. Expected: %v, Actual: %v", i, trxn.Value[0], byte(i))
+		}
 	}
 }
 
@@ -668,51 +784,80 @@ func BenchmarkPutNewKeys(b *testing.B) {
 	}
 }
 
-func BenchmarkOptimisticTransactions(b *testing.B) {
-	name := fmt.Sprintf("%s-BenchOptimTrans", store.opts.folderName)
+type IncOp struct{}
+
+func (io *IncOp) FullMerge(key, existingValue []byte, operands [][]byte) ([]byte, bool) {
+	val := existingValue[0]
+	delta := operands[0][0]
+	newVal := val + delta
+	return []byte{newVal}, true
+}
+
+func (io *IncOp) Name() string {
+	return "increment-operator"
+}
+
+func BenchmarkMergeOperators(b *testing.B) {
+	name := fmt.Sprintf("%s-BenchMergeOpers", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
+	opts.SetMergeOperator(&IncOp{})
 	ro := gorocksdb.NewDefaultReadOptions()
 	wo := gorocksdb.NewDefaultWriteOptions()
-	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
 
-	tdb, err := gorocksdb.OpenOptimisticTransactionDb(opts, name)
+	db, err := gorocksdb.OpenDb(opts, name)
 	if err != nil {
-		b.Errorf("Unable to open optimistic transaction DB. Error: %v", err)
+		b.Errorf("Unable to open DB. Error: %v", err)
 	}
-	defer tdb.Close()
+	defer db.Close()
 
 	ctrKey := []byte("num")
-	bdb := tdb.GetBaseDb()
-	err = bdb.Put(wo, ctrKey, []byte{0})
+	err = db.Put(wo, ctrKey, []byte{0})
 	if err != nil {
-		b.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
+		b.Errorf("Unable to PUT. Error: %v", err)
 	}
 
 	for i := 0; i < b.N; i++ {
-		txn := tdb.TransactionBegin(wo, to, nil)
-		cnt, err := txn.GetForUpdate(ro, ctrKey)
+		err := db.Merge(wo, ctrKey, []byte{1})
 		if err != nil {
-			b.Errorf("Unable to GetForUpdate. Error: %v", err)
+			b.Errorf("Unable to merge. Error: %v", err)
 		}
-		val := cnt.Data()[0]
-		newVal := val + 1
-		err = txn.Put(ctrKey, []byte{newVal})
-		if err != nil {
-			b.Errorf("Unable to PUT. Error: %v", err)
-		}
-		err = txn.Commit()
-		if err != nil {
-			b.Errorf("Unable to commit. Error: %v", err)
-		}
-		cnt.Free()
-		txn.Destroy()
+		db.CompactRange(gorocksdb.Range{nil, nil})
 	}
-	cnt, err := bdb.Get(ro, ctrKey)
+	cnt, err := db.Get(ro, ctrKey)
 	defer cnt.Free()
 	if err != nil {
-		b.Errorf("Unable to GET using base DB of optimistic transaction. Error: %v", err)
+		b.Errorf("Unable to GET. Error: %v", err)
 	}
 	val := cnt.Data()[0]
+	if val != byte(b.N) {
+		b.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, b.N, val)
+	}
+}
+
+func BenchmarkCompareAndSet(b *testing.B) {
+	ctrKey := []byte("num")
+	err := store.Put(ctrKey, []byte{0})
+	if err != nil {
+		b.Errorf("Unable to PUT. Error: %v", err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		cnt, err := store.Get(ctrKey)
+		if err != nil {
+			b.Errorf("Unable to Get. Error: %v", err)
+		}
+		val := cnt[0].Value[0]
+		newVal := val + 1
+		_, err = store.CompareAndSet(ctrKey, cnt[0].Value, []byte{newVal})
+		if err != nil {
+			b.Errorf("Unable to CAS. Error: %v", err)
+		}
+	}
+	cnt, err := store.Get(ctrKey)
+	if err != nil {
+		b.Errorf("Unable to GET. Error: %v", err)
+	}
+	val := cnt[0].Value[0]
 	if val != byte(b.N) {
 		b.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, b.N, val)
 	}

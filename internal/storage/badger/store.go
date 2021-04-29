@@ -223,6 +223,35 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	return results, err
 }
 
+func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
+	defer bdb.opts.statsCli.Timing("badger.cas.latency.ms", time.Now())
+	casTrxn := bdb.db.NewTransaction(true)
+	defer casTrxn.Discard()
+
+	exist, err := casTrxn.Get(key)
+	switch {
+	case err == badger.ErrKeyNotFound:
+		if expect != nil {
+			return false, nil
+		}
+	case err != nil:
+		bdb.opts.statsCli.Incr("badger.cas.get.errors", 1)
+		return false, err
+	default:
+		existVal, _ := exist.ValueCopy(nil)
+		if !bytes.Equal(existVal, expect) {
+			return false, nil
+		}
+	}
+	err = casTrxn.Set(key, update)
+	if err != nil {
+		bdb.opts.statsCli.Incr("badger.cas.set.errors", 1)
+		return false, err
+	}
+	err = casTrxn.Commit()
+	return err == nil, err
+}
+
 func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()

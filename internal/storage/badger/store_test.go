@@ -1,6 +1,7 @@
 package badger
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -146,6 +147,88 @@ func TestMissingGet(t *testing.T) {
 		t.Errorf("Expected no error since given key is only missing. But got error: %v", err)
 	} else if len(readResults) > 0 {
 		t.Errorf("Expected no values for missing key. Key: %s, Actual Value: %v", key, readResults)
+	}
+}
+
+func TestAtomicKeyCreation(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		freqs          sync.Map
+		numThrs        = 10
+		casKey, casVal = []byte("casKey"), []byte{0}
+	)
+
+	// verify key creation under contention
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			res, err := store.CompareAndSet(casKey, nil, casVal)
+			freqs.Store(id, res && err == nil)
+		}(i)
+	}
+	wg.Wait()
+
+	expNumSucc := 1
+	expNumFail := numThrs - expNumSucc
+	actNumSucc, actNumFail := 0, 0
+	freqs.Range(func(_, val interface{}) bool {
+		if val.(bool) {
+			actNumSucc++
+		} else {
+			actNumFail++
+		}
+		return true
+	})
+
+	if expNumSucc != actNumSucc {
+		t.Errorf("Mismatch in number of successes. Expected: %d, Actual: %d", expNumSucc, actNumSucc)
+	}
+
+	if expNumFail != actNumFail {
+		t.Errorf("Mismatch in number of failures. Expected: %d, Actual: %d", expNumFail, actNumFail)
+	}
+}
+
+func TestAtomicIncrDecr(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("ctrKey"), []byte{0}
+	)
+	store.Put(casKey, casVal)
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, _ := store.Get(casKey)
+				expect := exist[0].Value
+				update := []byte{expect[0] + delta}
+				res, err := store.CompareAndSet(casKey, expect, update)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := store.Get(casKey)
+	actVal := actual[0].Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
 	}
 }
 
@@ -566,6 +649,35 @@ func BenchmarkGetMissingKey(b *testing.B) {
 		if res, err := store.Get([]byte(key)); err == nil {
 			b.Fatalf("Expected an error on missing key, but got no error. Key: %s, Value: %s", key, res)
 		}
+	}
+}
+
+func BenchmarkCompareAndSet(b *testing.B) {
+	ctrKey := []byte("num")
+	err := store.Put(ctrKey, []byte{0})
+	if err != nil {
+		b.Errorf("Unable to PUT. Error: %v", err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		cnt, err := store.Get(ctrKey)
+		if err != nil {
+			b.Errorf("Unable to Get. Error: %v", err)
+		}
+		val := cnt[0].Value[0]
+		newVal := val + 1
+		_, err = store.CompareAndSet(ctrKey, cnt[0].Value, []byte{newVal})
+		if err != nil {
+			b.Errorf("Unable to CAS. Error: %v", err)
+		}
+	}
+	cnt, err := store.Get(ctrKey)
+	if err != nil {
+		b.Errorf("Unable to GET. Error: %v", err)
+	}
+	val := cnt[0].Value[0]
+	if val != byte(b.N) {
+		b.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, b.N, val)
 	}
 }
 

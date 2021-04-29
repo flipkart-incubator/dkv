@@ -19,22 +19,27 @@ service DKV {
   // Iterate iterates through the entire keyspace in no particular order and
   // returns the results as a stream of key value pairs.
   rpc Iterate (IterateRequest) returns (stream IterateResponse);
+
+  // CompareAndSet offers the standard CAS style transaction over a given
+  // key. Intended to be used in concurrent workloads with less contention.
+  rpc CompareAndSet (CompareAndSetRequest) returns (CompareAndSetResponse);
 }
 
-message IterateRequest {
-  // KeyPrefix can be used to iterate through keys that have this prefix.
-  bytes keyPrefix = 1;
-  // StartKey can be used to begin the iteration from the specified key.
-  bytes startKey = 2;
+message CompareAndSetRequest {
+  // Key is the given key that is involved with this CAS request.
+  bytes key = 1;
+  // OldValue is the expected value for comparison.
+  bytes oldValue = 2;
+  // NewValue is the value set once the comparison is successful.
+  bytes newValue = 3;
 }
 
-message IterateResponse {
-  // Status captures any errors with the current iteration.
+message CompareAndSetResponse {
+  // Status indicates the result of the compare and set operation.
   Status status = 1;
-  // Key of the current iteration.
-  bytes key = 2;
-  // Value of the current iteration.
-  bytes value = 3;
+  // Updated indicates if the given new value was overwritten following
+  // a successful comparison with the given old value.
+  bool updated = 2;
 }
 
 message Status {
@@ -109,6 +114,22 @@ message MultiGetResponse {
   Status status = 1;
   // Association of keys and values of the bulk Get operation.
   repeated KVPair keyValues = 2;
+}
+
+message IterateRequest {
+  // KeyPrefix can be used to iterate through keys that have this prefix.
+  bytes keyPrefix = 1;
+  // StartKey can be used to begin the iteration from the specified key.
+  bytes startKey = 2;
+}
+
+message IterateResponse {
+  // Status captures any errors with the current iteration.
+  Status status = 1;
+  // Key of the current iteration.
+  bytes key = 2;
+  // Value of the current iteration.
+  bytes value = 3;
 }
 
 service DKVReplication {

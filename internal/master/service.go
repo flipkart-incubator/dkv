@@ -103,6 +103,20 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 	return res, err
 }
 
+func (ss *standaloneService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
+	casRes, err := ss.store.CompareAndSet(casReq.Key, casReq.OldValue, casReq.NewValue)
+	if err != nil {
+		ss.lg.Error("Unable to perform CAS", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	}
+	res.Updated = casRes
+	return res, err
+}
+
 func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
@@ -306,6 +320,19 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 			res.Status = newErrorStatus(err)
 		}
 	}
+	return res, err
+}
+
+func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
+	reqBts, _ := proto.Marshal(&raftpb.InternalRaftRequest{Cas: casReq})
+	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
+	casRes, err := ds.raftRepl.Save(ctx, reqBts)
+	if err != nil {
+		ds.lg.Error("Unable to CAS in replicated storage", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	}
+	// '0' indicates CAS update was successful
+	res.Updated = casRes[0] == 0
 	return res, err
 }
 

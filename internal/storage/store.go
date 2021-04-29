@@ -33,6 +33,14 @@ type KVStore interface {
 	// order. IterationOptions can be used to control where to begin
 	// iteration as well as what keys are iterated by their prefix.
 	Iterate(IterationOptions) Iterator
+	// CompareAndSet compares the current value of the given key with
+	// that of the given value. In case of a match, it updates that
+	// key with the new value and returns true. Else, it returns false.
+	// All this is done atomically from the caller's point of view and
+	// hence is safe from a concurrency perspective.
+	// If the expected value is `nil`, then the key is created and
+	// initialized with the given value, atomically.
+	CompareAndSet(key, expect, update []byte) (bool, error)
 }
 
 // A Backupable represents the capability of the underlying store
