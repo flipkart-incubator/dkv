@@ -47,6 +47,7 @@ func TestStandaloneService(t *testing.T) {
 		defer dkvSvc.Close()
 		defer grpcSrvr.Stop()
 		t.Run("testPutAndGet", testPutAndGet)
+		t.Run("testPutTTLAndGet", testPutTTLAndGet)
 		t.Run("testAtomicKeyCreation", testAtomicKeyCreation)
 		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
 		t.Run("testDelete", testDelete)
@@ -71,6 +72,25 @@ func testPutAndGet(t *testing.T) {
 		}
 	}
 }
+
+func testPutTTLAndGet(t *testing.T) {
+	key, value := "DeletedKey", "SomeValue"
+
+	if err := dkvCli.PutTTL([]byte(key), []byte(value), time.Now().Add(2* time.Second).Unix() ); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+	}
+
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+
+	time.Sleep(3 * time.Second)
+
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil  {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
 
 func testAtomicKeyCreation(t *testing.T) {
 	var (
@@ -228,6 +248,7 @@ func testDelete(t *testing.T) {
 		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}
 }
+
 
 func testGetChanges(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "GCK", "GCV"

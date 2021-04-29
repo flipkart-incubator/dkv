@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -52,13 +53,34 @@ func TestINIFileOption(t *testing.T) {
 func TestPutAndGet(t *testing.T) {
 	numKeys := 10
 	for i := 1; i <= numKeys; i++ {
-		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("VALUEXXXX%d", i)
 		if err := store.Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
 	for i := 1; i <= numKeys; i++ {
+		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("VALUEXXXX%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if string(readResults[0].Value) != expectedValue {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+}
+
+func TestPutTTLAndGet(t *testing.T) {
+	numIteration := 10
+	for i := 1; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 1; i <= numIteration; i++ {
 		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
@@ -68,6 +90,20 @@ func TestPutAndGet(t *testing.T) {
 			}
 		}
 	}
+
+	time.Sleep(3 * time.Second)
+
+	for i := 1; i <= numIteration; i++ {
+		key := fmt.Sprintf("K%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if len(readResults) > 0 {
+				t.Errorf("GET mismatch post TTL Expiry. Key: %s, Expected Value: %s, Actual Value: %s", key, "nil", readResults[0].Value)
+			}
+		}
+	}
+
 }
 
 func TestPutEmptyValue(t *testing.T) {

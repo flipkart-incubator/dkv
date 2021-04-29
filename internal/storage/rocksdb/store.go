@@ -2,6 +2,7 @@ package rocksdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -159,6 +160,23 @@ func (rdb *rocksDB) Close() error {
 	rdb.optimTrxnDB.Close()
 	//rdb.opts.destroy()
 	return nil
+}
+
+func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS int64) error {
+	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
+	wo := gorocksdb.NewDefaultWriteOptions()
+	wo.SetSync(true)
+	defer wo.Destroy()
+	if expireTS > 0 {
+		b := make([]byte, tsLength)
+		binary.LittleEndian.PutUint64(b, uint64(expireTS))
+		value = append(value, b...)
+	}
+	err := rdb.db.Put(wo, key, value)
+	if err != nil {
+		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
+	}
+	return err
 }
 
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
@@ -508,6 +526,22 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 	return res
 }
 
+const tsLength = 8
+const EndOfWorld = 253402300799 // 9999-12-31 23:59:59
+
+func getExpireTs(valueWithTtl []byte) (int64, error) {
+	l := len(valueWithTtl)
+	if l < tsLength {
+		return 0, fmt.Errorf("invalid_length")
+	}
+	ts := valueWithTtl[l-tsLength:]
+	i := binary.LittleEndian.Uint64(ts)
+	if i > 0 && i < EndOfWorld {
+		return int64(i), nil
+	}
+	return 0, fmt.Errorf("not_valid_ts")
+}
+
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
 	value, err := rdb.db.Get(ro, key)
@@ -518,7 +552,19 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	defer value.Free()
 	val := toByteArray(value)
 	if val != nil && len(val) > 0 {
-		return []*serverpb.KVPair{&serverpb.KVPair{Key: key, Value: val}}, nil
+		//check ttl.
+		expireTs, _ := getExpireTs(val)
+		if expireTs == 0 {
+			//do nothing
+		} else if expireTs < time.Now().Unix() {
+			//triger delete.
+			rdb.Delete(key)
+			return nil, nil
+		} else if expireTs > 0 {
+			val = val[0 : len(val)-tsLength]
+		}
+		return []*serverpb.KVPair{{Key: key, Value: val}}, nil
+
 	}
 	return nil, nil
 }
@@ -534,6 +580,17 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	for i, value := range values {
 		if value != nil {
 			key, val := keys[i], toByteArray(value)
+			//check ttl.
+			expireTs, _ := getExpireTs(val)
+			if expireTs == 0 {
+				//do nothing
+			} else if expireTs < time.Now().Unix() {
+				//triger delete.
+				rdb.Delete(key)
+				continue
+			} else if expireTs > 0 {
+				val = val[0 : len(val)-tsLength]
+			}
 			results = append(results, &serverpb.KVPair{Key: key, Value: val})
 			value.Free()
 		}
