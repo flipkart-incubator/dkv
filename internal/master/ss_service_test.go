@@ -1,10 +1,12 @@
 package master
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +47,8 @@ func TestStandaloneService(t *testing.T) {
 		defer dkvSvc.Close()
 		defer grpcSrvr.Stop()
 		t.Run("testPutAndGet", testPutAndGet)
+		t.Run("testAtomicKeyCreation", testAtomicKeyCreation)
+		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
 		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testIteration", testIteration)
@@ -65,6 +69,90 @@ func testPutAndGet(t *testing.T) {
 		} else if string(actualValue.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
 		}
+	}
+}
+
+func testAtomicKeyCreation(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		freqs          sync.Map
+		numThrs        = 10
+		casKey, casVal = []byte("casKey"), []byte{0}
+	)
+
+	// verify key creation under contention
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			res, err := dkvCli.CompareAndSet(casKey, nil, casVal)
+			freqs.Store(id, res && err == nil)
+		}(i)
+	}
+	wg.Wait()
+
+	expNumSucc := 1
+	expNumFail := numThrs - expNumSucc
+	actNumSucc, actNumFail := 0, 0
+	freqs.Range(func(_, val interface{}) bool {
+		if val.(bool) {
+			actNumSucc++
+		} else {
+			actNumFail++
+		}
+		return true
+	})
+
+	if expNumSucc != actNumSucc {
+		t.Errorf("Mismatch in number of successes. Expected: %d, Actual: %d", expNumSucc, actNumSucc)
+	}
+
+	if expNumFail != actNumFail {
+		t.Errorf("Mismatch in number of failures. Expected: %d, Actual: %d", expNumFail, actNumFail)
+	}
+}
+
+func testAtomicIncrDecr(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("ctrKey"), []byte{0}
+	)
+	if err := dkvCli.Put(casKey, casVal); err != nil {
+		t.Fatalf("Unable to Put key, %s. Error: %v", casKey, err)
+	}
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, _ := dkvCli.Get(rc, casKey)
+				expect := exist.Value
+				update := []byte{expect[0] + delta}
+				res, err := dkvCli.CompareAndSet(casKey, expect, update)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := dkvCli.Get(rc, casKey)
+	actVal := actual.Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
 	}
 }
 

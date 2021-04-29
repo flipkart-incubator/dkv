@@ -70,6 +70,20 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	return errorFromStatus(status, err)
 }
 
+// CompareAndSet provides the wrapper for the standard CAS primitive.
+// It invokes the underlying GRPC CompareAndSet method. This is a
+// convenience wrapper.
+func (dkvClnt *DKVClient) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	casReq := &serverpb.CompareAndSetRequest{Key: key, OldValue: expect, NewValue: update}
+	casRes, err := dkvClnt.dkvCli.CompareAndSet(ctx, casReq)
+	if err != nil {
+		return false, err
+	}
+	return casRes.Updated, errorFromStatus(casRes.Status, nil)
+}
+
 // Delete takes the key as byte arrays and invokes the
 // GRPC Delete method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Delete(key []byte) error {
