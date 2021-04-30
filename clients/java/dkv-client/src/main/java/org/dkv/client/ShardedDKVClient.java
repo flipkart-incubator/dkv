@@ -69,23 +69,13 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
-    public <T extends Number> T decrementAndGet(byte[] key) {
-        return null;
+    public long decrementAndGet(byte[] key) {
+        return 0;
     }
 
     @Override
-    public <T extends Number> T addAndGet(byte[] key, T delta) {
-        return null;
-    }
-
-    @Override
-    public <T extends Number> T accumulateAndGet(byte[] key, BinaryOperator<T> operator) {
-        return null;
-    }
-
-    @Override
-    public <T extends Number> T updateAndGet(byte[] key, UnaryOperator<T> operator) {
-        return null;
+    public long addAndGet(byte[] key, long delta) {
+        return 0;
     }
 
     @Override

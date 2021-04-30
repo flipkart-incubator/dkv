@@ -5,10 +5,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.*;
 
 import static java.lang.String.format;
-import static org.junit.Assert.assertEquals;
+import static org.dkv.client.Utils.convertToLong;
+import static org.junit.Assert.*;
 
 public class SimpleDKVClientTest {
 
@@ -29,14 +33,66 @@ public class SimpleDKVClientTest {
     }
 
     @Test
-    public void shouldPerformIncrementAndGet() {
-        String key = "myCtr" + System.currentTimeMillis();
-        long val = dkvCli.incrementAndGet(key.getBytes());
-        assertEquals(1, val);
-        val = dkvCli.incrementAndGet(key.getBytes());
-        assertEquals(2, val);
-        val = dkvCli.incrementAndGet(key.getBytes());
-        assertEquals(3, val);
+    public void shouldPerformAtomicKeyCreation() throws InterruptedException {
+        byte[] key = ("myCtr" + System.currentTimeMillis()).getBytes();
+        int numThrs = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(numThrs);
+        Map<Integer, Boolean> results = new ConcurrentHashMap<>(numThrs);
+        for (int i = 1; i <= numThrs; i++) {
+            final int id = i;
+            pool.execute(() -> {
+                boolean res = dkvCli.compareAndSet(key, null, "hello".getBytes());
+                results.put(id, res);
+            });
+        }
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        int numSucc = 0, numFail = 0;
+        for (Boolean value : results.values()) {
+            if (value) numSucc++;
+            if (!value) numFail++;
+        }
+        assertEquals(1, numSucc);
+        assertEquals(numThrs - 1, numFail);
+    }
+
+    @Test
+    public void shouldPerformAtomicAddition() throws InterruptedException {
+        byte[] key = ("myCtr" + System.currentTimeMillis()).getBytes();
+        int numThrs = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(numThrs);
+        for (int i = 1; i <= numThrs; i++) {
+            final int id = i;
+            pool.execute(() -> {
+                int delta = (id & 1) == 1 ? 1 : -1;
+                dkvCli.addAndGet(key, delta);
+            });
+        }
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        byte[] actualBts = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(0L, convertToLong(actualBts));
+    }
+
+    @Test
+    public void shouldPerformAtomicIncrDecr() throws InterruptedException {
+        byte[] key = ("myCtr" + System.currentTimeMillis()).getBytes();
+        int numThrs = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(numThrs);
+        for (int i = 1; i <= numThrs; i++) {
+            final int id = i;
+            pool.execute(() -> {
+                if ((id & 1) == 1) {
+                    dkvCli.incrementAndGet(key);
+                } else {
+                    dkvCli.decrementAndGet(key);
+                }
+            });
+        }
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        byte[] actualBts = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(0L, convertToLong(actualBts));
     }
 
     @Test

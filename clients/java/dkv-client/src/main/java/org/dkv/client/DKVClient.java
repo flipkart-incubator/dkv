@@ -43,32 +43,60 @@ public interface DKVClient extends Closeable {
      */
     void put(byte[] key, byte[] value);
 
+    /**
+     * Performs the compare and set operation on the specified key. The
+     * given expected value is compared with the existing value and if
+     * there is a match, that value is overwritten with the given value.
+     *
+     * @param key key used for this compare and set operation
+     * @param expect value to be expected as the existing value
+     * @param update new value to be set if the comparison succeeds
+     * @return true only if the given value is set against the key
+     */
     boolean compareAndSet(byte[] key, byte[] expect, byte[] update);
 
+    /**
+     * Atomically increments the current value associated with the given
+     * key and returns that value.
+     *
+     * @param key key used for this operation
+     * @return the value after the increment operation
+     */
     long incrementAndGet(byte[] key);
 
-    <T extends Number> T decrementAndGet(byte[] key);
+    /**
+     * Atomically decrements the current value associated with the given
+     * key and returns that value.
+     *
+     * @param key key used for this operation
+     * @return the value after the decrement operation
+     */
+    long decrementAndGet(byte[] key);
 
-    <T extends Number> T addAndGet(byte[] key, T delta);
+    /**
+     * Atomically adds the given delta to the current value associated
+     * with the given key and returns that value.
+     *
+     * @param key key used for this operation
+     * @param delta the value used for addition
+     * @return the value after the addition operation
+     */
+    long addAndGet(byte[] key, long delta);
 
-    <T extends Number> T accumulateAndGet(byte[] key, BinaryOperator<T> operator);
-
-    <T extends Number> T updateAndGet(byte[] key, UnaryOperator<T> operator);
-
-        /**
-         * Retrieves the value associated with the given key from the DKV
-         * database. How recent the value needs to be can be controlled
-         * through the <tt>consistency</tt> parameter.
-         *
-         * @param consistency consistency controls how recent the result
-         *                    needs to be
-         * @param key key whose associated value needs to be retrieved
-         * @return the value associated with the given key in the database
-         * @throws DKVException if the underlying status in the response from
-         * the database is an error status
-         *
-         * @see Api.ReadConsistency
-         */
+    /**
+     * Retrieves the value associated with the given key from the DKV
+     * database. How recent the value needs to be can be controlled
+     * through the <tt>consistency</tt> parameter.
+     *
+     * @param consistency consistency controls how recent the result
+     *                    needs to be
+     * @param key key whose associated value needs to be retrieved
+     * @return the value associated with the given key in the database
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     *
+     * @see Api.ReadConsistency
+     */
     String get(Api.ReadConsistency consistency, String key);
 
     /**

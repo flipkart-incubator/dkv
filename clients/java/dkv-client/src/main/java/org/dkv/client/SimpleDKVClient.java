@@ -6,14 +6,13 @@ import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.function.BinaryOperator;
-import java.util.function.UnaryOperator;
 
 import static com.google.protobuf.ByteString.*;
+import static org.dkv.client.Utils.convertToLong;
+import static org.dkv.client.Utils.covertToBytes;
 
 /**
  * An implementation of the {@link DKVClient} interface. It provides a convenient
@@ -156,76 +155,21 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
-        ByteString keyByteStr = copyFrom(key);
-        ByteString expectByteStr = copyFrom(expect);
-        ByteString updateByteStr = copyFrom(update);
-        return cas(keyByteStr, expectByteStr, updateByteStr);
-    }
-
-    private boolean cas(ByteString keyByteStr, ByteString expectByteStr, ByteString updateByteStr) {
-        Api.CompareAndSetRequest.Builder casReqBuilder = Api.CompareAndSetRequest.newBuilder();
-        Api.CompareAndSetRequest casReq = casReqBuilder
-                .setKey(keyByteStr).setOldValue(expectByteStr).setNewValue(updateByteStr)
-                .build();
-        Api.CompareAndSetResponse casRes = blockingStub.compareAndSet(casReq);
-        Api.Status status = casRes.getStatus();
-        if (status.getCode() != 0) {
-            throw new DKVException(status, "CompareAndSet", new Object[]{keyByteStr, expectByteStr, updateByteStr});
-        }
-        return casRes.getUpdated();
+        ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
+        return cas(copyFrom(key), expectByteStr, copyFrom(update));
     }
 
     public long incrementAndGet(byte[] key) {
+        return addAndGet(key, 1);
+    }
+
+    public long decrementAndGet(byte[] key) {
+        return addAndGet(key, -1);
+    }
+
+    public long addAndGet(byte[] key, long delta) {
         ByteString keyByteStr = copyFrom(key);
-        ByteString expValByteStr, updatedValByteStr;
-        long updatedVal;
-        do {
-            expValByteStr = get(Api.ReadConsistency.LINEARIZABLE, keyByteStr);
-            byte[] expValBytes = expValByteStr.toByteArray();
-            long expVal = convertToLong(expValBytes);
-            updatedVal = expVal + 1;
-            byte[] updatedValBts = covertToBytes(updatedVal);
-            updatedValByteStr = copyFrom(updatedValBts);
-        } while (!cas(keyByteStr, expValByteStr, updatedValByteStr));
-        return updatedVal;
-    }
-
-    private long convertToLong(byte[] bts) {
-        if (bts == null || bts.length == 0) {
-            return 0;
-        }
-        long res = bts[0];
-        int limit = Math.min(8, bts.length);
-        for (int i = 1; i < limit; i++) {
-            res += ((long) bts[i] << 8*i);
-        }
-        return res;
-    }
-
-    private byte[] covertToBytes(long val) {
-        byte[] res = new byte[8];
-        Arrays.fill(res, (byte) 0);
-        for (int i = 0; i < 8; i++) {
-            res[i] = (byte) (val & 0xff);
-            val = val >> 8;
-        }
-        return res;
-    }
-
-    public <T extends Number> T decrementAndGet(byte[] key) {
-        return null;
-    }
-
-    public <T extends Number> T addAndGet(byte[] key, T delta) {
-        return null;
-    }
-
-    public <T extends Number> T accumulateAndGet(byte[] key, BinaryOperator<T> operator) {
-        return null;
-    }
-
-    public <T extends Number> T updateAndGet(byte[] key, UnaryOperator<T> operator) {
-        return null;
+        return addAndGet(keyByteStr, delta);
     }
 
     public String get(Api.ReadConsistency consistency, String key) {
@@ -356,5 +300,29 @@ public class SimpleDKVClient implements DKVClient {
             throw new DKVException(status, "MultiGet", new Object[]{consistency, keyByteStrs});
         }
         return multiGetRes.getKeyValuesList();
+    }
+
+    private long addAndGet(ByteString keyByteStr, long delta) {
+        ByteString expValByteStr, updatedValByteStr;
+        long updatedVal;
+        do {
+            expValByteStr = get(Api.ReadConsistency.LINEARIZABLE, keyByteStr);
+            updatedVal = convertToLong(expValByteStr) + delta;
+            updatedValByteStr = covertToBytes(updatedVal);
+        } while (!cas(keyByteStr, expValByteStr, updatedValByteStr));
+        return updatedVal;
+    }
+
+    private boolean cas(ByteString keyByteStr, ByteString expectByteStr, ByteString updateByteStr) {
+        Api.CompareAndSetRequest.Builder casReqBuilder = Api.CompareAndSetRequest.newBuilder();
+        Api.CompareAndSetRequest casReq = casReqBuilder
+                .setKey(keyByteStr).setOldValue(expectByteStr).setNewValue(updateByteStr)
+                .build();
+        Api.CompareAndSetResponse casRes = blockingStub.compareAndSet(casReq);
+        Api.Status status = casRes.getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "CompareAndSet", new Object[]{keyByteStr, expectByteStr, updateByteStr});
+        }
+        return casRes.getUpdated();
     }
 }
