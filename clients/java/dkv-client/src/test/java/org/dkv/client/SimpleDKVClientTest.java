@@ -99,6 +99,29 @@ public class SimpleDKVClientTest {
     }
 
     @Test
+    public void shouldPerformPutTTLAndGet() throws InterruptedException {
+        String key = "helloTTL", expVal = "world";
+        Long expiryTS = (System.currentTimeMillis() / 1000) + 2;
+        dkvCli.put(key, expVal, expiryTS);
+        String actVal = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
+        Thread.sleep(3000);
+        String actVal2 = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), "", actVal2);
+    }
+
+    @Test
+    public void shouldPerformPutAndGetAndDelete() {
+        String key = "hello", expVal = "world";
+        dkvCli.put(key, expVal);
+        String actVal = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
+        dkvCli.delete(key);
+        String actVal2 = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value post delete for key: %s", key), "", actVal2);
+    }
+
+    @Test
     public void shouldPerformMultiGet() {
         String keyPref = "K_", valPref = "V_";
         String[] keys = put(10, keyPref, valPref);
