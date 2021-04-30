@@ -6,8 +6,6 @@ import dkv.serverpb.Api;
 
 import java.io.Closeable;
 import java.util.*;
-import java.util.function.BinaryOperator;
-import java.util.function.UnaryOperator;
 
 import static java.util.Collections.addAll;
 import static org.dkv.client.DKVNodeType.*;

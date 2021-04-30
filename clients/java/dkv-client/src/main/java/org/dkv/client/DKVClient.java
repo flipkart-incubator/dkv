@@ -4,8 +4,6 @@ import dkv.serverpb.Api;
 
 import java.io.Closeable;
 import java.util.Iterator;
-import java.util.function.BinaryOperator;
-import java.util.function.UnaryOperator;
 
 /**
  * Provides the means to interact with DKV GRPC APIs. Implementors are
