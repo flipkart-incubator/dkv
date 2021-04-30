@@ -89,16 +89,16 @@ func testDistAtomicKeyCreation(t *testing.T) {
 
 	// verify atomic key creation under contention
 	// against all cluster nodes
-	cliId := 0
+	cliID := 0
 	for i := 0; i < numThrs; i++ {
 		wg.Add(1)
 		// cycle through the next cluster node client
-		cliId = 1 + (cliId+1)%clusterSize
+		cliID = 1 + (cliID+1)%clusterSize
 		go func(id, clId int) {
 			defer wg.Done()
 			res, err := dkvClis[clId].CompareAndSet(casKey, nil, casVal)
 			freqs.Store(id, res && err == nil)
-		}(i, cliId)
+		}(i, cliID)
 	}
 	wg.Wait()
 
@@ -133,11 +133,11 @@ func testDistAtomicIncrDecr(t *testing.T) {
 
 	// even threads increment, odd threads decrement
 	// a given key, all this done across cluster nodes
-	cliId := 0
+	cliID := 0
 	for i := 0; i < numThrs; i++ {
 		wg.Add(1)
 		// cycle through the next cluster node client
-		cliId = 1 + (cliId+1)%clusterSize
+		cliID = 1 + (cliID+1)%clusterSize
 		go func(id, clId int) {
 			defer wg.Done()
 			delta := byte(0)
@@ -156,7 +156,7 @@ func testDistAtomicIncrDecr(t *testing.T) {
 					break
 				}
 			}
-		}(i, cliId)
+		}(i, cliID)
 	}
 	wg.Wait()
 
