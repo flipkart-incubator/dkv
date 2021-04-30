@@ -129,6 +129,23 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 	return openStore(opts)
 }
 
+type ttlCompactionFilter struct{}
+
+// Name returns the CompactionFilter name
+func (m *ttlCompactionFilter) Name() string {
+	return "dkv.ttlfilter"
+}
+
+// Filter applies the logic for the Compaction process.
+// this returns remove as true if the TTL of the key has expired.
+func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, newVal []byte) {
+	expireTS, _ := getExpireTs(val)
+	if expireTS > 0 && expireTS < time.Now().Unix() {
+		return true, val
+	}
+	return false, nil
+}
+
 func newOptions(dbFolder string) *rocksDBOpts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
@@ -137,6 +154,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	rstOpts := gorocksdb.NewRestoreOptions()
 	wrOpts := gorocksdb.NewDefaultWriteOptions()
 	rdOpts := gorocksdb.NewDefaultReadOptions()
+	opts.SetCompactionFilter(&ttlCompactionFilter{})
 	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient()}
 }
 
@@ -153,7 +171,23 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0}, nil
+	rocksdb := rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0}
+	go rocksdb.Compaction()
+	return &rocksdb, nil
+}
+
+// Compaction runs the compaction routine
+func (rdb *rocksDB) Compaction() error {
+	tick := time.Tick(1 * time.Minute)
+	for {
+		select {
+		case <-tick:
+			// trigger a compaction
+			rdb.opts.lgr.Info("Triggering RocksDB Compaction")
+			rdb.db.CompactRange(gorocksdb.Range{nil, nil})
+		}
+	}
+	return nil
 }
 
 func (rdb *rocksDB) Close() error {
@@ -536,7 +570,7 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 }
 
 const tsLength = 8
-const EndOfWorld = 253402300799 // 9999-12-31 23:59:59
+const endOfWorld = 253402300799 // 9999-12-31 23:59:59
 
 func getExpireTs(valueWithTtl []byte) (int64, error) {
 	l := len(valueWithTtl)
@@ -545,13 +579,11 @@ func getExpireTs(valueWithTtl []byte) (int64, error) {
 	}
 	ts := valueWithTtl[l-tsLength:]
 	i := binary.LittleEndian.Uint64(ts)
-	if i > 0 && i < EndOfWorld {
+	if i > 0 && i < endOfWorld {
 		return int64(i), nil
 	}
 	return 0, fmt.Errorf("not_valid_ts")
 }
-
-
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
@@ -566,7 +598,7 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 		//check ttl.
 		expireTs, _ := getExpireTs(val)
 		if expireTs > 0 && expireTs < time.Now().Unix() {
-			//triger delete.
+			//trigger delete.
 			rdb.Delete(key)
 			return nil, nil
 		} else if expireTs > 0 {
