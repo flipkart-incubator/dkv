@@ -146,42 +146,51 @@ public class SimpleDKVClient implements DKVClient {
         blockingStub = DKVGrpc.newBlockingStub(channel);
     }
 
+    @Override
     public void put(String key, String value) {
         put(copyFromUtf8(key), copyFromUtf8(value));
     }
 
+    @Override
     public void put(byte[] key, byte[] value) {
         put(copyFrom(key), copyFrom(value));
     }
 
+    @Override
     public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
         ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
         return cas(copyFrom(key), expectByteStr, copyFrom(update));
     }
 
+    @Override
     public long incrementAndGet(byte[] key) {
         return addAndGet(key, 1);
     }
 
+    @Override
     public long decrementAndGet(byte[] key) {
         return addAndGet(key, -1);
     }
 
+    @Override
     public long addAndGet(byte[] key, long delta) {
         ByteString keyByteStr = copyFrom(key);
         return addAndGet(keyByteStr, delta);
     }
 
+    @Override
     public String get(Api.ReadConsistency consistency, String key) {
         ByteString value = get(consistency, copyFromUtf8(key));
         return value.toStringUtf8();
     }
 
+    @Override
     public byte[] get(Api.ReadConsistency consistency, byte[] key) {
         ByteString value = get(consistency, copyFrom(key));
         return value.toByteArray();
     }
 
+    @Override
     public KV.Strings[] multiGet(Api.ReadConsistency consistency, String[] keys) {
         LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (String key : keys) {
@@ -196,6 +205,7 @@ public class SimpleDKVClient implements DKVClient {
         return result;
     }
 
+    @Override
     public KV.Bytes[] multiGet(Api.ReadConsistency consistency, byte[][] keys) {
         LinkedList<ByteString> keyByteStrs = new LinkedList<>();
         for (byte[] key : keys) {
@@ -210,18 +220,22 @@ public class SimpleDKVClient implements DKVClient {
         return result;
     }
 
+    @Override
     public Iterator<DKVEntry> iterate(String startKey) {
         return iterate(copyFromUtf8(startKey), EMPTY);
     }
 
+    @Override
     public Iterator<DKVEntry> iterate(byte[] startKey) {
         return iterate(copyFrom(startKey), EMPTY);
     }
 
+    @Override
     public Iterator<DKVEntry> iterate(String startKey, String keyPref) {
         return iterate(copyFromUtf8(startKey), copyFromUtf8(keyPref));
     }
 
+    @Override
     public Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref) {
         return iterate(copyFrom(startKey), copyFrom(keyPref));
     }

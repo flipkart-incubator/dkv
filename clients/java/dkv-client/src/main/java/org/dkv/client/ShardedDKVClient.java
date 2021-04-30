@@ -60,22 +60,38 @@ public class ShardedDKVClient implements DKVClient {
 
     @Override
     public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
-        return false;
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.compareAndSet(key, expect, update);
     }
 
     @Override
     public long incrementAndGet(byte[] key) {
-        return 0;
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.incrementAndGet(key);
     }
 
     @Override
     public long decrementAndGet(byte[] key) {
-        return 0;
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.decrementAndGet(key);
     }
 
     @Override
     public long addAndGet(byte[] key, long delta) {
-        return 0;
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.addAndGet(key, delta);
     }
 
     @Override
