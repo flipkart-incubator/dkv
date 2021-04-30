@@ -74,23 +74,24 @@ func testPutAndGet(t *testing.T) {
 }
 
 func testPutTTLAndGet(t *testing.T) {
-	key, value := "DeletedKey", "SomeValue"
+	key, value := "ExpiredKey", "SomeValue"
 
-	if err := dkvCli.PutTTL([]byte(key), []byte(value), time.Now().Add(2* time.Second).Unix() ); err != nil {
+	if err := dkvCli.PutTTL([]byte(key), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
 		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 	}
 
-	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
-		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+	} else if string(actualValue.Value) != value {
+		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, value, actualValue)
 	}
 
 	time.Sleep(3 * time.Second)
 
-	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil  {
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
 		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}
 }
-
 
 func testAtomicKeyCreation(t *testing.T) {
 	var (
@@ -248,7 +249,6 @@ func testDelete(t *testing.T) {
 		t.Errorf("Expected no value for key %s. But got %s", key, val)
 	}
 }
-
 
 func testGetChanges(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "GCK", "GCV"

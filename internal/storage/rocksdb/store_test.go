@@ -157,7 +157,7 @@ func TestDelete(t *testing.T) {
 func TestGetLatestChangeNumber(t *testing.T) {
 	expNumTrxns := uint64(5)
 	beforeChngNum, _ := store.GetLatestCommittedChangeNumber()
-	putKeys(t, int(expNumTrxns), "aaKey", "aaVal")
+	putKeys(t, int(expNumTrxns), "aaKey", "aaVal", 0)
 	afterChngNum, _ := store.GetLatestCommittedChangeNumber()
 	actNumTrxns := afterChngNum - beforeChngNum
 	if expNumTrxns != actNumTrxns {
@@ -177,7 +177,7 @@ func TestLoadChanges(t *testing.T) {
 	keyPrefix, valPrefix := "bbKey", "bbVal"
 	chngNum, _ := store.GetLatestCommittedChangeNumber()
 	chngNum++ // due to possible previous transaction
-	putKeys(t, expNumTrxns, keyPrefix, valPrefix)
+	putKeys(t, expNumTrxns, keyPrefix, valPrefix, 0)
 	if chngs, err := store.LoadChanges(chngNum, maxChngs); err != nil {
 		t.Fatal(err)
 	} else {
@@ -214,7 +214,7 @@ func TestLoadChanges(t *testing.T) {
 func TestSaveChanges(t *testing.T) {
 	numTrxns := 3
 	putKeyPrefix, putValPrefix := "ccKey", "ccVal"
-	putKeys(t, numTrxns, putKeyPrefix, putValPrefix)
+	putKeys(t, numTrxns, putKeyPrefix, putValPrefix, 0)
 	chngNum, _ := store.GetLatestCommittedChangeNumber()
 	chngNum++ // due to possible previous transaction
 	wbPutKeyPrefix, wbPutValPrefix := "ddKey", "ddVal"
@@ -245,11 +245,11 @@ func TestSaveChanges(t *testing.T) {
 func TestIteratorPrefixScan(t *testing.T) {
 	numTrxns := 3
 	keyPrefix1, valPrefix1 := "aaPrefixKey", "aaPrefixVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 	keyPrefix2, valPrefix2 := "bbPrefixKey", "bbPrefixVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 	keyPrefix3, valPrefix3 := "ccPrefixKey", "ccPrefixVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, 0)
 
 	prefix := []byte("bbPrefix")
 	itOpts, err := storage.NewIteratorOptions(
@@ -281,14 +281,77 @@ func TestIteratorPrefixScan(t *testing.T) {
 	}
 }
 
+func TestIteratorFromStartKeyWithTTL(t *testing.T) {
+	numTrxns := 3
+	ttl := time.Now().Add(2 * time.Second).Unix()
+	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, ttl)
+	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
+	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, ttl)
+
+	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
+	itOpts, err := storage.NewIteratorOptions(
+		storage.IterationPrefixKey(prefix),
+		storage.IterationStartKey(startKey),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := store.Iterate(itOpts)
+	defer it.Close()
+
+	actCount := 0
+	for it.HasNext() {
+		key, val := it.Next()
+		if key != nil {
+			actCount++
+			if strings.HasPrefix(string(key), string(prefix)) {
+				t.Logf("Key: %s Value: %s\n", key, val)
+			} else {
+				t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			}
+		}
+	}
+
+	expCount := 5
+	if expCount != actCount {
+		t.Errorf("Expected %d records with prefix: %s, start key: %s. But got %d records.", expCount, prefix, startKey, actCount)
+	}
+
+	time.Sleep(3 * time.Second)
+
+	it = store.Iterate(itOpts)
+	defer it.Close()
+
+	actCount = 0
+	for it.HasNext() {
+		key, val := it.Next()
+		if key != nil {
+			actCount++
+			if strings.HasPrefix(string(key), string(prefix)) {
+				t.Logf("Key: %s Value: %s\n", key, val)
+			} else {
+				t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			}
+		}
+	}
+
+	expCount = 2
+	if expCount != actCount {
+		t.Errorf("Expected %d records with prefix: %s, start key: %s. But got %d records.", expCount, prefix, startKey, actCount)
+	}
+}
+
 func TestIteratorFromStartKey(t *testing.T) {
 	numTrxns := 3
 	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, 0)
 
 	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
 	itOpts, err := storage.NewIteratorOptions(
@@ -432,14 +495,14 @@ func TestRestoreFolderValidity(t *testing.T) {
 
 func TestBackupAndRestore(t *testing.T) {
 	numTrxns, keyPrefix, valPrefix := 5, "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, numTrxns, keyPrefix, valPrefix, 0)
 
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "backup")
 	if err := store.BackupTo(backupPath); err != nil {
 		t.Fatal(err)
 	} else {
 		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
-		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
+		putKeys(t, numTrxns, missKeyPrefix, missValPrefix, 0)
 		store.Close()
 		if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 			t.Fatal(err)
@@ -454,14 +517,14 @@ func TestBackupAndRestore(t *testing.T) {
 func TestGetPutSnapshot(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1, newValPrefix1 := "firSnapKey", "firSnapVal", "newFirSnapVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 
 	if snap, err := store.GetSnapshot(); err != nil {
 		t.Fatal(err)
 	} else {
-		putKeys(t, numTrxns, keyPrefix1, newValPrefix1)
+		putKeys(t, numTrxns, keyPrefix1, newValPrefix1, 0)
 		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
-		putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+		putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 
 		if err := store.PutSnapshot(snap); err != nil {
 			t.Fatal(err)
@@ -475,13 +538,13 @@ func TestGetPutSnapshot(t *testing.T) {
 func TestIterationOnExplicitSnapshot(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1 := "firKey", "firVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 
 	snap := store.db.NewSnapshot()
 	defer store.db.ReleaseSnapshot(snap)
 
 	keyPrefix2, valPrefix2 := "secKey", "secVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 
 	readOpts := gorocksdb.NewDefaultReadOptions()
 	defer readOpts.Destroy()
@@ -514,7 +577,7 @@ func TestIterationOnExplicitSnapshot(t *testing.T) {
 func TestPreventParallelBackups(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, numTrxns, keyPrefix, valPrefix, 0)
 
 	parallelism := 5
 	var succ, fail uint32
@@ -545,7 +608,7 @@ func TestPreventParallelBackups(t *testing.T) {
 func TestPreventParallelRestores(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, numTrxns, keyPrefix, valPrefix, 0)
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "test_backup")
 	if err := store.BackupTo(backupPath); err != nil {
 		t.Fatal(err)
@@ -990,7 +1053,7 @@ func BenchmarkIteration(b *testing.B) {
 	b.ResetTimer()
 	numTrxns := b.N
 	keyPrefix, valPrefix := "snapBenchKey", "snapBenchVal"
-	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	data := putKeys(b, numTrxns, keyPrefix, valPrefix, 0)
 	b.StartTimer()
 
 	snap := store.db.NewSnapshot()
@@ -1042,11 +1105,11 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
-func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string) map[string]string {
+func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string, ttl int64) map[string]string {
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := store.Put([]byte(k), []byte(v)); err != nil {
+		if err := store.PutTTL([]byte(k), []byte(v), ttl); err != nil {
 			t.Fatal(err)
 		} else {
 			if readResults, err := store.Get([]byte(k)); err != nil {

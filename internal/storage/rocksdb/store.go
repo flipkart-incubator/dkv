@@ -164,15 +164,12 @@ func (rdb *rocksDB) Close() error {
 
 func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS int64) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
-	wo := gorocksdb.NewDefaultWriteOptions()
-	wo.SetSync(true)
-	defer wo.Destroy()
 	if expireTS > 0 {
 		b := make([]byte, tsLength)
 		binary.LittleEndian.PutUint64(b, uint64(expireTS))
 		value = append(value, b...)
 	}
-	err := rdb.db.Put(wo, key, value)
+	err := rdb.db.Put(rdb.opts.writeOpts, key, value)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
 	}
@@ -459,9 +456,21 @@ func (rdbIter *iter) HasNext() bool {
 }
 
 func (rdbIter *iter) Next() ([]byte, []byte) {
-	defer rdbIter.rdbIter.Next()
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
+	expireTs, _ := getExpireTs(val)
+	if expireTs > 0 && expireTs < time.Now().Unix() {
+		//	rdb.Delete(key) //trigger delete.
+		rdbIter.rdbIter.Next()
+		if rdbIter.HasNext() {
+			return rdbIter.Next()
+		} else {
+			return nil, nil
+		}
+	} else if expireTs > 0 {
+		val = val[0 : len(val)-tsLength]
+	}
+	rdbIter.rdbIter.Next()
 	return key, val
 }
 
@@ -542,6 +551,8 @@ func getExpireTs(valueWithTtl []byte) (int64, error) {
 	return 0, fmt.Errorf("not_valid_ts")
 }
 
+
+
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
 	value, err := rdb.db.Get(ro, key)
@@ -554,9 +565,7 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	if val != nil && len(val) > 0 {
 		//check ttl.
 		expireTs, _ := getExpireTs(val)
-		if expireTs == 0 {
-			//do nothing
-		} else if expireTs < time.Now().Unix() {
+		if expireTs > 0 && expireTs < time.Now().Unix() {
 			//triger delete.
 			rdb.Delete(key)
 			return nil, nil
@@ -582,9 +591,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 			key, val := keys[i], toByteArray(value)
 			//check ttl.
 			expireTs, _ := getExpireTs(val)
-			if expireTs == 0 {
-				//do nothing
-			} else if expireTs < time.Now().Unix() {
+			if expireTs > 0 && expireTs < time.Now().Unix() {
 				//triger delete.
 				rdb.Delete(key)
 				continue
