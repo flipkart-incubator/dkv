@@ -204,7 +204,7 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	defer exist.Free()
 
 	existVal := exist.Data()
-	if expect == nil {
+	if expect == nil || len(expect) == 0 {
 		if len(existVal) > 0 {
 			return false, nil
 		}
@@ -219,6 +219,9 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 		return false, err
 	}
 	err = txn.Commit()
+	if err != nil && strings.HasSuffix(err.Error(), "Resource busy: ") {
+		return false, nil
+	}
 	return err == nil, err
 }
 

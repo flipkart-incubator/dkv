@@ -231,7 +231,7 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	exist, err := casTrxn.Get(key)
 	switch {
 	case err == badger.ErrKeyNotFound:
-		if expect != nil {
+		if expect != nil && len(expect) > 0 {
 			return false, nil
 		}
 	case err != nil:
@@ -249,6 +249,9 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 		return false, err
 	}
 	err = casTrxn.Commit()
+	if err == badger.ErrConflict {
+		return false, nil
+	}
 	return err == nil, err
 }
 
