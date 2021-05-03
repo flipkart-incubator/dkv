@@ -86,11 +86,11 @@ func TestPutIntAndGet(t *testing.T) {
 
 	for i := 1; i <= numIteration; i++ {
 		key, value := fmt.Sprintf("KI%d", i), fmt.Sprintf("V%d", i)
-		ttl := time.Now().Add(2*time.Second).Unix()
-		if i % 2 == 0 {
+		ttl := time.Now().Add(2 * time.Second).Unix()
+		if i%2 == 0 {
 			ttl = 0
 		}
-		if err := store.PutTTL([]byte(key), b, ttl ); err != nil {
+		if err := store.PutTTL([]byte(key), b, ttl); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -100,7 +100,7 @@ func TestPutIntAndGet(t *testing.T) {
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else {
-			readVal  := int64(binary.LittleEndian.Uint64(readResults[0].Value))
+			readVal := int64(binary.LittleEndian.Uint64(readResults[0].Value))
 			if readVal != math.MaxInt64 {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
 			}
@@ -331,9 +331,9 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
 	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3, time.Now().Add(2 * time.Second).Unix())
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, time.Now().Add(2*time.Second).Unix())
 	keyPrefix4, valPrefix4 := "StartKeyDD", "ccStartVal"
-	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2 * time.Second).Unix())
+	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2*time.Second).Unix())
 
 	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
 	itOpts, err := storage.NewIteratorOptions(

@@ -130,7 +130,7 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 	return openStore(opts)
 }
 
-type ttlCompactionFilter struct{
+type ttlCompactionFilter struct {
 }
 
 // Name returns the CompactionFilter name
@@ -584,7 +584,7 @@ func getExpireTs(valueWithTtl []byte) (int64, error) {
 	if ts[7] == bitMarker {
 		ts[7] = 0
 		i := binary.LittleEndian.Uint64(ts)
-		if i > 0 && i < endOfWorld  {
+		if i > 0 && i < endOfWorld {
 			return int64(i), nil
 		}
 	}

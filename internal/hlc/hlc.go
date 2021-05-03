@@ -5,10 +5,6 @@ import (
 	"time"
 )
 
-type hlc struct {
-
-}
-
 // Now returns current time
 func Now() time.Time {
 	return fastime.Now()
