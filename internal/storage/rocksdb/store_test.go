@@ -2,7 +2,9 @@ package rocksdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -69,6 +71,42 @@ func TestPutAndGet(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestPutIntAndGet(t *testing.T) {
+	numIteration := 10
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(math.MaxInt64))
+
+	//for _, b2 := range b {
+	//	fmt.Printf( " %d" ,b2)
+	//}
+	//fmt.Println("")
+
+	for i := 1; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("KI%d", i), fmt.Sprintf("V%d", i)
+		ttl := time.Now().Add(2*time.Second).Unix()
+		if i % 2 == 0 {
+			ttl = 0
+		}
+		if err := store.PutTTL([]byte(key), b, ttl ); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 1; i <= numIteration; i++ {
+		key, expectedValue := fmt.Sprintf("KI%d", i), fmt.Sprintf("V%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			readVal  := int64(binary.LittleEndian.Uint64(readResults[0].Value))
+			if readVal != math.MaxInt64 {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+
 }
 
 func TestPutTTLAndGet(t *testing.T) {
