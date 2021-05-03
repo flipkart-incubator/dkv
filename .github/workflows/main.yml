@@ -2,6 +2,8 @@ name: DKV CI
 
 on:
   push:
+    branches:
+      - master
   pull_request:
     branches:
       - master
@@ -54,6 +56,9 @@ jobs:
       - name: Inspect
         run: |
           docker buildx imagetools inspect localhost:5000/${{ github.repository_owner }}/dkv:latest
+      - name: Run tests
+        run: |
+          docker run -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make test"
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
