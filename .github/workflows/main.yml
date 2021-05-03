@@ -47,7 +47,7 @@ jobs:
         run: docker images
       - name: Run tests
         run: |
-          docker run --it dkv "cd /code && GOOS=linux GOARCH=amd64 make test"
+          docker run --it dkv bash -c "cd /code && GOOS=linux GOARCH=amd64 make test"
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache

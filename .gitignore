@@ -52,3 +52,4 @@ crashlytics-build.properties
 .DS_Store
 bin/
 
+.github/workflows/Dockerfile
