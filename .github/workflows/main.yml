@@ -24,10 +24,8 @@ jobs:
         uses: actions/checkout@v2
       - name: Prepopulate Docker file
         run:  |
-          cat Dockerfile > ./.github/workflows/Dockerfile
-          cat ./.github/workflows/_Dockerfile >> ./.github/workflows/Dockerfile
-          cat ./.github/workflows/Dockerfile
           echo "COPY . /code" >> Dockerfile
+          cat ./Dockerfile
       # This is the a separate action that sets up buildx runner
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -50,12 +48,9 @@ jobs:
           push: true
           tags: localhost:5000/${{ github.repository_owner }}/dkv:latest
           context: .
-          file: ./.github/workflows/Dockerfile
+          file: ./Dockerfile
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-      - name: Inspect
-        run: |
-          docker buildx imagetools inspect localhost:5000/${{ github.repository_owner }}/dkv:latest
       - name: Run tests
         run: |
           docker run -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make test"
