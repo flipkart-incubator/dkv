@@ -51,7 +51,10 @@ jobs:
           file: ./.github/workflows/Dockerfile
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-       - name: Move cache
+      - name: Inspect
+        run: |
+          docker buildx imagetools inspect localhost:5000/${{ github.repository_owner }}/dkv:latest
+      - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
