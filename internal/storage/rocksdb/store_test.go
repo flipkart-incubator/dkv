@@ -80,6 +80,13 @@ func TestPutTTLAndGet(t *testing.T) {
 		}
 	}
 
+	for i := 11; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), time.Now().Add(-2*time.Second).Unix()); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
 	for i := 1; i <= numIteration; i++ {
 		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
@@ -91,9 +98,7 @@ func TestPutTTLAndGet(t *testing.T) {
 		}
 	}
 
-	time.Sleep(3 * time.Second)
-
-	for i := 1; i <= numIteration; i++ {
+	for i := 11; i <= numIteration; i++ {
 		key := fmt.Sprintf("K%d", i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
@@ -283,13 +288,14 @@ func TestIteratorPrefixScan(t *testing.T) {
 
 func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 	numTrxns := 3
-	ttl := time.Now().Add(2 * time.Second).Unix()
 	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1, ttl)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
 	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3, ttl)
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, time.Now().Add(2 * time.Second).Unix())
+	keyPrefix4, valPrefix4 := "StartKeyDD", "ccStartVal"
+	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2 * time.Second).Unix())
 
 	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
 	itOpts, err := storage.NewIteratorOptions(
@@ -320,28 +326,6 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 		t.Errorf("Expected %d records with prefix: %s, start key: %s. But got %d records.", expCount, prefix, startKey, actCount)
 	}
 
-	time.Sleep(3 * time.Second)
-
-	it = store.Iterate(itOpts)
-	defer it.Close()
-
-	actCount = 0
-	for it.HasNext() {
-		key, val := it.Next()
-		if key != nil {
-			actCount++
-			if strings.HasPrefix(string(key), string(prefix)) {
-				t.Logf("Key: %s Value: %s\n", key, val)
-			} else {
-				t.Errorf("Expected key %s to have prefix %s", key, prefix)
-			}
-		}
-	}
-
-	expCount = 2
-	if expCount != actCount {
-		t.Errorf("Expected %d records with prefix: %s, start key: %s. But got %d records.", expCount, prefix, startKey, actCount)
-	}
 }
 
 func TestIteratorFromStartKey(t *testing.T) {
@@ -1114,7 +1098,7 @@ func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string, ttl int64) 
 		} else {
 			if readResults, err := store.Get([]byte(k)); err != nil {
 				t.Fatal(err)
-			} else if string(readResults[0].Value) != string(v) {
+			} else if ttl > time.Now().Unix() && string(readResults[0].Value) != string(v) {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
 			} else {
 				data[k] = v

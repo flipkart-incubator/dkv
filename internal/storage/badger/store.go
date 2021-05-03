@@ -178,7 +178,7 @@ func (bdb *badgerDB) Close() error {
 }
 
 func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS int64) error {
-	defer bdb.opts.statsCli.Timing("badger.put.latency.ms", time.Now())
+	defer bdb.opts.statsCli.Timing("badger.putTTL.latency.ms", time.Now())
 	err := bdb.db.Update(func(txn *badger.Txn) error {
 		kv := badger.NewEntry(key, value)
 		if expireTS > 0 {
@@ -187,7 +187,7 @@ func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS int64) error {
 		return txn.SetEntry(kv)
 	})
 	if err != nil {
-		bdb.opts.statsCli.Incr("badger.put.errors", 1)
+		bdb.opts.statsCli.Incr("badger.putTTL.errors", 1)
 	}
 	return err
 }

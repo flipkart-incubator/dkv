@@ -74,22 +74,24 @@ func testPutAndGet(t *testing.T) {
 }
 
 func testPutTTLAndGet(t *testing.T) {
-	key, value := "ExpiredKey", "SomeValue"
+	key1, key2,  value := "ValidKey", "ExpiredKey", "SomeValue"
 
-	if err := dkvCli.PutTTL([]byte(key), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
-		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+	if err := dkvCli.PutTTL([]byte(key1), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key1, value, err)
 	}
 
-	if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
-		t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+	if err := dkvCli.PutTTL([]byte(key2), []byte(value), time.Now().Add(-2*time.Second).Unix()); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key2, value, err)
+	}
+
+	if actualValue, err := dkvCli.Get(rc, []byte(key1)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s, Error: %v", key1, err)
 	} else if string(actualValue.Value) != value {
-		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, value, actualValue)
+		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key1, value, actualValue)
 	}
 
-	time.Sleep(3 * time.Second)
-
-	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
-		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	if val, _ := dkvCli.Get(rc, []byte(key2)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key2, val)
 	}
 }
 
