@@ -38,7 +38,7 @@ func TestDistributedClient(t *testing.T) {
 func initClusterConfig(t *testing.T) {
 	for i, v := range dkvPorts {
 		shard := DKVShard{
-			Name: fmt.Sprintf("shard%d", i),
+			Name: DKVShardKey(fmt.Sprintf("shard%d", i)),
 			Topology: map[DKVServerRole]*DKVNodeSet{
 				noRole: &DKVNodeSet{
 					Name: "default",
