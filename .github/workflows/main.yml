@@ -38,14 +38,16 @@ jobs:
           # not necessary here, because we set it before
           #load: true
           push: false
-          tags: dkv/dkv:latest
+          tags: dkv
           context: .
           file: ./.github/workflows/Dockerfile
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+      - name: Docker images
+        run: docker images
       - name: Run tests
         run: |
-          docker run dkv/dkv:latest "cd /code && make test"
+          docker run --it dkv "cd /code && GOOS=linux GOARCH=amd64 make test"
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
