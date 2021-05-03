@@ -2,11 +2,10 @@ package rocksdb
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/kpango/fastime"
+	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"io/ioutil"
 	"os"
 	"path"
@@ -39,7 +38,6 @@ type rocksDB struct {
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
 	globalMutation uint32
-	fT *fastime.Fastime
 }
 
 type rocksDBOpts struct {
@@ -133,7 +131,6 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 }
 
 type ttlCompactionFilter struct{
-	ft *fastime.Fastime
 }
 
 // Name returns the CompactionFilter name
@@ -145,7 +142,7 @@ func (m *ttlCompactionFilter) Name() string {
 // this returns remove as true if the TTL of the key has expired.
 func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, newVal []byte) {
 	expireTS, _ := getExpireTs(val)
-	if expireTS > 0 && expireTS < m.ft.UnixNow() {
+	if expireTS > 0 && expireTS < hlc.UnixNow() {
 		return true, val
 	}
 	return false, nil
@@ -159,6 +156,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	rstOpts := gorocksdb.NewRestoreOptions()
 	wrOpts := gorocksdb.NewDefaultWriteOptions()
 	rdOpts := gorocksdb.NewDefaultReadOptions()
+	opts.SetCompactionFilter(&ttlCompactionFilter{})
 	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient()}
 }
 
@@ -175,11 +173,7 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	ft := fastime.New()
-	ft.StartTimerD(context.Background(), time.Millisecond*100)
-
-	opts.rocksDBOpts.SetCompactionFilter(&ttlCompactionFilter{ft})
-	rocksdb := rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0, ft}
+	rocksdb := rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	// go rocksdb.Compaction()
 	return &rocksdb, nil
@@ -471,7 +465,6 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 type iter struct {
 	iterOpts storage.IterationOptions
 	rdbIter  *gorocksdb.Iterator
-	fT *fastime.Fastime
 }
 
 func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
@@ -483,7 +476,7 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, it, rdb.fT}
+	return &iter{iterOpts, it}
 }
 
 func (rdbIter *iter) HasNext() bool {
@@ -504,7 +497,7 @@ func (rdbIter *iter) Next() ([]byte, []byte) {
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
 	expireTs, _ := getExpireTs(val)
-	if expireTs > 0 && expireTs < rdbIter.fT.UnixNow() {
+	if expireTs > 0 && expireTs < hlc.UnixNow() {
 		rdbIter.rdbIter.Next()
 		if rdbIter.HasNext() {
 			return rdbIter.Next()
@@ -610,7 +603,7 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	if val != nil && len(val) > 0 {
 		//check ttl.
 		expireTs, _ := getExpireTs(val)
-		if expireTs > 0 && expireTs < rdb.fT.UnixNow() {
+		if expireTs > 0 && expireTs < hlc.UnixNow() {
 			return nil, nil
 		} else if expireTs > 0 {
 			val = val[0 : len(val)-tsLength]
@@ -634,7 +627,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 			key, val := keys[i], toByteArray(value)
 			//check ttl.
 			expireTs, _ := getExpireTs(val)
-			if expireTs > 0 && expireTs < rdb.fT.UnixNow() {
+			if expireTs > 0 && expireTs < hlc.UnixNow() {
 				val = []byte{} //expired keys should be returned with nil key value.
 			} else if expireTs > 0 {
 				val = val[0 : len(val)-tsLength]
