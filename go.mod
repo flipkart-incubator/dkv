@@ -12,7 +12,7 @@ require (
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210422080808-54e7b706f563
 	github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/protobuf v1.3.5
+	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/pkg/errors v0.9.1 // indirect
@@ -27,6 +27,7 @@ require (
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
 	google.golang.org/grpc v1.28.0
+	google.golang.org/protobuf v1.26.0
 	gopkg.in/ini.v1 v1.62.0
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
