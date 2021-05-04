@@ -106,9 +106,7 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 
 	// we try to sync with master 10 times before giving up
 	for i := 1; i <= 10; i++ {
-		if err := slaveSvc.(*slaveService).applyChangesFromMaster(100); err != nil {
-			t.Error(err)
-		}
+		slaveSvc.(*slaveService).applyChangesFromMaster(100)
 	}
 
 	for i := 0; i < numKeys; i++ {
