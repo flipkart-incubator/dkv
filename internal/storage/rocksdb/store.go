@@ -478,10 +478,21 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 	}
 	return &iter{iterOpts, it}
 }
+func (rdbIter *iter) verifyTTLValidity() bool {
+	if rdbIter.rdbIter.Valid() {
+		val := toByteArray(rdbIter.rdbIter.Value())
+		expireTs, _ := getExpireTs(val)
+		if expireTs > 0 && expireTs < hlc.UnixNow() {
+			return false
+		}
+		return true
+	}
+	return false
+}
 
 func (rdbIter *iter) HasNext() bool {
 	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
-		if rdbIter.rdbIter.ValidForPrefix(kp) {
+		if rdbIter.rdbIter.ValidForPrefix(kp) && rdbIter.verifyTTLValidity() {
 			return true
 		}
 		if rdbIter.rdbIter.Valid() {
@@ -497,13 +508,7 @@ func (rdbIter *iter) Next() ([]byte, []byte) {
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
 	expireTs, _ := getExpireTs(val)
-	if expireTs > 0 && expireTs < hlc.UnixNow() {
-		rdbIter.rdbIter.Next()
-		if rdbIter.HasNext() {
-			return rdbIter.Next()
-		}
-		return nil, nil
-	} else if expireTs > 0 {
+	if expireTs > 0 {
 		val = val[0 : len(val)-tsLength]
 	}
 	rdbIter.rdbIter.Next()
