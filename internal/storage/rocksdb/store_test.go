@@ -112,21 +112,21 @@ func TestPutIntAndGet(t *testing.T) {
 func TestPutTTLAndGet(t *testing.T) {
 	numIteration := 10
 	for i := 1; i <= numIteration; i++ {
-		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
 		if err := store.PutTTL([]byte(key), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
-	for i := 11; i <= numIteration; i++ {
-		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+	for i := 11; i <= 10+numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
 		if err := store.PutTTL([]byte(key), []byte(value), time.Now().Add(-2*time.Second).Unix()); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
 	for i := 1; i <= numIteration; i++ {
-		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		key, expectedValue := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else {
@@ -136,8 +136,8 @@ func TestPutTTLAndGet(t *testing.T) {
 		}
 	}
 
-	for i := 11; i <= numIteration; i++ {
-		key := fmt.Sprintf("K%d", i)
+	for i := 11; i <= 10+numIteration; i++ {
+		key := fmt.Sprintf("KTTL%d", i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else {
@@ -326,16 +326,16 @@ func TestIteratorPrefixScan(t *testing.T) {
 
 func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 	numTrxns := 3
-	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
+	keyPrefix1, valPrefix1 := "TTLStartKeyAA", "aaStartVal"
 	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
-	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
+	keyPrefix2, valPrefix2 := "TTLStartKeyBB", "bbStartVal"
 	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
-	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
+	keyPrefix3, valPrefix3 := "TTLStartKeyCC", "ccStartVal"
 	putKeys(t, numTrxns, keyPrefix3, valPrefix3, time.Now().Add(2*time.Second).Unix())
-	keyPrefix4, valPrefix4 := "StartKeyDD", "ccStartVal"
+	keyPrefix4, valPrefix4 := "TTLStartKeyDD", "ccStartVal"
 	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2*time.Second).Unix())
 
-	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
+	prefix, startKey := []byte("TTLStartKey"), []byte("TTLStartKeyBB_2")
 	itOpts, err := storage.NewIteratorOptions(
 		storage.IterationPrefixKey(prefix),
 		storage.IterationStartKey(startKey),

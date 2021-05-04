@@ -74,6 +74,8 @@ github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 h1:7HZCaLC5+BZpm
 github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4/go.mod h1:5tD+neXqOorC30/tWg0LCSkrqj/AR6gu8yY8/fpw1q0=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210422080808-54e7b706f563 h1:TMlZy4K2S3hPuYvbHn6H3gu/pWUqVZ+4jNm1qG+Ch2k=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210422080808-54e7b706f563/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
+github.com/flipkart-incubator/gorocksdb v0.0.0-20210504140021-7883705d529a h1:yJ/pg3ItBzjzrtX29QZMqxxtWI6hdcF3aLTS0usnuaY=
+github.com/flipkart-incubator/gorocksdb v0.0.0-20210504140021-7883705d529a/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
 github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894 h1:AEA1XeBrw7rXU9BTKTjN9ZkivmEGyhqS/wXFp9eIAKw=
 github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=

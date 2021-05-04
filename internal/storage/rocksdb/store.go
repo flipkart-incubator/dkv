@@ -32,6 +32,7 @@ type DB interface {
 
 type rocksDB struct {
 	db          *gorocksdb.DB
+	cf          gorocksdb.ColumnFamilyHandles
 	optimTrxnDB *gorocksdb.OptimisticTransactionDB
 	opts        *rocksDBOpts
 
@@ -49,6 +50,7 @@ type rocksDBOpts struct {
 	folderName     string
 	lgr            *zap.Logger
 	statsCli       stats.Client
+	cfNames        []string
 }
 
 // DBOption is used to configure the RocksDB
@@ -141,10 +143,10 @@ func (m *ttlCompactionFilter) Name() string {
 // Filter applies the logic for the Compaction process.
 // this returns remove as true if the TTL of the key has expired.
 func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, newVal []byte) {
-	expireTS, _ := getExpireTs(val)
-	if expireTS > 0 && expireTS < hlc.UnixNow() {
-		return true, val
-	}
+	//expireTS, _ := getExpireTs(val)
+	//if expireTS > 0 && expireTS < hlc.UnixNow() {
+	//	return true, val
+	//}
 	return false, nil
 }
 
@@ -152,12 +154,14 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
+	opts.SetCreateIfMissingColumnFamilies(true)
 	opts.SetBlockBasedTableFactory(bbto)
 	rstOpts := gorocksdb.NewRestoreOptions()
 	wrOpts := gorocksdb.NewDefaultWriteOptions()
 	rdOpts := gorocksdb.NewDefaultReadOptions()
 	opts.SetCompactionFilter(&ttlCompactionFilter{})
-	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient()}
+	cfNames := []string{"default", "ttl"}
+	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient(), cfNames: cfNames}
 }
 
 func (rdbOpts *rocksDBOpts) destroy() {
@@ -169,11 +173,12 @@ func (rdbOpts *rocksDBOpts) destroy() {
 }
 
 func openStore(opts *rocksDBOpts) (*rocksDB, error) {
-	optimTrxnDB, err := gorocksdb.OpenOptimisticTransactionDb(opts.rocksDBOpts, opts.folderName)
+	optimTrxnDB, cfh, err := gorocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts, opts.folderName, opts.cfNames, []*gorocksdb.Options{opts.rocksDBOpts, opts.rocksDBOpts})
 	if err != nil {
 		return nil, err
 	}
-	rocksdb := rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0}
+
+	rocksdb := rocksDB{optimTrxnDB.GetBaseDb(), cfh, optimTrxnDB, opts, 0}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	// go rocksdb.Compaction()
 	return &rocksdb, nil
@@ -187,7 +192,7 @@ func (rdb *rocksDB) Compaction() error {
 		case <-tick:
 			// trigger a compaction
 			rdb.opts.lgr.Info("Triggering RocksDB Compaction")
-			rdb.db.CompactRange(gorocksdb.Range{nil, nil})
+			rdb.db.CompactRangeCF(rdb.cf[1], gorocksdb.Range{nil, nil})
 		}
 	}
 	return nil
@@ -200,18 +205,19 @@ func (rdb *rocksDB) Close() error {
 }
 
 func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS int64) error {
-	defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
 	if expireTS > 0 {
+		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
 		b := make([]byte, tsLength)
 		binary.LittleEndian.PutUint64(b, uint64(expireTS))
-		b[7] = bitMarker
 		value = append(value, b...)
+		//Write TTL first, so that even if the data field write fails, its not an issue.
+		err := rdb.db.PutCF(rdb.opts.writeOpts, rdb.cf[1], key, value)
+		if err != nil {
+			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
+		}
+		return err
 	}
-	err := rdb.db.Put(rdb.opts.writeOpts, key, value)
-	if err != nil {
-		rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-	}
-	return err
+	return rdb.Put(key, value)
 }
 
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
@@ -463,27 +469,37 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 }
 
 type iter struct {
-	iterOpts storage.IterationOptions
-	rdbIter  *gorocksdb.Iterator
+	iterOpts    storage.IterationOptions
+	rdbIter     []*gorocksdb.Iterator
+	currentIter int
 }
 
 func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 	readOpts := rdb.opts.readOpts
-	it := rdb.db.NewIterator(readOpts)
 
+	it := rdb.db.NewIterator(readOpts)
 	if sk, prsnt := iterOpts.StartKey(); prsnt {
 		it.Seek(sk)
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, it}
+
+	itTTL := rdb.db.NewIteratorCF(readOpts, rdb.cf[1])
+	if sk, prsnt := iterOpts.StartKey(); prsnt {
+		itTTL.Seek(sk)
+	} else {
+		itTTL.SeekToFirst()
+	}
+	return &iter{iterOpts, []*gorocksdb.Iterator{it, itTTL}, 0}
 }
 func (rdbIter *iter) verifyTTLValidity() bool {
-	if rdbIter.rdbIter.Valid() {
-		val := toByteArray(rdbIter.rdbIter.Value())
-		expireTs, _ := getExpireTs(val)
-		if expireTs > 0 && expireTs < hlc.UnixNow() {
-			return false
+	if rdbIter.rdbIter[rdbIter.currentIter].Valid() {
+		val := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Value())
+		if rdbIter.currentIter != 0 {
+			expireTs, _ := getExpireTs(val)
+			if expireTs > 0 && expireTs < hlc.UnixNow() {
+				return false
+			}
 		}
 		return true
 	}
@@ -492,35 +508,57 @@ func (rdbIter *iter) verifyTTLValidity() bool {
 
 func (rdbIter *iter) HasNext() bool {
 	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
-		if rdbIter.rdbIter.ValidForPrefix(kp) && rdbIter.verifyTTLValidity() {
+		if rdbIter.rdbIter[rdbIter.currentIter].ValidForPrefix(kp) && rdbIter.verifyTTLValidity() {
 			return true
 		}
-		if rdbIter.rdbIter.Valid() {
-			rdbIter.rdbIter.Next()
+		if rdbIter.rdbIter[rdbIter.currentIter].Valid() {
+			rdbIter.rdbIter[rdbIter.currentIter].Next()
+			return rdbIter.HasNext()
+		}
+		if rdbIter.currentIter < len(rdbIter.rdbIter)-1 {
+			rdbIter.currentIter++
 			return rdbIter.HasNext()
 		}
 		return false
 	}
-	return rdbIter.rdbIter.Valid()
+
+	//non prefix use-case
+	valid := rdbIter.rdbIter[rdbIter.currentIter].Valid()
+	if rdbIter.currentIter < len(rdbIter.rdbIter)-1 {
+		rdbIter.currentIter++
+		return rdbIter.HasNext()
+	}
+	return valid
 }
 
 func (rdbIter *iter) Next() ([]byte, []byte) {
-	key := toByteArray(rdbIter.rdbIter.Key())
-	val := toByteArray(rdbIter.rdbIter.Value())
-	expireTs, _ := getExpireTs(val)
-	if expireTs > 0 {
+	key := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Key())
+	val := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Value())
+	var expireTs int64 = 0
+	if rdbIter.currentIter != 0 { //base iterator doesn't have ttl
+		expireTs, _ = getExpireTs(val)
+	}
+	if expireTs > 0 && expireTs < hlc.UnixNow() {
+		rdbIter.rdbIter[rdbIter.currentIter].Next()
+		if rdbIter.HasNext() {
+			return rdbIter.Next()
+		}
+		return nil, nil
+	} else if expireTs > 0 {
 		val = val[0 : len(val)-tsLength]
 	}
-	rdbIter.rdbIter.Next()
+	rdbIter.rdbIter[rdbIter.currentIter].Next()
 	return key, val
 }
 
 func (rdbIter *iter) Err() error {
-	return rdbIter.rdbIter.Err()
+	return rdbIter.rdbIter[rdbIter.currentIter].Err()
 }
 
 func (rdbIter *iter) Close() error {
-	rdbIter.rdbIter.Close()
+	for _, iterator := range rdbIter.rdbIter {
+		iterator.Close()
+	}
 	return nil
 }
 
@@ -578,7 +616,6 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 
 const tsLength = 8
 const endOfWorld = 253402300799 // 9999-12-31 23:59:59 B{ 127 65 244 255 58 0 0 0 }
-const bitMarker = 200
 
 func getExpireTs(valueWithTtl []byte) (int64, error) {
 	l := len(valueWithTtl)
@@ -586,59 +623,77 @@ func getExpireTs(valueWithTtl []byte) (int64, error) {
 		return 0, fmt.Errorf("invalid_length")
 	}
 	ts := valueWithTtl[l-tsLength:]
-	if ts[7] == bitMarker {
-		ts[7] = 0
-		i := binary.LittleEndian.Uint64(ts)
-		if i > 0 && i < endOfWorld {
-			return int64(i), nil
-		}
+	i := binary.LittleEndian.Uint64(ts)
+	if i > 0 && i < endOfWorld {
+		return int64(i), nil
 	}
 	return 0, fmt.Errorf("not_valid_ts")
 }
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
-	value, err := rdb.db.Get(ro, key)
+	values, err := rdb.db.MultiGetCFMultiCF(ro, rdb.cf, [][]byte{key, key})
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
 		return nil, err
 	}
-	defer value.Free()
-	val := toByteArray(value)
-	if val != nil && len(val) > 0 {
-		//check ttl.
-		expireTs, _ := getExpireTs(val)
-		if expireTs > 0 && expireTs < hlc.UnixNow() {
-			return nil, nil
-		} else if expireTs > 0 {
-			val = val[0 : len(val)-tsLength]
-		}
-		return []*serverpb.KVPair{{Key: key, Value: val}}, nil
-
+	value1, value2 := values[0], values[1]
+	kv := rdb.extractResult(value1, value2, key)
+	if kv != nil {
+		return []*serverpb.KVPair{kv}, nil
 	}
 	return nil, nil
 }
 
+func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *serverpb.KVPair {
+	defer value1.Free()
+	defer value2.Free()
+
+	if value1.Size() > 0 {
+		//non ttl use-case
+		val := toByteArray(value1)
+		return &serverpb.KVPair{Key: key, Value: val}
+	}
+
+	if value2.Size() > 0 {
+		//ttl use-case, check ttl
+		val := toByteArray(value2)
+		expireTs, _ := getExpireTs(val)
+		if expireTs > 0 && expireTs < hlc.UnixNow() {
+			return nil
+		} else if expireTs > 0 {
+			val = val[0 : len(val)-tsLength]
+		}
+		return &serverpb.KVPair{Key: key, Value: val}
+	}
+
+	return nil
+}
+
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
-	values, err := rdb.db.MultiGet(ro, keys...)
+
+	requestKeys := make([][]byte, len(keys)*2)
+	requestCF := make([]*gorocksdb.ColumnFamilyHandle, len(keys)*2)
+	for i, j := 0, 0; j < len(keys); j, i = j+1, i+2 {
+		requestKeys[i] = keys[j]
+		requestKeys[i+1] = keys[j]
+		requestCF[i] = rdb.cf[0]
+		requestCF[i+1] = rdb.cf[1]
+	}
+
+	values, err := rdb.db.MultiGetCFMultiCF(ro, requestCF, requestKeys)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
 		return nil, err
 	}
+
 	var results []*serverpb.KVPair
-	for i, value := range values {
-		if value != nil {
-			key, val := keys[i], toByteArray(value)
-			//check ttl.
-			expireTs, _ := getExpireTs(val)
-			if expireTs > 0 && expireTs < hlc.UnixNow() {
-				val = []byte{} //expired keys should be returned with nil key value.
-			} else if expireTs > 0 {
-				val = val[0 : len(val)-tsLength]
-			}
-			results = append(results, &serverpb.KVPair{Key: key, Value: val})
-			value.Free()
+	for i := 0; i < len(values); i += 2 {
+		value1, value2 := values[i], values[i+1]
+		kv := rdb.extractResult(value1, value2, requestKeys[i])
+		if kv != nil {
+			results = append(results, kv)
 		}
 	}
 	return results, nil
