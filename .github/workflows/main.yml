@@ -26,12 +26,10 @@ jobs:
         run:  |
           echo "COPY . /code" >> Dockerfile
           cat ./Dockerfile
-      # This is the a separate action that sets up buildx runner
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
         with:
           driver-opts: network=host
-      # So now you can use Actions' own caching!
       - name: Cache Docker layers
         uses: actions/cache@v2
         with:
@@ -54,6 +52,18 @@ jobs:
       - name: Run tests
         run: |
           docker run -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make test build"
+      - name: Build dkvsrv binary
+        run: |
+          rm -rf bin || true
+          mkdir -p bin
+          chmod 777 bin
+          docker run -v $(pwd)/bin:/code/bin -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make build"
+      - name: Upload dkvsrv binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: bin-dkvsrv
+          path: bin/dkvsrv
+          retention-days: 3
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
@@ -61,6 +71,7 @@ jobs:
 
   dkv_java_client_job:
     runs-on: ubuntu-latest
+    needs: dkv_server_job
     name: Build Java Client
     steps:
       - uses: actions/checkout@v2
@@ -75,6 +86,15 @@ jobs:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
+      - name: Create binary directory
+        run: |
+          mkdir -p bin
+          chmod 777 bin
+      - name: Download dkvsrv binary
+        uses: actions/download-artifact@v2
+        with:
+          name: bin-dkvsrv
+          path: bin/dkvsrv
       - name: Build with Maven
         run: |
           cd clients/java/dkv-client
