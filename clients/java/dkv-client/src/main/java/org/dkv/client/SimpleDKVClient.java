@@ -1,6 +1,6 @@
 package org.dkv.client;
 
-import com.codahale.metrics.JmxReporter;
+import com.codahale.metrics.jmx.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.protobuf.ByteString;
 import dkv.serverpb.Api;
@@ -32,7 +32,9 @@ import static org.dkv.client.Utils.covertToBytes;
  * @see DKVException
  */
 public class SimpleDKVClient implements DKVClient {
+    private static final String DEF_METRIC_PREFIX = "dkv-client-java";
     private static final MetricRegistry metrics = new MetricRegistry();
+
     private final DKVGrpc.DKVBlockingStub blockingStub;
     private final ManagedChannel channel;
     private final JmxReporter reporter;
@@ -213,13 +215,18 @@ public class SimpleDKVClient implements DKVClient {
 
     @Override
     public void close() {
-        channel.shutdownNow();
         reporter.stop();
+        channel.shutdownNow();
+        try {
+            channel.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            // ignore this since we're already closing
+        }
     }
 
     private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, String metricPrefix) {
         this.reporter = JmxReporter.forRegistry(metrics)
-                .inDomain(metricPrefix)
+                .inDomain(metricPrefix != null ? metricPrefix.trim() : DEF_METRIC_PREFIX)
                 .convertRatesTo(TimeUnit.MILLISECONDS)
                 .convertDurationsTo(TimeUnit.MILLISECONDS)
                 .build();

@@ -46,6 +46,11 @@
             <artifactId>metrics-core</artifactId>
             <version>4.1.9</version>
         </dependency>
+        <dependency>
+            <groupId>io.dropwizard.metrics</groupId>
+            <artifactId>metrics-jmx</artifactId>
+            <version>4.1.9</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -89,6 +94,35 @@
                     <source>8</source>
                     <target>8</target>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.0.0</version>
+                <executions>
+                    <execution>
+                        <id>start_dkv</id>
+                        <phase>generate-test-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${project.basedir}/src/test/resources/start_dkv.sh</executable>
+                            <workingDirectory>${project.basedir}/../../../</workingDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>stop_dkv</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${project.basedir}/src/test/resources/stop_dkv.sh</executable>
+                            <workingDirectory>${project.basedir}/../../../</workingDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

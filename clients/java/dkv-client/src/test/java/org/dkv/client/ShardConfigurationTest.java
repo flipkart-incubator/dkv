@@ -6,8 +6,6 @@ import org.junit.Test;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
-import static com.google.common.collect.Iterables.getLast;
-import static com.google.common.collect.Iterables.size;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
