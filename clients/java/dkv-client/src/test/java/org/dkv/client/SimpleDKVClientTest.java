@@ -24,7 +24,7 @@ public class SimpleDKVClientTest {
 
     @Before
     public void setUp() {
-        dkvCli = new SimpleDKVClient(DKV_TARGET);
+        dkvCli = new SimpleDKVClient(DKV_TARGET, null);
     }
 
     @Test
@@ -116,7 +116,7 @@ public class SimpleDKVClientTest {
         put(numKeys, keyPref2, valPref2);
         put(numKeys, keyPref3, valPref3);
         String startKey = format("%s%d", keyPref2, startIdx);
-        Iterator<DKVEntry> iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey, keyPref2);
+        Iterator<DKVEntry> iterRes = new SimpleDKVClient(DKV_TARGET, null).iterate(startKey, keyPref2);
         while (iterRes.hasNext()) {
             DKVEntry entry = iterRes.next();
             entry.checkStatus();
@@ -128,7 +128,7 @@ public class SimpleDKVClientTest {
 
         startIdx = 1;
         startKey = format("%s%d", keyPref1, startIdx);
-        iterRes = new SimpleDKVClient(DKV_TARGET).iterate(startKey);
+        iterRes = new SimpleDKVClient(DKV_TARGET, null).iterate(startKey);
         while (iterRes.hasNext()) {
             DKVEntry entry = iterRes.next();
             entry.checkStatus();
