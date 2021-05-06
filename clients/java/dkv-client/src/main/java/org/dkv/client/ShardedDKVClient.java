@@ -239,7 +239,7 @@ public class ShardedDKVClient implements DKVClient {
 
         SimpleDKVClient getDKVClient(DKVShard dkvShard, DKVNodeType... nodeTypes) {
             DKVNodeSet nodeSet = dkvShard.getNodesByType(nodeTypes);
-            DKVNode dkvNode = Iterables.get(nodeSet.getNodes(), 0);
+            DKVNode dkvNode = nodeSet.getNextNode();
             return internalPool.get(new Key(dkvNode, nodeSet.getName()));
         }
 
