@@ -1,7 +1,7 @@
 package org.dkv.client;
 
-import com.codahale.metrics.jmx.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.jmx.JmxReporter;
 import com.google.protobuf.ByteString;
 import dkv.serverpb.Api;
 import dkv.serverpb.DKVGrpc;
@@ -15,8 +15,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.protobuf.ByteString.*;
-import static org.dkv.client.Utils.convertToLong;
-import static org.dkv.client.Utils.covertToBytes;
+import static org.dkv.client.Utils.*;
 
 /**
  * An implementation of the {@link DKVClient} interface. It provides a convenient
@@ -331,34 +330,23 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort) {
-        if (dkvHost == null || dkvHost.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid DKV hostname must be provided");
-        }
-        if (dkvPort <= 0) {
-            throw new IllegalArgumentException("Valid DKV port must be provided");
-        }
+        checkf(dkvHost != null && !dkvHost.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
+        checkf(dkvPort > 0, IllegalArgumentException.class, "Valid DKV port must be provided");
         return ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext();
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort, String authority) {
-        if (authority == null || authority.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid authority must be provided");
-        }
+        checkf(authority != null && !authority.trim().isEmpty(), IllegalArgumentException.class, "Valid authority must be provided");
         return getManagedChannelBuilder(dkvHost, dkvPort).overrideAuthority(authority);
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget) {
-        if (dkvTarget == null || dkvTarget.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid DKV hostname must be provided");
-        }
+        checkf(dkvTarget != null && !dkvTarget.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
         return ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext();
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget, String authority) {
-        if (authority == null || authority.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid authority must be provided");
-        }
+        checkf(authority != null && !authority.trim().isEmpty(), IllegalArgumentException.class, "Valid authority must be provided");
         return getManagedChannelBuilder(dkvTarget).overrideAuthority(authority);
     }
-
 }
