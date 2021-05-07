@@ -98,4 +98,4 @@ jobs:
       - name: Build with Maven
         run: |
           cd clients/java/dkv-client
-          mvn clean install  -DskipTests -Dmaven.test.skip=true
+          mvn clean install
