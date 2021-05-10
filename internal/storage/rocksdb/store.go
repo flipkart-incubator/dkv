@@ -540,9 +540,8 @@ func (rdbIter *iter) verifyTTLValidity() bool {
 				return false
 			}
 		}
-		return true
 	}
-	return false
+	return true
 }
 
 func (rdbIter *iter) HasNext() bool {
@@ -563,7 +562,7 @@ func (rdbIter *iter) HasNext() bool {
 
 	//non prefix use-case
 	valid := rdbIter.rdbIter[rdbIter.currentIter].Valid()
-	if rdbIter.currentIter < len(rdbIter.rdbIter)-1 {
+	if !valid && rdbIter.currentIter < len(rdbIter.rdbIter)-1 {
 		rdbIter.currentIter++
 		return rdbIter.HasNext()
 	}

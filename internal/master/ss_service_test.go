@@ -207,6 +207,7 @@ func testIteration(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "IterK", "IterV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 	numNewKeys, newKeyPrefix, newValPrefix := 10, "NewIterK", "NewIterV"
+	count := 0
 
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
@@ -215,6 +216,7 @@ func testIteration(t *testing.T) {
 		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
+			count++
 			switch {
 			case strings.HasPrefix(k, keyPrefix):
 				suffix := k[len(keyPrefix):]
@@ -226,6 +228,10 @@ func testIteration(t *testing.T) {
 				t.Errorf("Did not expect the key %s in this iteration.", k)
 			}
 		}
+	}
+
+	if count == 0 {
+		t.Error("Iterate didn't return any rows")
 	}
 }
 
