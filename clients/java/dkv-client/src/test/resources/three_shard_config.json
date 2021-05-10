@@ -1,0 +1,109 @@
+{
+  "dkvShards": [
+    {
+      "name": "shard0",
+      "topology": {
+        "SLAVE": {
+          "name": "slaves",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 7091
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 7092
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 7093
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 7094
+            }
+          ]
+        },
+        "MASTER": {
+          "name": "masters",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 7080
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shard1",
+      "topology": {
+        "SLAVE": {
+          "name": "slaves",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 8091
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 8092
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 8093
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 8094
+            }
+          ]
+        },
+        "MASTER": {
+          "name": "masters",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 8080
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shard2",
+      "topology": {
+        "SLAVE": {
+          "name": "slaves",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 9091
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 9092
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 9093
+            },
+            {
+              "host": "127.0.0.1",
+              "port": 9094
+            }
+          ]
+        },
+        "MASTER": {
+          "name": "masters",
+          "nodes": [
+            {
+              "host": "127.0.0.1",
+              "port": 9080
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

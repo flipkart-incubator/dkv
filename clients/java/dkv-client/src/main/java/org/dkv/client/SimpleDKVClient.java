@@ -1,18 +1,21 @@
 package org.dkv.client;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.jmx.JmxReporter;
 import com.google.protobuf.ByteString;
 import dkv.serverpb.Api;
 import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import org.dkv.client.metrics.MetricsInterceptor;
 
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.protobuf.ByteString.*;
-import static org.dkv.client.Utils.convertToLong;
-import static org.dkv.client.Utils.covertToBytes;
+import static org.dkv.client.Utils.*;
 
 /**
  * An implementation of the {@link DKVClient} interface. It provides a convenient
@@ -28,7 +31,12 @@ import static org.dkv.client.Utils.covertToBytes;
  * @see DKVException
  */
 public class SimpleDKVClient implements DKVClient {
+    private static final String DEF_METRIC_PREFIX = "dkv-client-java";
+    private static final MetricRegistry metrics = new MetricRegistry();
+
     private final DKVGrpc.DKVBlockingStub blockingStub;
+    private final ManagedChannel channel;
+    private final JmxReporter reporter;
 
     /**
      * Creates an instance with the underlying GRPC conduit to the DKV database
@@ -38,22 +46,13 @@ public class SimpleDKVClient implements DKVClient {
      *
      * @param dkvHost host on which DKV database is running
      * @param dkvPort port the DKV database is listening on
+     * @param metricPrefix prefix for the published metrics
      * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public SimpleDKVClient(String dkvHost, int dkvPort) {
-        if (dkvHost == null || dkvHost.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid DKV hostname must be provided");
-        }
-
-        if (dkvPort <= 0) {
-            throw new IllegalArgumentException("Valid DKV port must be provided");
-        }
-
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext();
-        ManagedChannel channel = channelBuilder.build();
-        blockingStub = DKVGrpc.newBlockingStub(channel);
+    public SimpleDKVClient(String dkvHost, int dkvPort, String metricPrefix) {
+        this(getManagedChannelBuilder(dkvHost, dkvPort), metricPrefix);
     }
 
     /**
@@ -71,26 +70,13 @@ public class SimpleDKVClient implements DKVClient {
      * @param dkvHost host on which DKV database is running
      * @param dkvPort port the DKV database is listening on
      * @param authority value to be sent inside the HTTP/2 authority header
+     * @param metricPrefix prefix for the published metrics
      * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public SimpleDKVClient(String dkvHost, int dkvPort, String authority) {
-        if (dkvHost == null || dkvHost.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid DKV hostname must be provided");
-        }
-
-        if (authority == null || authority.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid authority must be provided");
-        }
-
-        if (dkvPort <= 0) {
-            throw new IllegalArgumentException("Valid DKV port must be provided");
-        }
-
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext().overrideAuthority(authority);
-        ManagedChannel channel = channelBuilder.build();
-        blockingStub = DKVGrpc.newBlockingStub(channel);
+    public SimpleDKVClient(String dkvHost, int dkvPort, String authority, String metricPrefix) {
+        this(getManagedChannelBuilder(dkvHost, dkvPort, authority), metricPrefix);
     }
 
     /**
@@ -100,18 +86,13 @@ public class SimpleDKVClient implements DKVClient {
      * implementations will support additional options for securing these exchanges.
      *
      * @param dkvTarget location (in the form host:port) at which DKV database is running
+     * @param metricPrefix prefix for the published metrics
      * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public SimpleDKVClient(String dkvTarget) {
-        if (dkvTarget == null || dkvTarget.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid DKV hostname must be provided");
-        }
-
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext();
-        ManagedChannel channel = channelBuilder.build();
-        blockingStub = DKVGrpc.newBlockingStub(channel);
+    public SimpleDKVClient(String dkvTarget, String metricPrefix) {
+        this(getManagedChannelBuilder(dkvTarget), metricPrefix);
     }
 
     /**
@@ -128,22 +109,13 @@ public class SimpleDKVClient implements DKVClient {
      *
      * @param dkvTarget location (in the form host:port) at which DKV database is running
      * @param authority value to be sent inside the HTTP/2 authority header
+     * @param metricPrefix prefix for the published metrics
      * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
-    public SimpleDKVClient(String dkvTarget, String authority) {
-        if (dkvTarget == null || dkvTarget.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid DKV target (host:port) must be provided");
-        }
-
-        if (authority == null || authority.trim().length() == 0) {
-            throw new IllegalArgumentException("Valid authority must be provided");
-        }
-
-        ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext().overrideAuthority(authority);
-        ManagedChannel channel = channelBuilder.build();
-        blockingStub = DKVGrpc.newBlockingStub(channel);
+    public SimpleDKVClient(String dkvTarget, String authority, String metricPrefix) {
+        this(getManagedChannelBuilder(dkvTarget, authority), metricPrefix);
     }
 
     @Override
@@ -242,7 +214,24 @@ public class SimpleDKVClient implements DKVClient {
 
     @Override
     public void close() {
-        ((ManagedChannel) blockingStub.getChannel()).shutdownNow();
+        reporter.stop();
+        channel.shutdownNow();
+        try {
+            channel.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {
+            // ignore this since we're already closing
+        }
+    }
+
+    private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, String metricPrefix) {
+        this.reporter = JmxReporter.forRegistry(metrics)
+                .inDomain(metricPrefix != null ? metricPrefix.trim() : DEF_METRIC_PREFIX)
+                .convertRatesTo(TimeUnit.MILLISECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .build();
+        this.reporter.start();
+        this.channel = channelBuilder.build();
+        this.blockingStub = DKVGrpc.newBlockingStub(channel).withInterceptors(new MetricsInterceptor(metrics));
     }
 
     private Iterator<DKVEntry> iterate(ByteString startKey, ByteString keyPref) {
@@ -338,5 +327,26 @@ public class SimpleDKVClient implements DKVClient {
             throw new DKVException(status, "CompareAndSet", new Object[]{keyByteStr, expectByteStr, updateByteStr});
         }
         return casRes.getUpdated();
+    }
+
+    private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort) {
+        checkf(dkvHost != null && !dkvHost.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
+        checkf(dkvPort > 0, IllegalArgumentException.class, "Valid DKV port must be provided");
+        return ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext();
+    }
+
+    private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort, String authority) {
+        checkf(authority != null && !authority.trim().isEmpty(), IllegalArgumentException.class, "Valid authority must be provided");
+        return getManagedChannelBuilder(dkvHost, dkvPort).overrideAuthority(authority);
+    }
+
+    private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget) {
+        checkf(dkvTarget != null && !dkvTarget.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
+        return ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext();
+    }
+
+    private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget, String authority) {
+        checkf(authority != null && !authority.trim().isEmpty(), IllegalArgumentException.class, "Valid authority must be provided");
+        return getManagedChannelBuilder(dkvTarget).overrideAuthority(authority);
     }
 }

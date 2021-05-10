@@ -25,7 +25,8 @@ public class ShardedDKVClientTest {
 
     @Before
     public void setup() {
-        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
+//        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
+        ShardConfiguration shardConf = loadShardConfig("/three_shard_config.json");
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
 //        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
         dkvClient = new ShardedDKVClient(new KeyHashBasedShardProvider(shardConf));
@@ -58,6 +59,7 @@ public class ShardedDKVClientTest {
 
         try {
             dkvClient.multiGet(LINEARIZABLE, keys);
+//            fail("expecting an exception");
         } catch (Exception e) {
             assertTrue(e instanceof UnsupportedOperationException);
         }

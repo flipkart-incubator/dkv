@@ -153,10 +153,14 @@ func testDistAtomicIncrDecr(t *testing.T) {
 					break
 				}
 				expect := exist.Value
-				update := []byte{expect[0] + delta}
-				res, err := dkvCli.CompareAndSet(casKey, expect, update)
-				if res && err == nil {
-					break
+				if len(expect) > 0 {
+					update := []byte{expect[0] + delta}
+					res, err := dkvCli.CompareAndSet(casKey, expect, update)
+					if res && err == nil {
+						break
+					}
+				} else {
+					t.Logf("Empty GET against client ID: %d. Error: %v", clId, err)
 				}
 			}
 		}(i, cliID)
