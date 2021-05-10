@@ -32,7 +32,8 @@ type DB interface {
 
 type rocksDB struct {
 	db          *gorocksdb.DB
-	cf          gorocksdb.ColumnFamilyHandles
+	normalCF    *gorocksdb.ColumnFamilyHandle
+	ttlCF       *gorocksdb.ColumnFamilyHandle
 	optimTrxnDB *gorocksdb.OptimisticTransactionDB
 	opts        *rocksDBOpts
 
@@ -159,9 +160,18 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	rstOpts := gorocksdb.NewRestoreOptions()
 	wrOpts := gorocksdb.NewDefaultWriteOptions()
 	rdOpts := gorocksdb.NewDefaultReadOptions()
-	opts.SetCompactionFilter(&ttlCompactionFilter{})
 	cfNames := []string{"default", "ttl"}
-	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient(), cfNames: cfNames}
+	return &rocksDBOpts{
+		folderName:     dbFolder,
+		blockTableOpts: bbto,
+		rocksDBOpts:    opts,
+		restoreOpts:    rstOpts,
+		lgr:            zap.NewNop(),
+		readOpts:       rdOpts,
+		writeOpts:      wrOpts,
+		statsCli:       stats.NewNoOpClient(),
+		cfNames:        cfNames,
+	}
 }
 
 func (rdbOpts *rocksDBOpts) destroy() {
@@ -173,12 +183,26 @@ func (rdbOpts *rocksDBOpts) destroy() {
 }
 
 func openStore(opts *rocksDBOpts) (*rocksDB, error) {
-	optimTrxnDB, cfh, err := gorocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts, opts.folderName, opts.cfNames, []*gorocksdb.Options{opts.rocksDBOpts, opts.rocksDBOpts})
+	normalOpts := opts.rocksDBOpts
+	ttlOpts, err := gorocksdb.GetOptionsFromString(normalOpts, "")
+	if err != nil {
+		return nil, err
+	}
+	ttlOpts.SetCompactionFilter(&ttlCompactionFilter{})
+	optimTrxnDB, cfh, err := gorocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts,
+		opts.folderName, opts.cfNames, []*gorocksdb.Options{normalOpts, ttlOpts})
 	if err != nil {
 		return nil, err
 	}
 
-	rocksdb := rocksDB{optimTrxnDB.GetBaseDb(), cfh, optimTrxnDB, opts, 0}
+	rocksdb := rocksDB{
+		db:             optimTrxnDB.GetBaseDb(),
+		normalCF:       cfh[0],
+		ttlCF:          cfh[1],
+		optimTrxnDB:    optimTrxnDB,
+		opts:           opts,
+		globalMutation: 0,
+	}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	// go rocksdb.Compaction()
 	return &rocksdb, nil
@@ -192,7 +216,7 @@ func (rdb *rocksDB) Compaction() error {
 		case <-tick:
 			// trigger a compaction
 			rdb.opts.lgr.Info("Triggering RocksDB Compaction")
-			rdb.db.CompactRangeCF(rdb.cf[1], gorocksdb.Range{nil, nil})
+			rdb.db.CompactRangeCF(rdb.ttlCF, gorocksdb.Range{nil, nil})
 		}
 	}
 	return nil
@@ -210,8 +234,7 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS int64) error {
 		b := make([]byte, tsLength)
 		binary.LittleEndian.PutUint64(b, uint64(expireTS))
 		value = append(value, b...)
-		//Write TTL first, so that even if the data field write fails, its not an issue.
-		err := rdb.db.PutCF(rdb.opts.writeOpts, rdb.cf[1], key, value)
+		err := rdb.db.PutCF(rdb.opts.writeOpts, rdb.ttlCF, key, value)
 		if err != nil {
 			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
 		}
@@ -484,7 +507,7 @@ func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 		it.SeekToFirst()
 	}
 
-	itTTL := rdb.db.NewIteratorCF(readOpts, rdb.cf[1])
+	itTTL := rdb.db.NewIteratorCF(readOpts, rdb.ttlCF)
 	if sk, prsnt := iterOpts.StartKey(); prsnt {
 		itTTL.Seek(sk)
 	} else {
@@ -632,7 +655,7 @@ func getExpireTs(valueWithTtl []byte) (int64, error) {
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
-	values, err := rdb.db.MultiGetCFMultiCF(ro, rdb.cf, [][]byte{key, key})
+	values, err := rdb.db.MultiGetCFMultiCF(ro, []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
 		return nil, err
@@ -678,8 +701,8 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	for i, j := 0, 0; j < len(keys); j, i = j+1, i+2 {
 		requestKeys[i] = keys[j]
 		requestKeys[i+1] = keys[j]
-		requestCF[i] = rdb.cf[0]
-		requestCF[i+1] = rdb.cf[1]
+		requestCF[i] = rdb.normalCF
+		requestCF[i+1] = rdb.ttlCF
 	}
 
 	values, err := rdb.db.MultiGetCFMultiCF(ro, requestCF, requestKeys)
