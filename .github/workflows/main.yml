@@ -95,6 +95,10 @@ jobs:
         with:
           name: bin-dkvsrv
           path: bin/dkvsrv
+      - name: Test dkvsrv binary
+        run: |
+          ls -lrth bin
+          ./bin/dkvsrv --help
       - name: Build with Maven
         run: |
           cd clients/java/dkv-client
