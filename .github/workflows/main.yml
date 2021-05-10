@@ -51,7 +51,7 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
       - name: Run tests
         run: |
-          docker run -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make test build"
+          docker run -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make test"
       - name: Build dkvsrv binary
         run: |
           rm -rf bin || true
@@ -94,11 +94,11 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: bin-dkvsrv
-          path: bin/dkvsrv
-      - name: Test dkvsrv binary
+          path: bin
+      - name: Update dkvsrv permissions
         run: |
-          ls -lrth bin
-          ./bin/dkvsrv --help
+          chmod +x bin/dkvsrv
+          ls -lRth bin
       - name: Build with Maven
         run: |
           cd clients/java/dkv-client
