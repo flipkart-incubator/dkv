@@ -19,5 +19,3 @@ $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:909
 $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9092 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms > /dev/null 2>&1 &
 $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9093 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms > /dev/null 2>&1 &
 $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9094 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms > /dev/null 2>&1 &
-
-./bin/dkvsrv -dbRole master -dbListenAddr 127.0.0.1:6080 -dbFolder /tmp/dkvsrv/s3
