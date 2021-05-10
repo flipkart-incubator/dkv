@@ -19,3 +19,11 @@ $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:909
 $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9092 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms > /dev/null 2>&1 &
 $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9093 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms > /dev/null 2>&1 &
 $DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9094 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms > /dev/null 2>&1 &
+
+$DKV_EXEC -dbDiskless -dbEngine badger -dbRole slave -dbListenAddr 127.0.0.1:9095 -replMasterAddr 127.0.0.1:9080 -replPollInterval 100ms &
+
+sleep 5
+
+echo "+++++++++++++++++++++++++++"
+cat nohup.out
+echo "+++++++++++++++++++++++++++"
