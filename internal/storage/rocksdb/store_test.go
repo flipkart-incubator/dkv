@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/shamaton/msgpack"
 	"math"
 	"os"
 	"os/exec"
@@ -106,7 +107,35 @@ func TestPutIntAndGet(t *testing.T) {
 			}
 		}
 	}
+}
 
+func TestMsgPack(t *testing.T) {
+	expirtyTs := time.Now().Add(2 * time.Second).Unix()
+	v := ttlDataFormat{
+		ExpiryTS: expirtyTs,
+		Data:     []byte("someValue"),
+	}
+	b, err := msgpack.Marshal(v)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("Pack data", string(b))
+
+	var item ttlDataFormat
+	err = msgpack.Unmarshal(b, &item)
+	if err != nil {
+		panic(err)
+	}
+	t.Log("Unpack data", string(item.Data))
+
+	if item.ExpiryTS != v.ExpiryTS {
+		t.Errorf("Unpack int mismatch. Expected Value: %d, Actual Value: %d", v.ExpiryTS, item.ExpiryTS)
+	}
+
+	if string(item.Data) != string(v.Data) {
+		t.Errorf("Unpack string mismatch. Expected Value: %s, Actual Value: %s", v.Data, item.Data)
+	}
 }
 
 func TestPutTTLAndGet(t *testing.T) {
@@ -146,7 +175,6 @@ func TestPutTTLAndGet(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func TestPutEmptyValue(t *testing.T) {

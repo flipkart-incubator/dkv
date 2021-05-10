@@ -2,11 +2,12 @@ package rocksdb
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/shamaton/msgpack"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -144,10 +145,14 @@ func (m *ttlCompactionFilter) Name() string {
 // Filter applies the logic for the Compaction process.
 // this returns remove as true if the TTL of the key has expired.
 func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, newVal []byte) {
-	//expireTS, _ := getExpireTs(val)
-	//if expireTS > 0 && expireTS < hlc.UnixNow() {
-	//	return true, val
-	//}
+	ttlRow, err := parseTTLMsgPackData(val)
+	if err != nil {
+		log.Println("ttlCompactionFilter::Filter Failed to parse msgpack data for Key", key)
+		return false, nil
+	}
+	if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
+		return true, val
+	}
 	return false, nil
 }
 
@@ -204,8 +209,13 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 		globalMutation: 0,
 	}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
-	// go rocksdb.Compaction()
+	//go rocksdb.Compaction()
 	return &rocksdb, nil
+}
+
+type ttlDataFormat struct {
+	ExpiryTS int64  `msgpack:"t"`
+	Data     []byte `msgpack:"d"`
 }
 
 // Compaction runs the compaction routine
@@ -231,10 +241,16 @@ func (rdb *rocksDB) Close() error {
 func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS int64) error {
 	if expireTS > 0 {
 		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
-		b := make([]byte, tsLength)
-		binary.LittleEndian.PutUint64(b, uint64(expireTS))
-		value = append(value, b...)
-		err := rdb.db.PutCF(rdb.opts.writeOpts, rdb.ttlCF, key, value)
+		dF := ttlDataFormat{
+			ExpiryTS: expireTS,
+			Data:     value,
+		}
+		msgPack, err := msgpack.Marshal(dF)
+		if err != nil {
+			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
+			return err
+		}
+		err = rdb.db.PutCF(rdb.opts.writeOpts, rdb.ttlCF, key, msgPack)
 		if err != nil {
 			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
 		}
@@ -519,8 +535,8 @@ func (rdbIter *iter) verifyTTLValidity() bool {
 	if rdbIter.rdbIter[rdbIter.currentIter].Valid() {
 		val := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Value())
 		if rdbIter.currentIter != 0 {
-			expireTs, _ := getExpireTs(val)
-			if expireTs > 0 && expireTs < hlc.UnixNow() {
+			ttlRow, _ := parseTTLMsgPackData(val)
+			if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
 				return false
 			}
 		}
@@ -557,18 +573,18 @@ func (rdbIter *iter) HasNext() bool {
 func (rdbIter *iter) Next() ([]byte, []byte) {
 	key := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Key())
 	val := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Value())
-	var expireTs int64 = 0
+	var ttlRow *ttlDataFormat
 	if rdbIter.currentIter != 0 { //base iterator doesn't have ttl
-		expireTs, _ = getExpireTs(val)
+		ttlRow, _ = parseTTLMsgPackData(val)
 	}
-	if expireTs > 0 && expireTs < hlc.UnixNow() {
+	if ttlRow != nil && ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
 		rdbIter.rdbIter[rdbIter.currentIter].Next()
 		if rdbIter.HasNext() {
 			return rdbIter.Next()
 		}
 		return nil, nil
-	} else if expireTs > 0 {
-		val = val[0 : len(val)-tsLength]
+	} else if ttlRow != nil && ttlRow.ExpiryTS > 0 {
+		val = ttlRow.Data
 	}
 	rdbIter.rdbIter[rdbIter.currentIter].Next()
 	return key, val
@@ -637,20 +653,10 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 	return res
 }
 
-const tsLength = 8
-const endOfWorld = 253402300799 // 9999-12-31 23:59:59 B{ 127 65 244 255 58 0 0 0 }
-
-func getExpireTs(valueWithTtl []byte) (int64, error) {
-	l := len(valueWithTtl)
-	if l < tsLength {
-		return 0, fmt.Errorf("invalid_length")
-	}
-	ts := valueWithTtl[l-tsLength:]
-	i := binary.LittleEndian.Uint64(ts)
-	if i > 0 && i < endOfWorld {
-		return int64(i), nil
-	}
-	return 0, fmt.Errorf("not_valid_ts")
+func parseTTLMsgPackData(valueWithTtl []byte) (*ttlDataFormat, error) {
+	var row ttlDataFormat
+	err := msgpack.Unmarshal(valueWithTtl, &row)
+	return &row, err
 }
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
@@ -681,11 +687,14 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 	if value2.Size() > 0 {
 		//ttl use-case, check ttl
 		val := toByteArray(value2)
-		expireTs, _ := getExpireTs(val)
-		if expireTs > 0 && expireTs < hlc.UnixNow() {
+		ttlRow, err := parseTTLMsgPackData(val)
+		if err != nil {
 			return nil
-		} else if expireTs > 0 {
-			val = val[0 : len(val)-tsLength]
+		}
+		if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
+			return nil
+		} else if ttlRow.ExpiryTS > 0 {
+			val = ttlRow.Data
 		}
 		return &serverpb.KVPair{Key: key, Value: val}
 	}
