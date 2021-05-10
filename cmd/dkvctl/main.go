@@ -25,6 +25,7 @@ var cmds = []*cmd{
 	{"del", "<key>", "Delete the given key", (*cmd).del, "", false},
 	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
 	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
+	{"keys", "\"*\" | <prefix> [<startKey>]", "Get keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).keys, "", false},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
@@ -73,6 +74,29 @@ func (c *cmd) get(client *ctl.DKVClient, args ...string) {
 			fmt.Printf("Unable to perform GET. Error: %v\n", err)
 		} else {
 			fmt.Println(string(res.Value))
+		}
+	}
+}
+
+func (c *cmd) keys(client *ctl.DKVClient, args ...string) {
+	strtKy, kyPrfx := "", ""
+	switch {
+	case len(args) == 1:
+		if strings.TrimSpace(args[0]) != "*" {
+			kyPrfx = args[0]
+		}
+	case len(args) == 2:
+		kyPrfx, strtKy = args[0], args[1]
+	}
+	if ch, err := client.Iterate([]byte(kyPrfx), []byte(strtKy)); err != nil {
+		fmt.Printf("Unable to perform iteration. Error: %v\n", err)
+	} else {
+		for kvp := range ch {
+			if kvp.ErrMsg != "" {
+				fmt.Printf("Error: %s\n", kvp.ErrMsg)
+			} else {
+				fmt.Printf("%s\n", kvp.Key)
+			}
 		}
 	}
 }
