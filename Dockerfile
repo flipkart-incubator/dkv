@@ -1,4 +1,6 @@
-FROM debian:stretch
+ARG BASE=debian:stretch
+
+FROM $BASE
  
 # Your team alias or your e-mail id
 MAINTAINER DKV Developers (dkv-dev@googlegroups.com)

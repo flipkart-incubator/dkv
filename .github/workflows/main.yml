@@ -10,7 +10,7 @@ on:
 
 jobs:
   dkv_server_job:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     name: Build Docker Server & Run Tests
     services:
       registry:
@@ -49,6 +49,8 @@ jobs:
           file: ./Dockerfile
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            BASE=ubuntu:18.04
       - name: Run tests
         run: |
           docker run -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make test"
@@ -70,7 +72,7 @@ jobs:
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
   dkv_java_client_job:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: dkv_server_job
     name: Build Java Client
     steps:
