@@ -473,7 +473,11 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 		for _, trxnRec := range chng.Trxns {
 			switch trxnRec.Type {
 			case serverpb.TrxnRecord_Put:
-				if lastErr = chngTrxn.Set(trxnRec.Key, trxnRec.Value); lastErr != nil {
+				entry := badger.NewEntry(trxnRec.Key, trxnRec.Value)
+				if trxnRec.ExpireTS > 0 {
+					entry.ExpiresAt = trxnRec.ExpireTS
+				}
+				if lastErr = chngTrxn.SetEntry(entry); lastErr != nil {
 					break
 				}
 			case serverpb.TrxnRecord_Delete:

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	badger_pb "github.com/dgraph-io/badger/v2/pb"
@@ -418,6 +419,45 @@ func TestIterationUsingStream(t *testing.T) {
 
 	if actCnt != numTrxns {
 		t.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
+func TestPutTTLAndGet(t *testing.T) {
+	numIteration := 10
+	for i := 1; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 11; i <= 10+numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 1; i <= numIteration; i++ {
+		key, expectedValue := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if string(readResults[0].Value) != expectedValue {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+
+	for i := 11; i <= 10+numIteration; i++ {
+		key := fmt.Sprintf("KTTL%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if len(readResults) > 0 {
+				t.Errorf("GET mismatch post TTL Expiry. Key: %s, Expected Value: %s, Actual Value: %s", key, "nil", readResults[0].Value)
+			}
+		}
 	}
 }
 

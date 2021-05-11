@@ -8,7 +8,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/utils"
 	"github.com/shamaton/msgpack"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"strings"
@@ -136,11 +135,12 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 }
 
 type ttlCompactionFilter struct {
+	lgr *zap.Logger
 }
 
 // Name returns the CompactionFilter name
 func (m *ttlCompactionFilter) Name() string {
-	return "dkv.ttlfilter"
+	return "dkv.ttlFilter"
 }
 
 // Filter applies the logic for the Compaction process.
@@ -148,7 +148,7 @@ func (m *ttlCompactionFilter) Name() string {
 func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, newVal []byte) {
 	ttlRow, err := parseTTLMsgPackData(val)
 	if err != nil {
-		log.Println("ttlCompactionFilter::Filter Failed to parse msgpack data for Key", key)
+		m.lgr.Warn("ttlCompactionFilter::Filter Failed to parse msgpack data", zap.String("Key", string(key)))
 		return false, nil
 	}
 	if hlc.InThePast(ttlRow.ExpiryTS) {
@@ -194,7 +194,7 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	ttlOpts.SetCompactionFilter(&ttlCompactionFilter{})
+	ttlOpts.SetCompactionFilter(&ttlCompactionFilter{opts.lgr})
 	optimTrxnDB, cfh, err := gorocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts,
 		opts.folderName, opts.cfNames, []*gorocksdb.Options{normalOpts, ttlOpts})
 	if err != nil {
@@ -621,10 +621,18 @@ func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 		trxnRec.Type = serverpb.TrxnRecord_Delete
 	case gorocksdb.WriteBatchValueRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Put
+	case gorocksdb.WriteBatchCFValueRecord:
+		trxnRec.Type = serverpb.TrxnRecord_Put
 	default:
 		trxnRec.Type = serverpb.TrxnRecord_Unknown
 	}
 	trxnRec.Key, trxnRec.Value = wbr.Key, wbr.Value
+	if wbr.CF == 1 { //second CF
+		if ttlDf, err := parseTTLMsgPackData(wbr.Value); err == nil && ttlDf != nil {
+			trxnRec.Value = ttlDf.Data
+			trxnRec.ExpireTS = ttlDf.ExpiryTS
+		}
+	}
 	return trxnRec
 }
 

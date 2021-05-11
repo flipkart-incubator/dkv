@@ -205,6 +205,8 @@ message TrxnRecord {
   bytes key = 2;
   // Value is the byte array representation of the value associated with this transaction.
   bytes value = 3;
+  // expireTS is the epoch seconds value, in int64 to associate with the key in the key value store.
+  uint64 expireTS = 4;
 }
 
 service DKVBackupRestore {
