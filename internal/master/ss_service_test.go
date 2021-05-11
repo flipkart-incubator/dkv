@@ -76,11 +76,11 @@ func testPutAndGet(t *testing.T) {
 func testPutTTLAndGet(t *testing.T) {
 	key1, key2, value := "ValidKey", "ExpiredKey", "SomeValue"
 
-	if err := dkvCli.PutTTL([]byte(key1), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
+	if err := dkvCli.PutTTL([]byte(key1), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
 		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key1, value, err)
 	}
 
-	if err := dkvCli.PutTTL([]byte(key2), []byte(value), time.Now().Add(-2*time.Second).Unix()); err != nil {
+	if err := dkvCli.PutTTL([]byte(key2), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
 		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key2, value, err)
 	}
 

@@ -151,7 +151,7 @@ func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, n
 		log.Println("ttlCompactionFilter::Filter Failed to parse msgpack data for Key", key)
 		return false, nil
 	}
-	if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
+	if hlc.InThePast(ttlRow.ExpiryTS) {
 		return true, val
 	}
 	return false, nil
@@ -215,7 +215,7 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 }
 
 type ttlDataFormat struct {
-	ExpiryTS int64  `msgpack:"t"`
+	ExpiryTS uint64 `msgpack:"t"`
 	Data     []byte `msgpack:"d"`
 }
 
@@ -239,7 +239,7 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS int64) error {
+func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 	if expireTS > 0 {
 		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
 		dF := ttlDataFormat{
@@ -509,9 +509,9 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 }
 
 type iter struct {
-	iterOpts    storage.IterationOptions
-	rdbIter     *gorocksdb.Iterator
-	ttlCF        bool
+	iterOpts storage.IterationOptions
+	rdbIter  *gorocksdb.Iterator
+	ttlCF    bool
 }
 
 func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
@@ -533,7 +533,7 @@ func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions) *iter {
 	} else {
 		itTTL.SeekToFirst()
 	}
-	return &iter{iterOpts,  itTTL, true}
+	return &iter{iterOpts, itTTL, true}
 }
 
 func (rdbIter *iter) verifyTTLValidity() bool {
@@ -541,7 +541,7 @@ func (rdbIter *iter) verifyTTLValidity() bool {
 		val := toByteArray(rdbIter.rdbIter.Value())
 		if rdbIter.ttlCF {
 			ttlRow, _ := parseTTLMsgPackData(val)
-			if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
+			if hlc.InThePast(ttlRow.ExpiryTS) {
 				return false
 			}
 		}
@@ -655,6 +655,8 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	}
 	value1, value2 := values[0], values[1]
 	kv := rdb.extractResult(value1, value2, key)
+	value1.Free()
+	value2.Free()
 	if kv != nil {
 		return []*serverpb.KVPair{kv}, nil
 	}
@@ -662,9 +664,6 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 }
 
 func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *serverpb.KVPair {
-	defer value1.Free()
-	defer value2.Free()
-
 	if value1.Size() > 0 {
 		//non ttl use-case
 		val := toByteArray(value1)
@@ -678,7 +677,7 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 		if err != nil {
 			return nil
 		}
-		if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
+		if hlc.InThePast(ttlRow.ExpiryTS) {
 			return nil
 		} else if ttlRow.ExpiryTS > 0 {
 			val = ttlRow.Data
@@ -711,6 +710,8 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	for i := 0; i < len(values); i += 2 {
 		value1, value2 := values[i], values[i+1]
 		kv := rdb.extractResult(value1, value2, requestKeys[i])
+		value1.Free()
+		value2.Free()
 		if kv != nil {
 			results = append(results, kv)
 		}

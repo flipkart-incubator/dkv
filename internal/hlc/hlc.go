@@ -11,6 +11,11 @@ func Now() time.Time {
 }
 
 // UnixNow returns current unix time
-func UnixNow() int64 {
-	return fastime.UnixNow()
+func UnixNow() uint64 {
+	return uint64(fastime.UnixNow())
+}
+
+//InThePast checks if the provided unix time has elapsed.
+func InThePast(epoch uint64) bool {
+	return epoch > 0 && epoch < UnixNow()
 }

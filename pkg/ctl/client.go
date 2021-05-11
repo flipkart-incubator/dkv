@@ -72,7 +72,7 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 
 // PutTTL takes the key and value as byte arrays, expireTS as epoch seconds and invokes the
 // GRPC Put method. This is a convenience wrapper.
-func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS int64) error {
+func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS uint64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	putReq := &serverpb.PutRequest{Key: key, Value: value, ExpireTS: expireTS}

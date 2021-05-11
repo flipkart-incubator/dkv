@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -11,7 +12,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestDKVReplStoreSave(t *testing.T) {
@@ -138,14 +138,14 @@ type memStore struct {
 
 type memStoreObject struct {
 	data     []byte
-	expiryTS int64
+	expiryTS uint64
 }
 
 func newMemStore() *memStore {
 	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
 }
 
-func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS int64) error {
+func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS uint64) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
@@ -184,7 +184,7 @@ func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 		storeKey := string(key)
 		if val, present := ms.store[storeKey]; present {
 			var v []byte
-			if val.expiryTS == 0 || val.expiryTS > time.Now().Unix() {
+			if val.expiryTS == 0 || val.expiryTS > hlc.UnixNow() {
 				v = val.data
 			}
 			rss[i] = &serverpb.KVPair{Key: key, Value: v}

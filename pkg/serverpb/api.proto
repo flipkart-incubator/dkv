@@ -56,7 +56,7 @@ message PutRequest {
   // Value is the value, in bytes, to associate with the key in the key value store.
   bytes value = 2;
   // expireTS is the epoch seconds value, in int64 to associate with the key in the key value store.
-  int64 expireTS = 3;
+  uint64 expireTS = 3;
 }
 
 message PutResponse {

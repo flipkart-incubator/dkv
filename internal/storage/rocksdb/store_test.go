@@ -92,7 +92,7 @@ func TestPutIntAndGet(t *testing.T) {
 		if i%2 == 0 {
 			ttl = 0
 		}
-		if err := store.PutTTL([]byte(key), b, ttl); err != nil {
+		if err := store.PutTTL([]byte(key), b, uint64(ttl)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -111,7 +111,7 @@ func TestPutIntAndGet(t *testing.T) {
 }
 
 func TestMsgPack(t *testing.T) {
-	expirtyTs := time.Now().Add(2 * time.Second).Unix()
+	expirtyTs := uint64(time.Now().Add(2 * time.Second).Unix())
 	v := ttlDataFormat{
 		ExpiryTS: expirtyTs,
 		Data:     []byte("someValue"),
@@ -145,7 +145,7 @@ func TestCompactionFilterOnExpiredKeys(t *testing.T) {
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("%s_%d", keyPref, i), fmt.Sprintf("V%d", i)
 		expireAt := time.Now().Add(-2 * time.Second).Unix()
-		if err := store.PutTTL([]byte(key), []byte(value), expireAt); err != nil {
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(expireAt)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -168,14 +168,14 @@ func TestPutTTLAndGet(t *testing.T) {
 	numIteration := 10
 	for i := 1; i <= numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
-		if err := store.PutTTL([]byte(key), []byte(value), time.Now().Add(2*time.Second).Unix()); err != nil {
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
 	for i := 11; i <= 10+numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
-		if err := store.PutTTL([]byte(key), []byte(value), time.Now().Add(-2*time.Second).Unix()); err != nil {
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -1183,7 +1183,7 @@ func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string, ttl int64) 
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := store.PutTTL([]byte(k), []byte(v), ttl); err != nil {
+		if err := store.PutTTL([]byte(k), []byte(v), uint64(ttl)); err != nil {
 			t.Fatal(err)
 		} else {
 			if readResults, err := store.Get([]byte(k)); err != nil {
