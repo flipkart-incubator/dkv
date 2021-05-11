@@ -251,7 +251,10 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
 			return err
 		}
-		err = rdb.db.PutCF(rdb.opts.writeOpts, rdb.ttlCF, key, msgPack)
+		wb := gorocksdb.NewWriteBatch()
+		wb.DeleteCF(rdb.normalCF, key)
+		wb.PutCF(rdb.ttlCF, key, msgPack)
+		err = rdb.db.Write(rdb.opts.writeOpts, wb)
 		if err != nil {
 			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
 		}
@@ -262,7 +265,10 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
-	err := rdb.db.Put(rdb.opts.writeOpts, key, value)
+	wb := gorocksdb.NewWriteBatch()
+	wb.DeleteCF(rdb.ttlCF, key)
+	wb.Put(key, value)
+	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
 	}
@@ -617,6 +623,8 @@ func (rdb *rocksDB) openBackupEngine(folder string) (*gorocksdb.BackupEngine, er
 func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	trxnRec := &serverpb.TrxnRecord{}
 	switch wbr.Type {
+	case gorocksdb.WriteBatchCFDeletionRecord:
+		trxnRec.Type = serverpb.TrxnRecord_Delete
 	case gorocksdb.WriteBatchDeletionRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Delete
 	case gorocksdb.WriteBatchValueRecord:
@@ -628,7 +636,10 @@ func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	}
 	trxnRec.Key, trxnRec.Value = wbr.Key, wbr.Value
 	if wbr.CF == 1 { //second CF
-		if ttlDf, err := parseTTLMsgPackData(wbr.Value); err == nil && ttlDf != nil {
+		if ttlDf, err := parseTTLMsgPackData(wbr.Value); err != nil {
+			//log error?
+			//fmt.Println("toTrxnRecord parseTTLMsgPackData Failed ", string(wbr.Key), string(wbr.Value))
+		} else if ttlDf != nil {
 			trxnRec.Value = ttlDf.Data
 			trxnRec.ExpireTS = ttlDf.ExpiryTS
 		}
@@ -650,7 +661,10 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 
 func parseTTLMsgPackData(valueWithTtl []byte) (*ttlDataFormat, error) {
 	var row ttlDataFormat
-	err := msgpack.Unmarshal(valueWithTtl, &row)
+	var err error
+	if len(valueWithTtl) > 0 {
+		err = msgpack.Unmarshal(valueWithTtl, &row)
+	}
 	return &row, err
 }
 

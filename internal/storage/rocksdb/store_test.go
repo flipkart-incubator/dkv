@@ -121,14 +121,11 @@ func TestMsgPack(t *testing.T) {
 		t.Error(err)
 	}
 
-	t.Log("Pack data", string(b))
-
 	var item ttlDataFormat
 	err = msgpack.Unmarshal(b, &item)
 	if err != nil {
 		panic(err)
 	}
-	t.Log("Unpack data", string(item.Data))
 
 	if item.ExpiryTS != v.ExpiryTS {
 		t.Errorf("Unpack int mismatch. Expected Value: %d, Actual Value: %d", v.ExpiryTS, item.ExpiryTS)
@@ -252,16 +249,17 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGetLatestChangeNumber(t *testing.T) {
-	expNumTrxns := uint64(5)
+	numInsert := 5
 	beforeChngNum, _ := store.GetLatestCommittedChangeNumber()
-	putKeys(t, int(expNumTrxns), "aaKey", "aaVal", 0)
+	putKeys(t, numInsert, "aaKey", "aaVal", 0)
 	afterChngNum, _ := store.GetLatestCommittedChangeNumber()
 	actNumTrxns := afterChngNum - beforeChngNum
+	expNumTrxns := uint64(10)
 	if expNumTrxns != actNumTrxns {
 		t.Errorf("Mismatch in number of transactions. Expected: %d, Actual: %d", expNumTrxns, actNumTrxns)
 	}
 	beforeChngNum = afterChngNum
-	getKeys(t, int(expNumTrxns), "aaKey", "aaVal")
+	getKeys(t, numInsert, "aaKey", "aaVal")
 	afterChngNum, _ = store.GetLatestCommittedChangeNumber()
 	actNumTrxns = afterChngNum - beforeChngNum
 	if actNumTrxns != 0 {
@@ -286,13 +284,13 @@ func TestLoadChanges(t *testing.T) {
 		if firstChngNum != chngNum {
 			t.Errorf("Expected first change number to be %d but it is %d", chngNum, firstChngNum)
 		}
-		for i := 0; i < actNumChngs; i++ {
+		for i := 0; i < actNumChngs; i += 2 {
 			chng := chngs[i]
 			// t.Log(string(chng.SerialisedForm))
-			if chng.NumberOfTrxns != 1 {
-				t.Errorf("Expected only one transaction in this change but found %d transactions", chng.NumberOfTrxns)
+			if chng.NumberOfTrxns != 2 {
+				t.Errorf("Expected only two transaction in this change but found %d transactions", chng.NumberOfTrxns)
 			}
-			trxnRec := chng.Trxns[0]
+			trxnRec := chng.Trxns[1]
 			if trxnRec.Type != serverpb.TrxnRecord_Put {
 				t.Errorf("Expected transaction type to be Put but found %s", trxnRec.Type.String())
 			}
