@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/utils"
 	"github.com/shamaton/msgpack"
 	"io/ioutil"
 	"log"
@@ -509,32 +510,36 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 
 type iter struct {
 	iterOpts    storage.IterationOptions
-	rdbIter     []*gorocksdb.Iterator
-	currentIter int
+	rdbIter     *gorocksdb.Iterator
+	ttlCF        bool
 }
 
 func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
 	readOpts := rdb.opts.readOpts
-
 	it := rdb.db.NewIterator(readOpts)
-	if sk, prsnt := iterOpts.StartKey(); prsnt {
+	if sk, present := iterOpts.StartKey(); present {
 		it.Seek(sk)
 	} else {
 		it.SeekToFirst()
 	}
+	return &iter{iterOpts, it, false}
+}
 
+func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions) *iter {
+	readOpts := rdb.opts.readOpts
 	itTTL := rdb.db.NewIteratorCF(readOpts, rdb.ttlCF)
-	if sk, prsnt := iterOpts.StartKey(); prsnt {
+	if sk, present := iterOpts.StartKey(); present {
 		itTTL.Seek(sk)
 	} else {
 		itTTL.SeekToFirst()
 	}
-	return &iter{iterOpts, []*gorocksdb.Iterator{it, itTTL}, 0}
+	return &iter{iterOpts,  itTTL, true}
 }
+
 func (rdbIter *iter) verifyTTLValidity() bool {
-	if rdbIter.rdbIter[rdbIter.currentIter].Valid() {
-		val := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Value())
-		if rdbIter.currentIter != 0 {
+	if rdbIter.rdbIter.Valid() {
+		val := toByteArray(rdbIter.rdbIter.Value())
+		if rdbIter.ttlCF {
 			ttlRow, _ := parseTTLMsgPackData(val)
 			if ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
 				return false
@@ -546,62 +551,45 @@ func (rdbIter *iter) verifyTTLValidity() bool {
 
 func (rdbIter *iter) HasNext() bool {
 	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
-		if rdbIter.rdbIter[rdbIter.currentIter].ValidForPrefix(kp) && rdbIter.verifyTTLValidity() {
+		if rdbIter.rdbIter.ValidForPrefix(kp) && rdbIter.verifyTTLValidity() {
 			return true
 		}
-		if rdbIter.rdbIter[rdbIter.currentIter].Valid() {
-			rdbIter.rdbIter[rdbIter.currentIter].Next()
-			return rdbIter.HasNext()
-		}
-		if rdbIter.currentIter < len(rdbIter.rdbIter)-1 {
-			rdbIter.currentIter++
+		if rdbIter.rdbIter.Valid() {
+			rdbIter.rdbIter.Next()
 			return rdbIter.HasNext()
 		}
 		return false
 	}
-
-	//non prefix use-case
-	valid := rdbIter.rdbIter[rdbIter.currentIter].Valid()
-	if !valid && rdbIter.currentIter < len(rdbIter.rdbIter)-1 {
-		rdbIter.currentIter++
-		return rdbIter.HasNext()
-	}
-	return valid
+	return rdbIter.rdbIter.Valid()
 }
 
 func (rdbIter *iter) Next() ([]byte, []byte) {
-	key := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Key())
-	val := toByteArray(rdbIter.rdbIter[rdbIter.currentIter].Value())
+	defer rdbIter.rdbIter.Next()
+	key := toByteArray(rdbIter.rdbIter.Key())
+	val := toByteArray(rdbIter.rdbIter.Value())
 	var ttlRow *ttlDataFormat
-	if rdbIter.currentIter != 0 { //base iterator doesn't have ttl
+	if rdbIter.ttlCF { //base iterator doesn't have ttl
 		ttlRow, _ = parseTTLMsgPackData(val)
 	}
-	if ttlRow != nil && ttlRow.ExpiryTS > 0 && ttlRow.ExpiryTS < hlc.UnixNow() {
-		rdbIter.rdbIter[rdbIter.currentIter].Next()
-		if rdbIter.HasNext() {
-			return rdbIter.Next()
-		}
-		return nil, nil
-	} else if ttlRow != nil && ttlRow.ExpiryTS > 0 {
+	if ttlRow != nil && ttlRow.ExpiryTS > 0 {
 		val = ttlRow.Data
 	}
-	rdbIter.rdbIter[rdbIter.currentIter].Next()
 	return key, val
 }
 
 func (rdbIter *iter) Err() error {
-	return rdbIter.rdbIter[rdbIter.currentIter].Err()
+	return rdbIter.rdbIter.Err()
 }
 
 func (rdbIter *iter) Close() error {
-	for _, iterator := range rdbIter.rdbIter {
-		iterator.Close()
-	}
+	rdbIter.rdbIter.Close()
 	return nil
 }
 
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	return rdb.newIter(iterOpts)
+	baseIter := rdb.newIter(iterOpts)
+	ttlIter := rdb.newIterCF(iterOpts)
+	return utils.Concat(baseIter, ttlIter)
 }
 
 func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
