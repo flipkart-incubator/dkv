@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/shamaton/msgpack"
 	"math"
 	"os"
 	"os/exec"
@@ -15,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/shamaton/msgpack"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -135,6 +136,31 @@ func TestMsgPack(t *testing.T) {
 
 	if string(item.Data) != string(v.Data) {
 		t.Errorf("Unpack string mismatch. Expected Value: %s, Actual Value: %s", v.Data, item.Data)
+	}
+}
+
+func TestCompactionFilterOnExpiredKeys(t *testing.T) {
+	numKeys := 10
+	keyPref := "Expired"
+	for i := 1; i <= numKeys; i++ {
+		key, value := fmt.Sprintf("%s_%d", keyPref, i), fmt.Sprintf("V%d", i)
+		expireAt := time.Now().Add(-2 * time.Second).Unix()
+		if err := store.PutTTL([]byte(key), []byte(value), expireAt); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	store.db.CompactRangeCF(store.ttlCF, gorocksdb.Range{nil, nil})
+	for i := 1; i <= numKeys; i++ {
+		key := fmt.Sprintf("%s_%d", keyPref, i)
+		if value, err := store.db.GetCF(store.opts.readOpts, store.ttlCF, []byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			val := toByteArray(value)
+			if len(val) > 0 {
+				t.Errorf("Expected missing for key: %s. But found it with value: %v", key, val)
+			}
+		}
 	}
 }
 
