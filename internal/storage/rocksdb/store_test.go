@@ -522,7 +522,12 @@ func TestMultiGet(t *testing.T) {
 	keys, vals := make([][]byte, numKeys), make([]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("MK%d", i), fmt.Sprintf("MV%d", i)
-		if err := store.Put([]byte(key), []byte(value)); err != nil {
+		ttl := int64(0)
+		if i&1 == 1 {
+			ttl = time.Now().Add(2 * time.Second).Unix()
+		}
+		err := store.PutTTL([]byte(key), []byte(value), uint64(ttl))
+		if err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		} else {
 			keys[i-1] = []byte(key)

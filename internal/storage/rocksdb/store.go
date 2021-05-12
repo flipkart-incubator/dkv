@@ -708,25 +708,23 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
 
-	requestKeys := make([][]byte, len(keys)*2)
-	requestCF := make([]*gorocksdb.ColumnFamilyHandle, len(keys)*2)
-	for i, j := 0, 0; j < len(keys); j, i = j+1, i+2 {
-		requestKeys[i] = keys[j]
-		requestKeys[i+1] = keys[j]
-		requestCF[i] = rdb.normalCF
-		requestCF[i+1] = rdb.ttlCF
+	kl := len(keys)
+	reqCFs := make([]*gorocksdb.ColumnFamilyHandle, kl<<1)
+	for i := 0; i < kl; i++ {
+		reqCFs[i] = rdb.normalCF
+		reqCFs[i+kl] = rdb.ttlCF
 	}
 
-	values, err := rdb.db.MultiGetCFMultiCF(ro, requestCF, requestKeys)
+	values, err := rdb.db.MultiGetCFMultiCF(ro, reqCFs, append(keys, keys...))
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
 		return nil, err
 	}
 
 	var results []*serverpb.KVPair
-	for i := 0; i < len(values); i += 2 {
-		value1, value2 := values[i], values[i+1]
-		kv := rdb.extractResult(value1, value2, requestKeys[i])
+	for i := 0; i < kl; i++ {
+		value1, value2 := values[i], values[i+kl]
+		kv := rdb.extractResult(value1, value2, keys[i])
 		value1.Free()
 		value2.Free()
 		if kv != nil {
