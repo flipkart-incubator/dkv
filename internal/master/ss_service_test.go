@@ -278,10 +278,10 @@ func testGetChanges(t *testing.T) {
 				chng := chngs[numChngs-i]
 				id := numKeys - i + 1
 				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, id), fmt.Sprintf("%s_%d", valPrefix, id)
-				if chng.NumberOfTrxns != 1 {
-					t.Errorf("Expected one transaction, but found %d transactions.", chng.NumberOfTrxns)
+				if chng.NumberOfTrxns != 2 {
+					t.Errorf("Expected two transaction, but found %d transactions.", chng.NumberOfTrxns)
 				} else {
-					trxn := chng.Trxns[0]
+					trxn := chng.Trxns[1]
 					if trxn.Type != serverpb.TrxnRecord_Put {
 						t.Errorf("Expected PUT transaction but found %s transaction", trxn.Type.String())
 					} else if string(trxn.Key) != expKey {

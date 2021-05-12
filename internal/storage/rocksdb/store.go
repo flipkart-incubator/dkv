@@ -277,7 +277,10 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
-	err := rdb.db.Delete(rdb.opts.writeOpts, key)
+	wb := gorocksdb.NewWriteBatch()
+	wb.DeleteCF(rdb.ttlCF, key)
+	wb.Delete(key)
+	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
 	}
