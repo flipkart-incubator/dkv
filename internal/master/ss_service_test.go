@@ -47,6 +47,7 @@ func TestStandaloneService(t *testing.T) {
 		defer dkvSvc.Close()
 		defer grpcSrvr.Stop()
 		t.Run("testPutAndGet", testPutAndGet)
+		t.Run("testPutTTLAndGet", testPutTTLAndGet)
 		t.Run("testAtomicKeyCreation", testAtomicKeyCreation)
 		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
 		t.Run("testDelete", testDelete)
@@ -69,6 +70,28 @@ func testPutAndGet(t *testing.T) {
 		} else if string(actualValue.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
 		}
+	}
+}
+
+func testPutTTLAndGet(t *testing.T) {
+	key1, key2, value := "ValidKey", "ExpiredKey", "SomeValue"
+
+	if err := dkvCli.PutTTL([]byte(key1), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key1, value, err)
+	}
+
+	if err := dkvCli.PutTTL([]byte(key2), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key2, value, err)
+	}
+
+	if actualValue, err := dkvCli.Get(rc, []byte(key1)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s, Error: %v", key1, err)
+	} else if string(actualValue.Value) != value {
+		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key1, value, actualValue)
+	}
+
+	if val, _ := dkvCli.Get(rc, []byte(key2)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key2, val)
 	}
 }
 
@@ -184,6 +207,7 @@ func testIteration(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "IterK", "IterV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 	numNewKeys, newKeyPrefix, newValPrefix := 10, "NewIterK", "NewIterV"
+	count := 0
 
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
@@ -192,6 +216,7 @@ func testIteration(t *testing.T) {
 		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
+			count++
 			switch {
 			case strings.HasPrefix(k, keyPrefix):
 				suffix := k[len(keyPrefix):]
@@ -203,6 +228,10 @@ func testIteration(t *testing.T) {
 				t.Errorf("Did not expect the key %s in this iteration.", k)
 			}
 		}
+	}
+
+	if count == 0 {
+		t.Error("Iterate didn't return any rows")
 	}
 }
 
@@ -249,10 +278,10 @@ func testGetChanges(t *testing.T) {
 				chng := chngs[numChngs-i]
 				id := numKeys - i + 1
 				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, id), fmt.Sprintf("%s_%d", valPrefix, id)
-				if chng.NumberOfTrxns != 1 {
-					t.Errorf("Expected one transaction, but found %d transactions.", chng.NumberOfTrxns)
+				if chng.NumberOfTrxns != 2 {
+					t.Errorf("Expected two transaction, but found %d transactions.", chng.NumberOfTrxns)
 				} else {
-					trxn := chng.Trxns[0]
+					trxn := chng.Trxns[1]
 					if trxn.Type != serverpb.TrxnRecord_Put {
 						t.Errorf("Expected PUT transaction but found %s transaction", trxn.Type.String())
 					} else if string(trxn.Key) != expKey {

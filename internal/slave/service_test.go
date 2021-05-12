@@ -144,7 +144,12 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	defer slaveGrpcSrvr.GracefulStop()
 
 	numKeys, keyPrefix, valPrefix := 10, "K", "V"
-	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
+
+	numKeys, ttlKeyPrefix, ttlValPrefix, ttlExpiredKeyPrefix := 10, "TTL-K", "TTL-V", "EXPIRED-TTL-K"
+	putKeys(t, masterCli, numKeys, ttlKeyPrefix, ttlValPrefix, uint64(time.Now().Add(2*time.Hour).Unix()))
+	putKeys(t, masterCli, numKeys, ttlExpiredKeyPrefix, ttlValPrefix, uint64(time.Now().Add(-2*time.Second).Unix()))
+
 	testDelete(t, masterCli, keyPrefix)
 
 	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
@@ -153,6 +158,15 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+
+	//TTL
+	getKeys(t, masterCli, numKeys, ttlKeyPrefix, ttlValPrefix)
+	getKeys(t, slaveCli, numKeys, ttlKeyPrefix, ttlValPrefix)
+
+	//TTL Expired
+	getInvalidKeys(t, masterCli, numKeys, ttlExpiredKeyPrefix)
+	getInvalidKeys(t, slaveCli, numKeys, ttlExpiredKeyPrefix)
+
 	getNonExistentKey(t, slaveCli, keyPrefix)
 
 	backupFolder := fmt.Sprintf("%s/backup", masterDBFolder)
@@ -161,7 +175,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	}
 
 	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
-	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
 	testDelete(t, masterCli, keyPrefix)
 
 	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
@@ -183,10 +197,10 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	}
 }
 
-func putKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPrefix string) {
+func putKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPrefix string, ttl uint64) {
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
-		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+		if err := dkvCli.PutTTL([]byte(key), []byte(value), ttl); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -200,6 +214,18 @@ func getKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPre
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(res.Value) != value {
 			t.Errorf("GET value mismatch for Key: %s, Expected: %s, Actual: %s", key, value, res.Value)
+		}
+	}
+}
+
+func getInvalidKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix string) {
+	rc := serverpb.ReadConsistency_SEQUENTIAL
+	for i := 1; i <= numKeys; i++ {
+		key := fmt.Sprintf("%s%d", keyPrefix, i)
+		if res, err := dkvCli.Get(rc, []byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if res != nil && string(res.Value) != "" {
+			t.Errorf("Expected no value for key %s. But got %s", key, string(res.Value))
 		}
 	}
 }

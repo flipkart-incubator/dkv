@@ -177,6 +177,21 @@ func (bdb *badgerDB) Close() error {
 	return nil
 }
 
+func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
+	defer bdb.opts.statsCli.Timing("badger.putTTL.latency.ms", time.Now())
+	err := bdb.db.Update(func(txn *badger.Txn) error {
+		kv := badger.NewEntry(key, value)
+		if expireTS > 0 {
+			kv.ExpiresAt = expireTS
+		}
+		return txn.SetEntry(kv)
+	})
+	if err != nil {
+		bdb.opts.statsCli.Incr("badger.putTTL.errors", 1)
+	}
+	return err
+}
+
 func (bdb *badgerDB) Put(key []byte, value []byte) error {
 	defer bdb.opts.statsCli.Timing("badger.put.latency.ms", time.Now())
 	err := bdb.db.Update(func(txn *badger.Txn) error {
@@ -458,7 +473,11 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 		for _, trxnRec := range chng.Trxns {
 			switch trxnRec.Type {
 			case serverpb.TrxnRecord_Put:
-				if lastErr = chngTrxn.Set(trxnRec.Key, trxnRec.Value); lastErr != nil {
+				entry := badger.NewEntry(trxnRec.Key, trxnRec.Value)
+				if trxnRec.ExpireTS > 0 {
+					entry.ExpiresAt = trxnRec.ExpireTS
+				}
+				if lastErr = chngTrxn.SetEntry(entry); lastErr != nil {
 					break
 				}
 			case serverpb.TrxnRecord_Delete:

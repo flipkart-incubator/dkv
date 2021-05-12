@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"sync"
-	"testing"
-
+	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"
+	"sync"
+	"testing"
 )
 
 func TestDKVReplStoreSave(t *testing.T) {
@@ -132,12 +132,29 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 }
 
 type memStore struct {
-	store map[string][]byte
+	store map[string]memStoreObject
 	mu    sync.Mutex
 }
 
+type memStoreObject struct {
+	data     []byte
+	expiryTS uint64
+}
+
 func newMemStore() *memStore {
-	return &memStore{store: make(map[string][]byte), mu: sync.Mutex{}}
+	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
+}
+
+func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS uint64) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	storeKey := string(key)
+	if _, present := ms.store[storeKey]; present {
+		return errors.New("Given key already exists")
+	}
+	ms.store[storeKey] = memStoreObject{value, expiryTS}
+	return nil
 }
 
 func (ms *memStore) Put(key []byte, value []byte) error {
@@ -148,7 +165,7 @@ func (ms *memStore) Put(key []byte, value []byte) error {
 	if _, present := ms.store[storeKey]; present {
 		return errors.New("Given key already exists")
 	}
-	ms.store[storeKey] = value
+	ms.store[storeKey] = memStoreObject{value, 0}
 	return nil
 }
 
@@ -166,7 +183,11 @@ func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	for i, key := range keys {
 		storeKey := string(key)
 		if val, present := ms.store[storeKey]; present {
-			rss[i] = &serverpb.KVPair{Key: key, Value: val}
+			var v []byte
+			if val.expiryTS == 0 || val.expiryTS > hlc.UnixNow() {
+				v = val.data
+			}
+			rss[i] = &serverpb.KVPair{Key: key, Value: v}
 		} else {
 			return nil, errors.New("Given key not found")
 		}
@@ -184,8 +205,8 @@ func (ms *memStore) CompareAndSet(key, expect, update []byte) (bool, error) {
 		return false, nil
 	}
 
-	if !present && expect == nil || bytes.Equal(expect, exist) {
-		ms.store[storeKey] = update
+	if !present && expect == nil || bytes.Equal(expect, exist.data) {
+		ms.store[storeKey] = memStoreObject{update, 0}
 	}
 	return true, nil
 }
@@ -200,7 +221,7 @@ func (ms *memStore) GetSnapshot() ([]byte, error) {
 }
 
 func (ms *memStore) PutSnapshot(snap []byte) error {
-	data := make(map[string][]byte)
+	data := make(map[string]memStoreObject)
 	err := gob.NewDecoder(bytes.NewBuffer(snap)).Decode(data)
 	ms.store = data
 	return err

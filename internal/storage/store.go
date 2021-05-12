@@ -16,6 +16,9 @@ type KVStore interface {
 	io.Closer
 	// Put stores the association between the given key and value
 	Put(key []byte, value []byte) error
+	// PutTTL stores the association between the given key and value
+	// and sets the expireTS of the key to the provided epoch in seconds
+	PutTTL(key []byte, value []byte, expireTS uint64) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.

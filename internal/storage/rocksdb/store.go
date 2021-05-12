@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
+	"github.com/shamaton/msgpack"
 	"io/ioutil"
 	"os"
 	"path"
@@ -30,6 +33,8 @@ type DB interface {
 
 type rocksDB struct {
 	db          *gorocksdb.DB
+	normalCF    *gorocksdb.ColumnFamilyHandle
+	ttlCF       *gorocksdb.ColumnFamilyHandle
 	optimTrxnDB *gorocksdb.OptimisticTransactionDB
 	opts        *rocksDBOpts
 
@@ -47,6 +52,7 @@ type rocksDBOpts struct {
 	folderName     string
 	lgr            *zap.Logger
 	statsCli       stats.Client
+	cfNames        []string
 }
 
 // DBOption is used to configure the RocksDB
@@ -128,15 +134,50 @@ func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 	return openStore(opts)
 }
 
+type ttlCompactionFilter struct {
+	lgr *zap.Logger
+}
+
+// Name returns the CompactionFilter name
+func (m *ttlCompactionFilter) Name() string {
+	return "dkv.ttlFilter"
+}
+
+// Filter applies the logic for the Compaction process.
+// this returns remove as true if the TTL of the key has expired.
+func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, newVal []byte) {
+	ttlRow, err := parseTTLMsgPackData(val)
+	if err != nil {
+		m.lgr.Warn("ttlCompactionFilter::Filter Failed to parse msgpack data", zap.String("Key", string(key)))
+		return false, nil
+	}
+	if hlc.InThePast(ttlRow.ExpiryTS) {
+		return true, val
+	}
+	return false, nil
+}
+
 func newOptions(dbFolder string) *rocksDBOpts {
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
+	opts.SetCreateIfMissingColumnFamilies(true)
 	opts.SetBlockBasedTableFactory(bbto)
 	rstOpts := gorocksdb.NewRestoreOptions()
 	wrOpts := gorocksdb.NewDefaultWriteOptions()
 	rdOpts := gorocksdb.NewDefaultReadOptions()
-	return &rocksDBOpts{folderName: dbFolder, blockTableOpts: bbto, rocksDBOpts: opts, restoreOpts: rstOpts, lgr: zap.NewNop(), readOpts: rdOpts, writeOpts: wrOpts, statsCli: stats.NewNoOpClient()}
+	cfNames := []string{"default", "ttl"}
+	return &rocksDBOpts{
+		folderName:     dbFolder,
+		blockTableOpts: bbto,
+		rocksDBOpts:    opts,
+		restoreOpts:    rstOpts,
+		lgr:            zap.NewNop(),
+		readOpts:       rdOpts,
+		writeOpts:      wrOpts,
+		statsCli:       stats.NewNoOpClient(),
+		cfNames:        cfNames,
+	}
 }
 
 func (rdbOpts *rocksDBOpts) destroy() {
@@ -148,11 +189,48 @@ func (rdbOpts *rocksDBOpts) destroy() {
 }
 
 func openStore(opts *rocksDBOpts) (*rocksDB, error) {
-	optimTrxnDB, err := gorocksdb.OpenOptimisticTransactionDb(opts.rocksDBOpts, opts.folderName)
+	normalOpts := opts.rocksDBOpts
+	ttlOpts, err := gorocksdb.GetOptionsFromString(normalOpts, "")
 	if err != nil {
 		return nil, err
 	}
-	return &rocksDB{optimTrxnDB.GetBaseDb(), optimTrxnDB, opts, 0}, nil
+	ttlOpts.SetCompactionFilter(&ttlCompactionFilter{opts.lgr})
+	optimTrxnDB, cfh, err := gorocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts,
+		opts.folderName, opts.cfNames, []*gorocksdb.Options{normalOpts, ttlOpts})
+	if err != nil {
+		return nil, err
+	}
+
+	rocksdb := rocksDB{
+		db:             optimTrxnDB.GetBaseDb(),
+		normalCF:       cfh[0],
+		ttlCF:          cfh[1],
+		optimTrxnDB:    optimTrxnDB,
+		opts:           opts,
+		globalMutation: 0,
+	}
+	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
+	//go rocksdb.Compaction()
+	return &rocksdb, nil
+}
+
+type ttlDataFormat struct {
+	ExpiryTS uint64 `msgpack:"t"`
+	Data     []byte `msgpack:"d"`
+}
+
+// Compaction runs the compaction routine
+func (rdb *rocksDB) Compaction() error {
+	tick := time.Tick(15 * time.Minute)
+	for {
+		select {
+		case <-tick:
+			// trigger a compaction
+			rdb.opts.lgr.Info("Triggering RocksDB Compaction")
+			rdb.db.CompactRangeCF(rdb.ttlCF, gorocksdb.Range{nil, nil})
+		}
+	}
+	return nil
 }
 
 func (rdb *rocksDB) Close() error {
@@ -161,9 +239,36 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
+func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
+	if expireTS > 0 {
+		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
+		dF := ttlDataFormat{
+			ExpiryTS: expireTS,
+			Data:     value,
+		}
+		msgPack, err := msgpack.Marshal(dF)
+		if err != nil {
+			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
+			return err
+		}
+		wb := gorocksdb.NewWriteBatch()
+		wb.Delete(key)
+		wb.PutCF(rdb.ttlCF, key, msgPack)
+		err = rdb.db.Write(rdb.opts.writeOpts, wb)
+		if err != nil {
+			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
+		}
+		return err
+	}
+	return rdb.Put(key, value)
+}
+
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
-	err := rdb.db.Put(rdb.opts.writeOpts, key, value)
+	wb := gorocksdb.NewWriteBatch()
+	wb.DeleteCF(rdb.ttlCF, key)
+	wb.Put(key, value)
+	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
 	}
@@ -172,7 +277,10 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
-	err := rdb.db.Delete(rdb.opts.writeOpts, key)
+	wb := gorocksdb.NewWriteBatch()
+	wb.DeleteCF(rdb.ttlCF, key)
+	wb.Delete(key)
+	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
 	}
@@ -383,7 +491,7 @@ func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*ser
 	for i < maxChanges && chngIter.Valid() {
 		wb, chngNum := chngIter.GetBatch()
 		defer wb.Destroy()
-		chngs[i] = toChangeRecord(wb, chngNum)
+		chngs[i] = rdb.toChangeRecord(wb, chngNum)
 		i++
 		chngIter.Next()
 	}
@@ -412,23 +520,36 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 type iter struct {
 	iterOpts storage.IterationOptions
 	rdbIter  *gorocksdb.Iterator
+	ttlCF    bool
 }
 
-func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
+func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions, cf *gorocksdb.ColumnFamilyHandle) *iter {
 	readOpts := rdb.opts.readOpts
-	it := rdb.db.NewIterator(readOpts)
-
-	if sk, prsnt := iterOpts.StartKey(); prsnt {
+	it := rdb.db.NewIteratorCF(readOpts, cf)
+	if sk, present := iterOpts.StartKey(); present {
 		it.Seek(sk)
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, it}
+	return &iter{iterOpts, it, cf == rdb.ttlCF}
+}
+
+func (rdbIter *iter) verifyTTLValidity() bool {
+	if rdbIter.rdbIter.Valid() {
+		val := toByteArray(rdbIter.rdbIter.Value())
+		if rdbIter.ttlCF {
+			ttlRow, _ := parseTTLMsgPackData(val)
+			if hlc.InThePast(ttlRow.ExpiryTS) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (rdbIter *iter) HasNext() bool {
 	if kp, prsnt := rdbIter.iterOpts.KeyPrefix(); prsnt {
-		if rdbIter.rdbIter.ValidForPrefix(kp) {
+		if rdbIter.rdbIter.ValidForPrefix(kp) && rdbIter.verifyTTLValidity() {
 			return true
 		}
 		if rdbIter.rdbIter.Valid() {
@@ -444,6 +565,13 @@ func (rdbIter *iter) Next() ([]byte, []byte) {
 	defer rdbIter.rdbIter.Next()
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
+	var ttlRow *ttlDataFormat
+	if rdbIter.ttlCF { //base iterator doesn't have ttl
+		ttlRow, _ = parseTTLMsgPackData(val)
+	}
+	if ttlRow != nil && ttlRow.ExpiryTS > 0 {
+		val = ttlRow.Data
+	}
 	return key, val
 }
 
@@ -457,10 +585,12 @@ func (rdbIter *iter) Close() error {
 }
 
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	return rdb.newIter(iterOpts)
+	baseIter := rdb.newIterCF(iterOpts, rdb.normalCF)
+	ttlIter := rdb.newIterCF(iterOpts, rdb.ttlCF)
+	return iterators.Concat(baseIter, ttlIter)
 }
 
-func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
+func (rdb *rocksDB) toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
 	chngRec := &serverpb.ChangeRecord{}
 	chngRec.ChangeNumber = changeNum
 	dataBts := writeBatch.Data()
@@ -471,7 +601,7 @@ func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverp
 	var trxns []*serverpb.TrxnRecord
 	for wbIter.Next() {
 		wbr := wbIter.Record()
-		trxns = append(trxns, toTrxnRecord(wbr))
+		trxns = append(trxns, rdb.toTrxnRecord(wbr))
 	}
 	chngRec.Trxns = trxns
 	return chngRec
@@ -482,17 +612,30 @@ func (rdb *rocksDB) openBackupEngine(folder string) (*gorocksdb.BackupEngine, er
 	return gorocksdb.OpenBackupEngine(opts, folder)
 }
 
-func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
+func (rdb *rocksDB) toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	trxnRec := &serverpb.TrxnRecord{}
 	switch wbr.Type {
+	case gorocksdb.WriteBatchCFDeletionRecord:
+		trxnRec.Type = serverpb.TrxnRecord_Delete
 	case gorocksdb.WriteBatchDeletionRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Delete
 	case gorocksdb.WriteBatchValueRecord:
+		trxnRec.Type = serverpb.TrxnRecord_Put
+	case gorocksdb.WriteBatchCFValueRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Put
 	default:
 		trxnRec.Type = serverpb.TrxnRecord_Unknown
 	}
 	trxnRec.Key, trxnRec.Value = wbr.Key, wbr.Value
+	if wbr.CF == 1 { //second CF
+		if ttlDf, err := parseTTLMsgPackData(wbr.Value); err != nil {
+			rdb.opts.lgr.Warn("ToTrxnRecord parseTTLMsgPackData Failed",
+				zap.String("Key", string(wbr.Key)), zap.Int("CF", wbr.CF))
+		} else if ttlDf != nil {
+			trxnRec.Value = ttlDf.Data
+			trxnRec.ExpireTS = ttlDf.ExpiryTS
+		}
+	}
 	return trxnRec
 }
 
@@ -508,34 +651,84 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 	return res
 }
 
+func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
+	var row ttlDataFormat
+	var err error
+	if len(valueWithTTL) > 0 {
+		err = msgpack.Unmarshal(valueWithTTL, &row)
+	}
+	return &row, err
+}
+
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
-	value, err := rdb.db.Get(ro, key)
+	values, err := rdb.db.MultiGetCFMultiCF(ro, []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
 		return nil, err
 	}
-	defer value.Free()
-	val := toByteArray(value)
-	if val != nil && len(val) > 0 {
-		return []*serverpb.KVPair{&serverpb.KVPair{Key: key, Value: val}}, nil
+	value1, value2 := values[0], values[1]
+	kv := rdb.extractResult(value1, value2, key)
+	value1.Free()
+	value2.Free()
+	if kv != nil {
+		return []*serverpb.KVPair{kv}, nil
 	}
 	return nil, nil
 }
 
+func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *serverpb.KVPair {
+	if value1.Size() > 0 {
+		//non ttl use-case
+		val := toByteArray(value1)
+		return &serverpb.KVPair{Key: key, Value: val}
+	}
+
+	if value2.Size() > 0 {
+		//ttl use-case, check ttl
+		val := toByteArray(value2)
+		ttlRow, err := parseTTLMsgPackData(val)
+		if err != nil {
+			rdb.opts.lgr.Warn("RocksDB::extractResult Failed to parse msgpack data",
+				zap.String("Key", string(key)), zap.Error(err))
+			rdb.opts.statsCli.Incr("rocksdb.get.parse.errors", 1)
+			return nil
+		}
+		if hlc.InThePast(ttlRow.ExpiryTS) {
+			return nil
+		} else if ttlRow.ExpiryTS > 0 {
+			val = ttlRow.Data
+		}
+		return &serverpb.KVPair{Key: key, Value: val}
+	}
+
+	return nil
+}
+
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
-	values, err := rdb.db.MultiGet(ro, keys...)
+
+	kl := len(keys)
+	reqCFs := make([]*gorocksdb.ColumnFamilyHandle, kl<<1)
+	for i := 0; i < kl; i++ {
+		reqCFs[i] = rdb.normalCF
+		reqCFs[i+kl] = rdb.ttlCF
+	}
+
+	values, err := rdb.db.MultiGetCFMultiCF(ro, reqCFs, append(keys, keys...))
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
 		return nil, err
 	}
+
 	var results []*serverpb.KVPair
-	for i, value := range values {
-		if value != nil {
-			key, val := keys[i], toByteArray(value)
-			results = append(results, &serverpb.KVPair{Key: key, Value: val})
-			value.Free()
+	for i := 0; i < kl; i++ {
+		value1, value2 := values[i], values[i+kl]
+		kv := rdb.extractResult(value1, value2, keys[i])
+		value1.Free()
+		value2.Free()
+		if kv != nil {
+			results = append(results, kv)
 		}
 	}
 	return results, nil
