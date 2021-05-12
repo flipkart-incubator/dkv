@@ -321,7 +321,7 @@ func TestSaveChanges(t *testing.T) {
 		wb.Put([]byte(ks), []byte(vs))
 		delKs := fmt.Sprintf("%s_%d", putKeyPrefix, i+1)
 		wb.Delete([]byte(delKs))
-		chngs[i] = toChangeRecord(wb, chngNum)
+		chngs[i] = store.toChangeRecord(wb, chngNum)
 		chngNum++
 	}
 	expChngNum := chngNum - 1
@@ -858,7 +858,7 @@ func TestLoadChangesForOptimisticTransactions(t *testing.T) {
 	for chngIter.Valid() {
 		wb, chngNum := chngIter.GetBatch()
 		defer wb.Destroy()
-		chngs = append(chngs, toChangeRecord(wb, chngNum))
+		chngs = append(chngs, store.toChangeRecord(wb, chngNum))
 		chngIter.Next()
 	}
 

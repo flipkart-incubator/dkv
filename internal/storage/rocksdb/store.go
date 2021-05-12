@@ -491,7 +491,7 @@ func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*ser
 	for i < maxChanges && chngIter.Valid() {
 		wb, chngNum := chngIter.GetBatch()
 		defer wb.Destroy()
-		chngs[i] = toChangeRecord(wb, chngNum)
+		chngs[i] = rdb.toChangeRecord(wb, chngNum)
 		i++
 		chngIter.Next()
 	}
@@ -601,7 +601,7 @@ func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator 
 	return utils.Concat(baseIter, ttlIter)
 }
 
-func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
+func (rdb *rocksDB) toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
 	chngRec := &serverpb.ChangeRecord{}
 	chngRec.ChangeNumber = changeNum
 	dataBts := writeBatch.Data()
@@ -612,7 +612,7 @@ func toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverp
 	var trxns []*serverpb.TrxnRecord
 	for wbIter.Next() {
 		wbr := wbIter.Record()
-		trxns = append(trxns, toTrxnRecord(wbr))
+		trxns = append(trxns, rdb.toTrxnRecord(wbr))
 	}
 	chngRec.Trxns = trxns
 	return chngRec
@@ -623,7 +623,7 @@ func (rdb *rocksDB) openBackupEngine(folder string) (*gorocksdb.BackupEngine, er
 	return gorocksdb.OpenBackupEngine(opts, folder)
 }
 
-func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
+func (rdb *rocksDB) toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	trxnRec := &serverpb.TrxnRecord{}
 	switch wbr.Type {
 	case gorocksdb.WriteBatchCFDeletionRecord:
@@ -640,8 +640,8 @@ func toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	trxnRec.Key, trxnRec.Value = wbr.Key, wbr.Value
 	if wbr.CF == 1 { //second CF
 		if ttlDf, err := parseTTLMsgPackData(wbr.Value); err != nil {
-			//log error?
-			//fmt.Println("toTrxnRecord parseTTLMsgPackData Failed ", string(wbr.Key), string(wbr.Value))
+			rdb.opts.lgr.Warn("ToTrxnRecord parseTTLMsgPackData Failed",
+				zap.String("Key", string(wbr.Key)), zap.Int("CF", wbr.CF))
 		} else if ttlDf != nil {
 			trxnRec.Value = ttlDf.Data
 			trxnRec.ExpireTS = ttlDf.ExpiryTS
