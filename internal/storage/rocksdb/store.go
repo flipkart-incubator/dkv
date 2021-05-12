@@ -531,11 +531,7 @@ func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions, cf *gorocksdb.C
 	} else {
 		it.SeekToFirst()
 	}
-	var ttlCf bool
-	if ttlCf = false; cf == rdb.ttlCF {
-		ttlCf = true
-	}
-	return &iter{iterOpts, it, ttlCf}
+	return &iter{iterOpts, it, cf == rdb.ttlCF}
 }
 
 func (rdbIter *iter) verifyTTLValidity() bool {
@@ -655,11 +651,11 @@ func toByteArray(value *gorocksdb.Slice) []byte {
 	return res
 }
 
-func parseTTLMsgPackData(valueWithTtl []byte) (*ttlDataFormat, error) {
+func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 	var row ttlDataFormat
 	var err error
-	if len(valueWithTtl) > 0 {
-		err = msgpack.Unmarshal(valueWithTtl, &row)
+	if len(valueWithTTL) > 0 {
+		err = msgpack.Unmarshal(valueWithTTL, &row)
 	}
 	return &row, err
 }
