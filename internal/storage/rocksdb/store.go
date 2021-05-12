@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/utils"
+	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
 	"github.com/shamaton/msgpack"
 	"io/ioutil"
 	"os"
@@ -252,7 +252,7 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 			return err
 		}
 		wb := gorocksdb.NewWriteBatch()
-		wb.DeleteCF(rdb.normalCF, key)
+		wb.Delete(key)
 		wb.PutCF(rdb.ttlCF, key, msgPack)
 		err = rdb.db.Write(rdb.opts.writeOpts, wb)
 		if err != nil {
@@ -523,26 +523,19 @@ type iter struct {
 	ttlCF    bool
 }
 
-func (rdb *rocksDB) newIter(iterOpts storage.IterationOptions) *iter {
+func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions, cf *gorocksdb.ColumnFamilyHandle) *iter {
 	readOpts := rdb.opts.readOpts
-	it := rdb.db.NewIterator(readOpts)
+	it := rdb.db.NewIteratorCF(readOpts, cf)
 	if sk, present := iterOpts.StartKey(); present {
 		it.Seek(sk)
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, it, false}
-}
-
-func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions) *iter {
-	readOpts := rdb.opts.readOpts
-	itTTL := rdb.db.NewIteratorCF(readOpts, rdb.ttlCF)
-	if sk, present := iterOpts.StartKey(); present {
-		itTTL.Seek(sk)
-	} else {
-		itTTL.SeekToFirst()
+	var ttlCf bool
+	if ttlCf = false; cf == rdb.ttlCF {
+		ttlCf = true
 	}
-	return &iter{iterOpts, itTTL, true}
+	return &iter{iterOpts, it, ttlCf}
 }
 
 func (rdbIter *iter) verifyTTLValidity() bool {
@@ -596,9 +589,9 @@ func (rdbIter *iter) Close() error {
 }
 
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	baseIter := rdb.newIter(iterOpts)
-	ttlIter := rdb.newIterCF(iterOpts)
-	return utils.Concat(baseIter, ttlIter)
+	baseIter := rdb.newIterCF(iterOpts, rdb.normalCF)
+	ttlIter := rdb.newIterCF(iterOpts, rdb.ttlCF)
+	return iterators.Concat(baseIter, ttlIter)
 }
 
 func (rdb *rocksDB) toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
@@ -700,6 +693,9 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 		val := toByteArray(value2)
 		ttlRow, err := parseTTLMsgPackData(val)
 		if err != nil {
+			rdb.opts.lgr.Warn("RocksDB::extractResult Failed to parse msgpack data",
+				zap.String("Key", string(key)), zap.Error(err))
+			rdb.opts.statsCli.Incr("rocksdb.get.parse.errors", 1)
 			return nil
 		}
 		if hlc.InThePast(ttlRow.ExpiryTS) {
