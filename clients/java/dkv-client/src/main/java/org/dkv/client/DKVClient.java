@@ -42,6 +42,46 @@ public interface DKVClient extends Closeable {
     void put(byte[] key, byte[] value);
 
     /**
+     * Performs the compare and set operation on the specified key. The
+     * given expected value is compared with the existing value and if
+     * there is a match, that value is overwritten with the given value.
+     *
+     * @param key key used for this compare and set operation
+     * @param expect value to be expected as the existing value
+     * @param update new value to be set if the comparison succeeds
+     * @return true only if the given value is set against the key
+     */
+    boolean compareAndSet(byte[] key, byte[] expect, byte[] update);
+
+    /**
+     * Atomically increments the current value associated with the given
+     * key and returns that value.
+     *
+     * @param key key used for this operation
+     * @return the value after the increment operation
+     */
+    long incrementAndGet(byte[] key);
+
+    /**
+     * Atomically decrements the current value associated with the given
+     * key and returns that value.
+     *
+     * @param key key used for this operation
+     * @return the value after the decrement operation
+     */
+    long decrementAndGet(byte[] key);
+
+    /**
+     * Atomically adds the given delta to the current value associated
+     * with the given key and returns that value.
+     *
+     * @param key key used for this operation
+     * @param delta the value used for addition
+     * @return the value after the addition operation
+     */
+    long addAndGet(byte[] key, long delta);
+
+    /**
      * Retrieves the value associated with the given key from the DKV
      * database. How recent the value needs to be can be controlled
      * through the <tt>consistency</tt> parameter.

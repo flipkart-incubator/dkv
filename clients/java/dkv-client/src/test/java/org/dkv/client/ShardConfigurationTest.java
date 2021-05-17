@@ -6,8 +6,6 @@ import org.junit.Test;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
-import static com.google.common.collect.Iterables.getLast;
-import static com.google.common.collect.Iterables.size;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -19,22 +17,24 @@ public class ShardConfigurationTest {
         assertNotNull(configStream);
         Gson gson = new Gson();
         ShardConfiguration shardConf = gson.fromJson(new InputStreamReader(configStream), ShardConfiguration.class);
-        assertEquals(3, shardConf.getNumShards());
+        assertEquals(1, shardConf.getNumShards());
         for (int i = 0; i < shardConf.getNumShards(); i++) {
             DKVShard dkvShard = shardConf.getShardAtIndex(i);
             assertEquals("shard"+i, dkvShard.getName());
 
-            DKVNodeSet readNodes = dkvShard.getNodesByType(DKVNodeType.MASTER);
-            assertEquals(1, size(readNodes.getNodes()));
-            DKVNode dkvNode = getLast(readNodes.getNodes());
+            DKVNodeSet master = dkvShard.getNodesByType(DKVNodeType.MASTER);
+            assertEquals(1, master.getNumNodes());
+            DKVNode dkvNode = master.getNodes()[0];
             assertEquals("127.0.0.1", dkvNode.getHost());
-            assertEquals(8081+i, dkvNode.getPort());
+            assertEquals(8080, dkvNode.getPort());
 
-            DKVNodeSet writeNodes = dkvShard.getNodesByType(DKVNodeType.SLAVE);
-            assertEquals(1, size(writeNodes.getNodes()));
-            dkvNode = getLast(writeNodes.getNodes());
-            assertEquals("127.0.0.1", dkvNode.getHost());
-            assertEquals(8081+i, dkvNode.getPort());
+            DKVNodeSet slaves = dkvShard.getNodesByType(DKVNodeType.SLAVE);
+            assertEquals(4, slaves.getNumNodes());
+
+            for (int j = 0; j < slaves.getNumNodes(); j++) {
+                assertEquals("127.0.0.1", slaves.getNodes()[j].getHost());
+                assertEquals(8091 + j, slaves.getNodes()[j].getPort());
+            }
         }
     }
 }

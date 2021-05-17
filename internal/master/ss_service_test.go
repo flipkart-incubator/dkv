@@ -1,10 +1,12 @@
 package master
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +47,10 @@ func TestStandaloneService(t *testing.T) {
 		defer dkvSvc.Close()
 		defer grpcSrvr.Stop()
 		t.Run("testPutAndGet", testPutAndGet)
+		t.Run("testPutTTLAndGet", testPutTTLAndGet)
+		t.Run("testAtomicKeyCreation", testAtomicKeyCreation)
+		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
+		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
@@ -64,6 +70,112 @@ func testPutAndGet(t *testing.T) {
 		} else if string(actualValue.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, actualValue)
 		}
+	}
+}
+
+func testPutTTLAndGet(t *testing.T) {
+	key1, key2, value := "ValidKey", "ExpiredKey", "SomeValue"
+
+	if err := dkvCli.PutTTL([]byte(key1), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key1, value, err)
+	}
+
+	if err := dkvCli.PutTTL([]byte(key2), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key2, value, err)
+	}
+
+	if actualValue, err := dkvCli.Get(rc, []byte(key1)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s, Error: %v", key1, err)
+	} else if string(actualValue.Value) != value {
+		t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key1, value, actualValue)
+	}
+
+	if val, _ := dkvCli.Get(rc, []byte(key2)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key2, val)
+	}
+}
+
+func testAtomicKeyCreation(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		freqs          sync.Map
+		numThrs        = 10
+		casKey, casVal = []byte("casKey"), []byte{0}
+	)
+
+	// verify key creation under contention
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			res, err := dkvCli.CompareAndSet(casKey, nil, casVal)
+			freqs.Store(id, res && err == nil)
+		}(i)
+	}
+	wg.Wait()
+
+	expNumSucc := 1
+	expNumFail := numThrs - expNumSucc
+	actNumSucc, actNumFail := 0, 0
+	freqs.Range(func(_, val interface{}) bool {
+		if val.(bool) {
+			actNumSucc++
+		} else {
+			actNumFail++
+		}
+		return true
+	})
+
+	if expNumSucc != actNumSucc {
+		t.Errorf("Mismatch in number of successes. Expected: %d, Actual: %d", expNumSucc, actNumSucc)
+	}
+
+	if expNumFail != actNumFail {
+		t.Errorf("Mismatch in number of failures. Expected: %d, Actual: %d", expNumFail, actNumFail)
+	}
+}
+
+func testAtomicIncrDecr(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("ctrKey"), []byte{0}
+	)
+	if err := dkvCli.Put(casKey, casVal); err != nil {
+		t.Fatalf("Unable to Put key, %s. Error: %v", casKey, err)
+	}
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, _ := dkvCli.Get(rc, casKey)
+				expect := exist.Value
+				update := []byte{expect[0] + delta}
+				res, err := dkvCli.CompareAndSet(casKey, expect, update)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := dkvCli.Get(rc, casKey)
+	actVal := actual.Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
 	}
 }
 
@@ -95,6 +207,7 @@ func testIteration(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "IterK", "IterV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 	numNewKeys, newKeyPrefix, newValPrefix := 10, "NewIterK", "NewIterV"
+	count := 0
 
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
@@ -103,6 +216,7 @@ func testIteration(t *testing.T) {
 		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
+			count++
 			switch {
 			case strings.HasPrefix(k, keyPrefix):
 				suffix := k[len(keyPrefix):]
@@ -115,6 +229,10 @@ func testIteration(t *testing.T) {
 			}
 		}
 	}
+
+	if count == 0 {
+		t.Error("Iterate didn't return any rows")
+	}
 }
 
 func testMissingGet(t *testing.T) {
@@ -124,11 +242,27 @@ func testMissingGet(t *testing.T) {
 	}
 }
 
+func testDelete(t *testing.T) {
+	key, value := "DeletedKey", "SomeValue"
+
+	if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+	}
+
+	if err := dkvCli.Delete([]byte(key)); err != nil {
+		t.Fatalf("Unable to DELETE. Key: %s, Error: %v", key, err)
+	}
+
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
 func testGetChanges(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "GCK", "GCV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 
-	if chngsRes, err := dkvCli.GetChanges(0, 100); err != nil {
+	if chngsRes, err := dkvCli.GetChanges(0, 1000); err != nil {
 		t.Fatalf("Unable to get changes. Error: %v", err)
 	} else {
 		if chngsRes.MasterChangeNumber == 0 {
@@ -140,13 +274,14 @@ func testGetChanges(t *testing.T) {
 			t.Errorf("Expected at least %d changes. But got only %d changes.", numKeys, numChngs)
 		} else {
 			// Loop from the back since changes sent in chronological order.
-			for i, j := numKeys, numChngs; i >= 1; i, j = i-1, j-1 {
-				chng := chngs[j-1]
-				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-				if chng.NumberOfTrxns != 1 {
-					t.Errorf("Expected one transaction, but found %d transactions.", chng.NumberOfTrxns)
+			for i := 1; i <= numKeys; i++ {
+				chng := chngs[numChngs-i]
+				id := numKeys - i + 1
+				expKey, expVal := fmt.Sprintf("%s_%d", keyPrefix, id), fmt.Sprintf("%s_%d", valPrefix, id)
+				if chng.NumberOfTrxns != 2 {
+					t.Errorf("Expected two transaction, but found %d transactions.", chng.NumberOfTrxns)
 				} else {
-					trxn := chng.Trxns[0]
+					trxn := chng.Trxns[1]
 					if trxn.Type != serverpb.TrxnRecord_Put {
 						t.Errorf("Expected PUT transaction but found %s transaction", trxn.Type.String())
 					} else if string(trxn.Key) != expKey {
@@ -185,13 +320,14 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
+		rocksDb, err := rocksdb.OpenDB(dbFolder,
+			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}
 		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		bdgrDb, err := badger.OpenDB(dbFolder)
+		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
 		if err != nil {
 			panic(err)
 		}

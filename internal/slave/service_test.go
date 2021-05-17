@@ -71,8 +71,14 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli)
 	wg.Wait()
 
+	// stop the slave poller so as to avoid race with this poller
+	// and the explicit call to applyChangesFromMaster later
+	slaveSvc.(*slaveService).replTckr.Stop()
+	slaveSvc.(*slaveService).replStop <- struct{}{}
+	sleepInSecs(2)
 	// Reduce the max number of changes for testing
-	slaveSvc.(*dkvSlaveService).maxNumChngs = 100
+	//slaveSvc.(*slaveService).maxNumChngs = 100
+
 	slaveCli = newDKVClient(slaveSvcPort)
 	defer slaveCli.Close()
 	defer slaveSvc.Close()
@@ -98,8 +104,10 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 		}
 	}
 
-	// wait for atleast couple of replPollInterval to ensure slave replication
-	sleepInSecs(10)
+	// we try to sync with master 10 times before giving up
+	for i := 1; i <= 10; i++ {
+		slaveSvc.(*slaveService).applyChangesFromMaster(100)
+	}
 
 	for i := 0; i < numKeys; i++ {
 		getRes, _ := slaveCli.Get(0, keys[i])
@@ -124,17 +132,42 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli)
 	wg.Wait()
 
+	// stop the slave poller so as to avoid race with this poller
+	// and the explicit call to applyChangesFromMaster later
+	slaveSvc.(*slaveService).replTckr.Stop()
+	slaveSvc.(*slaveService).replStop <- struct{}{}
+	sleepInSecs(2)
+
 	slaveCli = newDKVClient(slaveSvcPort)
 	defer slaveCli.Close()
 	defer slaveSvc.Close()
 	defer slaveGrpcSrvr.GracefulStop()
 
 	numKeys, keyPrefix, valPrefix := 10, "K", "V"
-	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
-	// wait for atleast couple of replPollInterval to ensure slave replication
-	sleepInSecs(5)
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
+
+	numKeys, ttlKeyPrefix, ttlValPrefix, ttlExpiredKeyPrefix := 10, "TTL-K", "TTL-V", "EXPIRED-TTL-K"
+	putKeys(t, masterCli, numKeys, ttlKeyPrefix, ttlValPrefix, uint64(time.Now().Add(2*time.Hour).Unix()))
+	putKeys(t, masterCli, numKeys, ttlExpiredKeyPrefix, ttlValPrefix, uint64(time.Now().Add(-2*time.Second).Unix()))
+
+	testDelete(t, masterCli, keyPrefix)
+
+	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
+		t.Error(err)
+	}
+
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+
+	//TTL
+	getKeys(t, masterCli, numKeys, ttlKeyPrefix, ttlValPrefix)
+	getKeys(t, slaveCli, numKeys, ttlKeyPrefix, ttlValPrefix)
+
+	//TTL Expired
+	getInvalidKeys(t, masterCli, numKeys, ttlExpiredKeyPrefix)
+	getInvalidKeys(t, slaveCli, numKeys, ttlExpiredKeyPrefix)
+
+	getNonExistentKey(t, slaveCli, keyPrefix)
 
 	backupFolder := fmt.Sprintf("%s/backup", masterDBFolder)
 	if err := masterCli.Backup(backupFolder); err != nil {
@@ -142,27 +175,32 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	}
 
 	numKeys, keyPrefix, valPrefix = 10, "BK", "BV"
-	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
-	// wait for atleast couple of replPollInterval to ensure slave replication
-	sleepInSecs(5)
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
+	testDelete(t, masterCli, keyPrefix)
+
+	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
+		t.Error(err)
+	}
+
 	getKeys(t, masterCli, numKeys, keyPrefix, valPrefix)
 	getKeys(t, slaveCli, numKeys, keyPrefix, valPrefix)
+	getNonExistentKey(t, slaveCli, keyPrefix)
 
 	if err := masterCli.Restore(backupFolder); err != nil {
 		t.Fatalf("An error occurred while restoring. Error: %v", err)
 	}
 
-	if err := slaveSvc.(*dkvSlaveService).applyChangesFromMaster(maxNumChangesRepl); err == nil {
+	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err == nil {
 		t.Error("Expected an error from slave instance")
 	} else {
 		t.Log(err)
 	}
 }
 
-func putKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPrefix string) {
+func putKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPrefix string, ttl uint64) {
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("%s%d", keyPrefix, i), fmt.Sprintf("%s%d", valPrefix, i)
-		if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+		if err := dkvCli.PutTTL([]byte(key), []byte(value), ttl); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -180,6 +218,42 @@ func getKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix, valPre
 	}
 }
 
+func getInvalidKeys(t *testing.T, dkvCli *ctl.DKVClient, numKeys int, keyPrefix string) {
+	rc := serverpb.ReadConsistency_SEQUENTIAL
+	for i := 1; i <= numKeys; i++ {
+		key := fmt.Sprintf("%s%d", keyPrefix, i)
+		if res, err := dkvCli.Get(rc, []byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if res != nil && string(res.Value) != "" {
+			t.Errorf("Expected no value for key %s. But got %s", key, string(res.Value))
+		}
+	}
+}
+
+func getNonExistentKey(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
+	rc := serverpb.ReadConsistency_SEQUENTIAL
+	key := keyPrefix + "DeletedKey"
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
+func testDelete(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
+	key, value := keyPrefix+"DeletedKey", "SomeValue"
+	rc := serverpb.ReadConsistency_SEQUENTIAL
+	if err := dkvCli.Put([]byte(key), []byte(value)); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+	}
+
+	if err := dkvCli.Delete([]byte(key)); err != nil {
+		t.Fatalf("Unable to DELETE. Key: %s, Error: %v", key, err)
+	}
+
+	if val, _ := dkvCli.Get(rc, []byte(key)); val != nil && string(val.Value) != "" {
+		t.Errorf("Expected no value for key %s. But got %s", key, val)
+	}
+}
+
 func newDKVClient(port int) *ctl.DKVClient {
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
@@ -193,7 +267,8 @@ func newRocksDBStore(dbFolder string) rocksdb.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := rocksdb.OpenDB(dbFolder, rocksdb.WithCacheSize(cacheSize))
+	store, err := rocksdb.OpenDB(dbFolder,
+		rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
 	if err != nil {
 		panic(err)
 	}
@@ -204,7 +279,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		panic(err)
 	}
-	store, err := badger.OpenDB(dbFolder)
+	store, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
 	if err != nil {
 		panic(err)
 	}
