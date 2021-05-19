@@ -99,13 +99,14 @@ public class SimpleDKVClientTest {
     }
 
     @Test
-    public void shouldPerformPutTTLAndGet() throws InterruptedException {
+    public void shouldPerformPutTTLAndGet() {
         String key = "helloTTL", expVal = "world";
-        Long expiryTS = (System.currentTimeMillis() / 1000) + 2;
-        dkvCli.put(key, expVal, expiryTS);
+        // expiryTS set to 2 seconds from now
+        dkvCli.put(key, expVal, (System.currentTimeMillis() / 1000) + 2);
         String actVal = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
         assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
-        Thread.sleep(3000);
+        // expiryTS set to 2 seconds ago
+        dkvCli.put(key, expVal, (System.currentTimeMillis() / 1000) - 2);
         String actVal2 = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
         assertEquals(format("Invalid value for key: %s", key), "", actVal2);
     }

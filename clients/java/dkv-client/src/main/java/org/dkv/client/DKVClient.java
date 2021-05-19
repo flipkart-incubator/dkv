@@ -93,7 +93,7 @@ public interface DKVClient extends Closeable {
      * @throws DKVException if the underlying status in the response from
      * the database is an error status
      */
-    void put(String key, String value, Long expiryTS);
+    void put(String key, String value, long expiryTS);
 
     /**
      * Associates the specified value with the specified key
@@ -107,7 +107,7 @@ public interface DKVClient extends Closeable {
      * @throws DKVException if the underlying status in the response from
      * the database is an error status
      */
-    void put(byte[] key, byte[] value, Long expiryTS);
+    void put(byte[] key, byte[] value, long expiryTS);
 
     /**
      * Retrieves the value associated with the given key from the DKV

@@ -93,7 +93,7 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
-    public void put(String key, String value, Long expiryTS) {
+    public void put(String key, String value, long expiryTS) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
         //noinspection ConstantConditions
@@ -102,7 +102,7 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
-    public void put(byte[] key, byte[] value, Long expiryTS) {
+    public void put(byte[] key, byte[] value, long expiryTS) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
         //noinspection ConstantConditions

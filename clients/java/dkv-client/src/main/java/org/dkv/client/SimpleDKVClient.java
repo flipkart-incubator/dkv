@@ -129,12 +129,12 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     @Override
-    public void put(String key, String value, Long expiryTS) {
+    public void put(String key, String value, long expiryTS) {
         put(copyFromUtf8(key), copyFromUtf8(value), expiryTS);
     }
 
     @Override
-    public void put(byte[] key, byte[] value, Long expiryTS) {
+    public void put(byte[] key, byte[] value, long expiryTS) {
         put(copyFrom(key), copyFrom(value), expiryTS);
     }
 
@@ -292,11 +292,11 @@ public class SimpleDKVClient implements DKVClient {
                 .build();
         Api.Status status = blockingStub.delete(delReq).getStatus();
         if (status.getCode() != 0) {
-            throw new DKVException(status, "Del", new Object[]{keyByteStr.toByteArray()});
+            throw new DKVException(status, "Delete", new Object[]{keyByteStr.toByteArray()});
         }
     }
 
-    private void put(ByteString keyByteStr, ByteString valByteStr, Long expiryTS) {
+    private void put(ByteString keyByteStr, ByteString valByteStr, long expiryTS) {
         Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
         Api.PutRequest putReq = putReqBuilder
                 .setKey(keyByteStr)
