@@ -93,6 +93,24 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
+    public void put(String key, String value, long expiryTS) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.put(key, value, expiryTS);
+    }
+
+    @Override
+    public void put(byte[] key, byte[] value, long expiryTS) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.put(key, value, expiryTS);
+    }
+
+    @Override
     public String get(Api.ReadConsistency consistency, String key) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
@@ -162,6 +180,24 @@ public class ShardedDKVClient implements DKVClient {
             DKVClient dkvClient = pool.getDKVClient(dkvShard, nodeType, UNKNOWN);
             return dkvClient.multiGet(consistency, keys);
         }
+    }
+
+    @Override
+    public void delete(String key) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.delete(key);
+    }
+
+    @Override
+    public void delete(byte[] key) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.delete(key);
     }
 
     @Override

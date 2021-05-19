@@ -99,6 +99,30 @@ public class SimpleDKVClientTest {
     }
 
     @Test
+    public void shouldPerformPutTTLAndGet() {
+        String key = "helloTTL", expVal = "world";
+        // expiryTS set to 2 seconds from now
+        dkvCli.put(key, expVal, (System.currentTimeMillis() / 1000) + 2);
+        String actVal = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
+        // expiryTS set to 2 seconds ago
+        dkvCli.put(key, expVal, (System.currentTimeMillis() / 1000) - 2);
+        String actVal2 = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), "", actVal2);
+    }
+
+    @Test
+    public void shouldPerformPutAndGetAndDelete() {
+        String key = "hello", expVal = "world";
+        dkvCli.put(key, expVal);
+        String actVal = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
+        dkvCli.delete(key);
+        String actVal2 = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value post delete for key: %s", key), "", actVal2);
+    }
+
+    @Test
     public void shouldPerformMultiGet() {
         String keyPref = "K_", valPref = "V_";
         String[] keys = put(10, keyPref, valPref);

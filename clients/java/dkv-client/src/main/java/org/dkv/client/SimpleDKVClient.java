@@ -120,12 +120,22 @@ public class SimpleDKVClient implements DKVClient {
 
     @Override
     public void put(String key, String value) {
-        put(copyFromUtf8(key), copyFromUtf8(value));
+        put(copyFromUtf8(key), copyFromUtf8(value), 0L);
     }
 
     @Override
     public void put(byte[] key, byte[] value) {
-        put(copyFrom(key), copyFrom(value));
+        put(copyFrom(key), copyFrom(value), 0L);
+    }
+
+    @Override
+    public void put(String key, String value, long expiryTS) {
+        put(copyFromUtf8(key), copyFromUtf8(value), expiryTS);
+    }
+
+    @Override
+    public void put(byte[] key, byte[] value, long expiryTS) {
+        put(copyFrom(key), copyFrom(value), expiryTS);
     }
 
     @Override
@@ -190,6 +200,16 @@ public class SimpleDKVClient implements DKVClient {
             result[idx++] = new KV.Bytes(kvPair.getKey().toByteArray(), kvPair.getValue().toByteArray());
         }
         return result;
+    }
+
+    @Override
+    public void delete(String key) {
+        delete(copyFromUtf8(key));
+    }
+
+    @Override
+    public void delete(byte[] key) {
+        delete(copyFrom(key));
     }
 
     @Override
@@ -265,11 +285,23 @@ public class SimpleDKVClient implements DKVClient {
         }
     }
 
-    private void put(ByteString keyByteStr, ByteString valByteStr) {
+    private void delete(ByteString keyByteStr) {
+        Api.DeleteRequest.Builder delReqBuilder = Api.DeleteRequest.newBuilder();
+        Api.DeleteRequest delReq = delReqBuilder
+                .setKey(keyByteStr)
+                .build();
+        Api.Status status = blockingStub.delete(delReq).getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "Delete", new Object[]{keyByteStr.toByteArray()});
+        }
+    }
+
+    private void put(ByteString keyByteStr, ByteString valByteStr, long expiryTS) {
         Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
         Api.PutRequest putReq = putReqBuilder
                 .setKey(keyByteStr)
                 .setValue(valByteStr)
+                .setExpireTS(expiryTS)
                 .build();
         Api.Status status = blockingStub.put(putReq).getStatus();
         if (status.getCode() != 0) {
