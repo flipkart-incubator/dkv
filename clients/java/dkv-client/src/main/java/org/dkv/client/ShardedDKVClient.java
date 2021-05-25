@@ -57,6 +57,42 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
+    public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.compareAndSet(key, expect, update);
+    }
+
+    @Override
+    public long incrementAndGet(byte[] key) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.incrementAndGet(key);
+    }
+
+    @Override
+    public long decrementAndGet(byte[] key) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.decrementAndGet(key);
+    }
+
+    @Override
+    public long addAndGet(byte[] key, long delta) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.addAndGet(key, delta);
+    }
+
+    @Override
     public String get(Api.ReadConsistency consistency, String key) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
@@ -175,10 +211,12 @@ public class ShardedDKVClient implements DKVClient {
         private static class Key {
             private final DKVNode dkvNode;
             private final String authority;
+            private final String shardName;
 
-            private Key(DKVNode dkvNode, String authority) {
+            private Key(DKVNode dkvNode, String authority, String shardName) {
                 this.dkvNode = dkvNode;
                 this.authority = authority;
+                this.shardName = shardName;
             }
 
             @Override
@@ -203,8 +241,8 @@ public class ShardedDKVClient implements DKVClient {
 
         SimpleDKVClient getDKVClient(DKVShard dkvShard, DKVNodeType... nodeTypes) {
             DKVNodeSet nodeSet = dkvShard.getNodesByType(nodeTypes);
-            DKVNode dkvNode = Iterables.get(nodeSet.getNodes(), 0);
-            return internalPool.get(new Key(dkvNode, nodeSet.getName()));
+            DKVNode dkvNode = nodeSet.getNextNode();
+            return internalPool.get(new Key(dkvNode, nodeSet.getName(), dkvShard.getName()));
         }
 
         @Override
@@ -221,7 +259,7 @@ public class ShardedDKVClient implements DKVClient {
 
         @Override
         public SimpleDKVClient load(ShardedDKVClient.DKVClientPool.Key key) {
-            return new SimpleDKVClient(key.dkvNode.getHost(), key.dkvNode.getPort(), key.authority);
+            return new SimpleDKVClient(key.dkvNode.getHost(), key.dkvNode.getPort(), key.authority, key.shardName);
         }
 
         @Override

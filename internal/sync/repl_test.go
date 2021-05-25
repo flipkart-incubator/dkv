@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"testing"
-
+	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"
+	"sync"
+	"testing"
 )
 
 func TestDKVReplStoreSave(t *testing.T) {
@@ -26,6 +27,10 @@ func TestDKVReplStoreSave(t *testing.T) {
 	testGet(t, kvs, dkvRepl, []byte("kit"))
 
 	testMultiGet(t, kvs, dkvRepl, []byte("foo"), []byte("hello"), []byte("kit"))
+
+	testDelete(t, kvs, dkvRepl, []byte("foo"))
+	testDelete(t, kvs, dkvRepl, []byte("hello"))
+	testDelete(t, kvs, dkvRepl, []byte("kit"))
 }
 
 func TestDKVReplStoreClose(t *testing.T) {
@@ -51,6 +56,22 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 				t.Error(err)
 			} else if string(res[0].Value) != string(val) {
 				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0])
+			}
+		}
+	}
+}
+
+func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
+	intReq := new(raftpb.InternalRaftRequest)
+	intReq.Delete = &serverpb.DeleteRequest{Key: key}
+	if reqBts, err := proto.Marshal(intReq); err != nil {
+		t.Error(err)
+	} else {
+		if _, err := dkvRepl.Save(reqBts); err != nil {
+			t.Error(err)
+		} else {
+			if _, err := kvs.Get(key); err.Error() != "Given key not found" {
+				t.Error(err)
 			}
 		}
 	}
@@ -111,19 +132,49 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 }
 
 type memStore struct {
-	store map[string][]byte
+	store map[string]memStoreObject
+	mu    sync.Mutex
+}
+
+type memStoreObject struct {
+	data     []byte
+	expiryTS uint64
 }
 
 func newMemStore() *memStore {
-	return &memStore{store: make(map[string][]byte)}
+	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
 }
 
-func (ms *memStore) Put(key []byte, value []byte) error {
+func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS uint64) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
 	storeKey := string(key)
 	if _, present := ms.store[storeKey]; present {
 		return errors.New("Given key already exists")
 	}
-	ms.store[storeKey] = value
+	ms.store[storeKey] = memStoreObject{value, expiryTS}
+	return nil
+}
+
+func (ms *memStore) Put(key []byte, value []byte) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	storeKey := string(key)
+	if _, present := ms.store[storeKey]; present {
+		return errors.New("Given key already exists")
+	}
+	ms.store[storeKey] = memStoreObject{value, 0}
+	return nil
+}
+
+func (ms *memStore) Delete(key []byte) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	storeKey := string(key)
+	delete(ms.store, storeKey)
 	return nil
 }
 
@@ -132,12 +183,32 @@ func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	for i, key := range keys {
 		storeKey := string(key)
 		if val, present := ms.store[storeKey]; present {
-			rss[i] = &serverpb.KVPair{Key: key, Value: val}
+			var v []byte
+			if val.expiryTS == 0 || val.expiryTS > hlc.UnixNow() {
+				v = val.data
+			}
+			rss[i] = &serverpb.KVPair{Key: key, Value: v}
 		} else {
 			return nil, errors.New("Given key not found")
 		}
 	}
 	return rss, nil
+}
+
+func (ms *memStore) CompareAndSet(key, expect, update []byte) (bool, error) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	storeKey := string(key)
+	exist, present := ms.store[storeKey]
+	if (!present && expect != nil) || (present && expect == nil) {
+		return false, nil
+	}
+
+	if !present && expect == nil || bytes.Equal(expect, exist.data) {
+		ms.store[storeKey] = memStoreObject{update, 0}
+	}
+	return true, nil
 }
 
 func (ms *memStore) Close() error {
@@ -150,7 +221,7 @@ func (ms *memStore) GetSnapshot() ([]byte, error) {
 }
 
 func (ms *memStore) PutSnapshot(snap []byte) error {
-	data := make(map[string][]byte)
+	data := make(map[string]memStoreObject)
 	err := gob.NewDecoder(bytes.NewBuffer(snap)).Decode(data)
 	ms.store = data
 	return err

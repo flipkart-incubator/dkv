@@ -16,10 +16,15 @@ type KVStore interface {
 	io.Closer
 	// Put stores the association between the given key and value
 	Put(key []byte, value []byte) error
+	// PutTTL stores the association between the given key and value
+	// and sets the expireTS of the key to the provided epoch in seconds
+	PutTTL(key []byte, value []byte, expireTS uint64) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
 	Get(keys ...[]byte) ([]*serverpb.KVPair, error)
+	// Delete deletes the given key.
+	Delete(key []byte) error
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
 	GetSnapshot() ([]byte, error)
@@ -31,6 +36,14 @@ type KVStore interface {
 	// order. IterationOptions can be used to control where to begin
 	// iteration as well as what keys are iterated by their prefix.
 	Iterate(IterationOptions) Iterator
+	// CompareAndSet compares the current value of the given key with
+	// that of the given value. In case of a match, it updates that
+	// key with the new value and returns true. Else, it returns false.
+	// All this is done atomically from the caller's point of view and
+	// hence is safe from a concurrency perspective.
+	// If the expected value is `nil`, then the key is created and
+	// initialized with the given value, atomically.
+	CompareAndSet(key, expect, update []byte) (bool, error)
 }
 
 // A Backupable represents the capability of the underlying store

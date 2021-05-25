@@ -1,14 +1,18 @@
 package badger
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	badger_pb "github.com/dgraph-io/badger/v2/pb"
@@ -17,6 +21,12 @@ import (
 )
 
 const dbFolder = "/tmp/badger_storage_test"
+
+var (
+	_, fp, _, _ = runtime.Caller(0)
+	basepath    = filepath.Dir(fp)
+	iniFilePath = fmt.Sprintf("%s/badger.ini", basepath)
+)
 
 var store *badgerDB
 
@@ -28,6 +38,13 @@ func TestMain(m *testing.M) {
 		res := m.Run()
 		store.Close()
 		os.Exit(res)
+	}
+}
+
+func TestINIFileOption(t *testing.T) {
+	_, err := OpenDB(WithBadgerConfig(iniFilePath))
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -51,7 +68,7 @@ func TestPutAndGet(t *testing.T) {
 }
 
 func TestInMemPutAndGet(t *testing.T) {
-	if kvs, err := OpenInMemDB(); err != nil {
+	if kvs, err := OpenDB(WithInMemory()); err != nil {
 		t.Fatalf("Unable to open Badger with in-memory mode. Error: %v", err)
 	} else {
 		numTrxns := 50
@@ -85,6 +102,30 @@ func TestPutEmptyValue(t *testing.T) {
 	}
 }
 
+func TestDelete(t *testing.T) {
+	key, val := "SomeKey", "SomeValue"
+	if err := store.Put([]byte(key), []byte(val)); err != nil {
+		t.Fatalf("Unable to PUT. Key: %s", key)
+	}
+
+	if res, err := store.Get([]byte(key)); err != nil {
+		t.Fatalf("Unable to GET. Key: %s", key)
+	} else {
+		t.Logf("Got value: '%s'", string(res[0].Value))
+	}
+
+	// delete key
+	if err := store.Delete([]byte(key)); err != nil {
+		t.Fatalf("Unable to Delete Key: %s", key)
+	}
+
+	if res, err := store.Get([]byte(key)); err != nil {
+		t.Fatalf("Got Exception while trying to GET deleted key value. Key: %s", key)
+	} else if len(res) != 0 {
+		t.Fatalf("Got Result while trying to GET deleted key value. Key: %s", key)
+	}
+}
+
 func TestMultiGet(t *testing.T) {
 	numKeys := 10
 	keys, vals := make([][]byte, numKeys), make([][]byte, numKeys)
@@ -110,9 +151,91 @@ func TestMissingGet(t *testing.T) {
 	}
 }
 
+func TestAtomicKeyCreation(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		freqs          sync.Map
+		numThrs        = 10
+		casKey, casVal = []byte("casKey"), []byte{0}
+	)
+
+	// verify key creation under contention
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			res, err := store.CompareAndSet(casKey, nil, casVal)
+			freqs.Store(id, res && err == nil)
+		}(i)
+	}
+	wg.Wait()
+
+	expNumSucc := 1
+	expNumFail := numThrs - expNumSucc
+	actNumSucc, actNumFail := 0, 0
+	freqs.Range(func(_, val interface{}) bool {
+		if val.(bool) {
+			actNumSucc++
+		} else {
+			actNumFail++
+		}
+		return true
+	})
+
+	if expNumSucc != actNumSucc {
+		t.Errorf("Mismatch in number of successes. Expected: %d, Actual: %d", expNumSucc, actNumSucc)
+	}
+
+	if expNumFail != actNumFail {
+		t.Errorf("Mismatch in number of failures. Expected: %d, Actual: %d", expNumFail, actNumFail)
+	}
+}
+
+func TestAtomicIncrDecr(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("ctrKey"), []byte{0}
+	)
+	store.Put(casKey, casVal)
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, _ := store.Get(casKey)
+				expect := exist[0].Value
+				update := []byte{expect[0] + delta}
+				res, err := store.CompareAndSet(casKey, expect, update)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := store.Get(casKey)
+	actVal := actual[0].Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
+	}
+}
+
 func TestSaveChangesForPutAndDelete(t *testing.T) {
 	testSaveChangesForPutAndDelete(t, store)
-	inMemStore, _ := OpenInMemDB()
+	inMemStore, _ := OpenDB(WithInMemory())
 	testSaveChangesForPutAndDelete(t, inMemStore)
 }
 
@@ -160,7 +283,7 @@ func testSaveChangesForPutAndDelete(t *testing.T, bdb DB) {
 
 func TestSaveChangesForInterleavedPutAndDelete(t *testing.T) {
 	testSaveChangesForInterleavedPutAndDelete(t, store)
-	inMemStore, _ := OpenInMemDB()
+	inMemStore, _ := OpenDB(WithInMemory())
 	testSaveChangesForInterleavedPutAndDelete(t, inMemStore)
 }
 
@@ -230,7 +353,7 @@ func TestBackupAndRestore(t *testing.T) {
 }
 
 func TestBackupAndRestoreForInMemBadger(t *testing.T) {
-	bdb, _ := OpenInMemDB()
+	bdb, _ := OpenDB(WithInMemory())
 	numTrxns := 50
 	keyPrefix, valPrefix := "brKey", "brVal"
 	putKeys(t, bdb, numTrxns, keyPrefix, valPrefix)
@@ -296,6 +419,45 @@ func TestIterationUsingStream(t *testing.T) {
 
 	if actCnt != numTrxns {
 		t.Errorf("Expected snapshot iterator to give %d keys, but only got %d keys", numTrxns, actCnt)
+	}
+}
+
+func TestPutTTLAndGet(t *testing.T) {
+	numIteration := 10
+	for i := 1; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 11; i <= 10+numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 1; i <= numIteration; i++ {
+		key, expectedValue := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if string(readResults[0].Value) != expectedValue {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+
+	for i := 11; i <= 10+numIteration; i++ {
+		key := fmt.Sprintf("KTTL%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if len(readResults) > 0 {
+				t.Errorf("GET mismatch post TTL Expiry. Key: %s, Expected Value: %s, Actual Value: %s", key, "nil", readResults[0].Value)
+			}
+		}
 	}
 }
 
@@ -530,6 +692,35 @@ func BenchmarkGetMissingKey(b *testing.B) {
 	}
 }
 
+func BenchmarkCompareAndSet(b *testing.B) {
+	ctrKey := []byte("num")
+	err := store.Put(ctrKey, []byte{0})
+	if err != nil {
+		b.Errorf("Unable to PUT. Error: %v", err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		cnt, err := store.Get(ctrKey)
+		if err != nil {
+			b.Errorf("Unable to Get. Error: %v", err)
+		}
+		val := cnt[0].Value[0]
+		newVal := val + 1
+		_, err = store.CompareAndSet(ctrKey, cnt[0].Value, []byte{newVal})
+		if err != nil {
+			b.Errorf("Unable to CAS. Error: %v", err)
+		}
+	}
+	cnt, err := store.Get(ctrKey)
+	if err != nil {
+		b.Errorf("Unable to GET. Error: %v", err)
+	}
+	val := cnt[0].Value[0]
+	if val != byte(b.N) {
+		b.Errorf("Value mismatch for key: %s. Expected: %d, Actual: %d", ctrKey, b.N, val)
+	}
+}
+
 func BenchmarkStreamBasedIteration(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
@@ -694,6 +885,6 @@ func openBadgerDB() (*badgerDB, error) {
 	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
 		return nil, err
 	}
-	kvs, err := OpenDB(dbFolder)
+	kvs, err := OpenDB(WithDBDir(dbFolder))
 	return kvs.(*badgerDB), err
 }

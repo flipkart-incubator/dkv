@@ -45,7 +45,11 @@ func NewDKVClient(clientConfig DKVConfig, authority string) (*ctl.DKVClient, err
 	var opt grpc.DialOption
 	var err error = nil
 	var config *tls.Config
-	switch clientConfig.ConnectionMode {
+	var clientMode = clientConfig.ConnectionMode
+	if clientMode == "" {
+		clientMode = clientModeFromFlags(clientConfig)
+	}
+	switch clientMode {
 	case MutualTLS:
 		config, err = getTLSConfigWithCertPool(clientConfig.CaCertPath)
 		if err == nil {
@@ -209,4 +213,15 @@ func NewListener(listenAddr string) (lis net.Listener) {
 		return
 	}
 	return
+}
+
+func clientModeFromFlags(config DKVConfig) ConnectionMode {
+	if config.CaCertPath != "" {
+		if config.KeyPath != "" && config.CertPath != "" {
+			return MutualTLS
+		}
+		return ServerTLS
+	} else {
+		return Insecure
+	}
 }

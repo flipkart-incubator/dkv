@@ -1,7 +1,10 @@
 package org.dkv.client;
 
+import com.google.protobuf.ByteString;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.ByteBuffer;
 
 import static java.lang.String.format;
 
@@ -28,5 +31,20 @@ public class Utils {
         if (!condition) {
             throwf(excClass, msg, keys);
         }
+    }
+
+    static long convertToLong(byte[] bts) {
+        if (bts.length == 0) return 0;
+        return ByteBuffer.wrap(bts).getLong();
+    }
+
+    static long convertToLong(ByteString byteStr) {
+        if (byteStr.isEmpty()) return 0;
+        return byteStr.asReadOnlyByteBuffer().getLong();
+    }
+
+    static ByteString covertToBytes(long val) {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(8).putLong(val);
+        return ByteString.copyFrom(byteBuffer.array());
     }
 }

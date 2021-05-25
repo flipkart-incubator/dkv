@@ -50,12 +50,22 @@ func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
-
-	if err := ss.store.Put(putReq.Key, putReq.Value); err != nil {
+	if err := ss.store.PutTTL(putReq.Key, putReq.Value, putReq.ExpireTS); err != nil {
 		ss.lg.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
 	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
+}
+
+func (ss *standaloneService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	if err := ss.store.Delete(delReq.Key); err != nil {
+		ss.lg.Error("Unable to DELETE", zap.Error(err))
+		return &serverpb.DeleteResponse{Status: newErrorStatus(err)}, err
+	}
+	return &serverpb.DeleteResponse{Status: newEmptyStatus()}, nil
 }
 
 func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
@@ -89,6 +99,20 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 	} else {
 		res.KeyValues = readResults
 	}
+	return res, err
+}
+
+func (ss *standaloneService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
+	casRes, err := ss.store.CompareAndSet(casReq.Key, casReq.OldValue, casReq.NewValue)
+	if err != nil {
+		ss.lg.Error("Unable to perform CAS", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	}
+	res.Updated = casRes
 	return res, err
 }
 
@@ -298,6 +322,34 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 	return res, err
 }
 
+func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
+	reqBts, _ := proto.Marshal(&raftpb.InternalRaftRequest{Cas: casReq})
+	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
+	casRes, err := ds.raftRepl.Save(ctx, reqBts)
+	if err != nil {
+		ds.lg.Error("Unable to CAS in replicated storage", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	}
+	// '0' indicates CAS update was successful
+	res.Updated = casRes[0] == 0
+	return res, err
+}
+
+func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
+	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Delete: delReq})
+	res := &serverpb.DeleteResponse{Status: newEmptyStatus()}
+	if err != nil {
+		ds.lg.Error("Unable to DEL over Nexus", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	} else {
+		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
+			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			res.Status = newErrorStatus(err)
+		}
+	}
+	return res, err
+}
+
 func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
 	switch getReq.ReadConsistency {
 	case serverpb.ReadConsistency_SEQUENTIAL:
@@ -311,9 +363,14 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 			res.Status = newErrorStatus(err)
 			loadError = err
 		} else {
-			kvs, _ := gobDecodeAsKVPairs(val)
-			if kvs != nil && len(kvs) == 1 {
-				res.Value = kvs[0].Value
+			if kvs, err := gobDecodeAsKVPairs(val); err != nil {
+				loadError = err
+			} else {
+				if kvs != nil && len(kvs) == 1 {
+					res.Value = kvs[0].Value
+				} else {
+					loadError = fmt.Errorf("unable to compute value for given key from %v", kvs)
+				}
 			}
 		}
 		return res, loadError

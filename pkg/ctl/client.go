@@ -68,6 +68,48 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	return errorFromStatus(status, err)
 }
 
+// PutTTL takes the key and value as byte arrays, expireTS as epoch seconds and invokes the
+// GRPC Put method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	putReq := &serverpb.PutRequest{Key: key, Value: value, ExpireTS: expireTS}
+	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
+	var status *serverpb.Status
+	if res != nil {
+		status = res.Status
+	}
+	return errorFromStatus(status, err)
+}
+
+// CompareAndSet provides the wrapper for the standard CAS primitive.
+// It invokes the underlying GRPC CompareAndSet method. This is a
+// convenience wrapper.
+func (dkvClnt *DKVClient) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	casReq := &serverpb.CompareAndSetRequest{Key: key, OldValue: expect, NewValue: update}
+	casRes, err := dkvClnt.dkvCli.CompareAndSet(ctx, casReq)
+	if err != nil {
+		return false, err
+	}
+	return casRes.Updated, errorFromStatus(casRes.Status, nil)
+}
+
+// Delete takes the key as byte arrays and invokes the
+// GRPC Delete method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) Delete(key []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	delReq := &serverpb.DeleteRequest{Key: key}
+	res, err := dkvClnt.dkvCli.Delete(ctx, delReq)
+	var status *serverpb.Status
+	if res != nil {
+		status = res.Status
+	}
+	return errorFromStatus(status, err)
+}
+
 // Get takes the key as byte array along with the consistency
 // level and invokes the GRPC Get method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverpb.GetResponse, error) {
@@ -143,6 +185,8 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 	return errorFromStatus(res, err)
 }
 
+// ListNodes retrieves the current members of the Nexus cluster
+// along with identifying the leader.
 func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()

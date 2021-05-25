@@ -29,6 +29,7 @@ import (
 var (
 	disklessMode     bool
 	dbEngine         string
+	dbEngineIni      string
 	dbFolder         string
 	dbListenAddr     string
 	peerListenAddr   string
@@ -39,6 +40,7 @@ var (
 	certPath         string
 	keyPath          string
 	caCertPath       string
+	blockCacheSize   uint64
 
 	// Logging vars
 	dbAccessLog    string
@@ -57,6 +59,7 @@ func init() {
 	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
 	flag.StringVar(&peerListenAddr, "peerListenAddr", "127.0.0.1:8083", "Address on which the DKV replication service binds")
 	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
+	flag.StringVar(&dbEngineIni, "dbEngineIni", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
 	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
 	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
@@ -66,6 +69,7 @@ func init() {
 	flag.StringVar(&keyPath, "keyPath", "", "Path for key file of this node")
 	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
+	flag.Uint64Var(&blockCacheSize, "blockCacheSize", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -77,6 +81,8 @@ const (
 	slaveRole              = "slave"
 )
 
+const defBlockCacheSize = 3 << 30
+
 func main() {
 	flag.Parse()
 	validateFlags()
@@ -85,10 +91,7 @@ func main() {
 	setFlagsForNexusDirs()
 	setupStats()
 
-	var secure = false
-	if caCertPath != "" && keyPath != "" && certPath != "" {
-		secure = true
-	}
+	var secure = caCertPath != "" && keyPath != "" && certPath != ""
 
 	var srvrMode utils.ConnectionMode
 	if secure {
@@ -185,9 +188,15 @@ func validateFlags() {
 	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
 		log.Panicf("replMasterAddr must be given in slave mode")
 	}
-	nonNullAuthFlags := btou(certPath != "") + btou(keyPath != "") + btou(caCertPath != "")
+	nonNullAuthFlags := btou(certPath != "", keyPath != "", caCertPath != "")
 	if nonNullAuthFlags > 0 && nonNullAuthFlags < 3 {
 		log.Panicf("Missing TLS attributes, set all flags (caCertPath, keyPath, certPath) to run DKV in secure mode")
+	}
+
+	if dbEngineIni != "" {
+		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
+			log.Panicf("given storage configuration file: %s does not exist", dbEngineIni)
+		}
 	}
 }
 
@@ -279,8 +288,22 @@ func haveFlagsWithPrefix(prefix string) bool {
 	return res
 }
 
+func printFlagsWithoutPrefix(prefixes ...string) {
+	flag.VisitAll(func(f *flag.Flag) {
+		shouldPrint := true
+		for _, pf := range prefixes {
+			if strings.HasPrefix(f.Name, pf) {
+				shouldPrint = false
+				break
+			}
+		}
+		if shouldPrint {
+			log.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
+		}
+	})
+}
+
 func printFlagsWithPrefix(prefixes ...string) {
-	log.Println("Launching DKV server with following flags:")
 	flag.VisitAll(func(f *flag.Flag) {
 		for _, pf := range prefixes {
 			if strings.HasPrefix(f.Name, pf) {
@@ -295,6 +318,7 @@ func toDKVSrvrRole(role string) dkvSrvrRole {
 }
 
 func (role dkvSrvrRole) printFlags() {
+	log.Println("Launching DKV server with following flags:")
 	switch role {
 	case noRole:
 		printFlagsWithPrefix("db")
@@ -307,6 +331,7 @@ func (role dkvSrvrRole) printFlags() {
 	case slaveRole:
 		printFlagsWithPrefix("db", "repl")
 	}
+	printFlagsWithoutPrefix("db", "repl", "nexus")
 }
 
 func setDKVDefaultsForNexusDirs() {
@@ -334,8 +359,6 @@ func setupStats() {
 	}
 }
 
-const cacheSize = 3 << 30
-
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
 	slg := dkvLogger.Sugar()
 	defer slg.Sync()
@@ -349,9 +372,11 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	switch dbEngine {
 	case "rocksdb":
 		rocksDb, err := rocksdb.OpenDB(dbDir,
-			rocksdb.WithCacheSize(cacheSize),
-			rocksdb.WithStats(statsCli),
-			rocksdb.WithLogger(dkvLogger))
+			rocksdb.WithSyncWrites(),
+			rocksdb.WithCacheSize(blockCacheSize),
+			rocksdb.WithRocksDBConfig(dbEngineIni),
+			rocksdb.WithLogger(dkvLogger),
+			rocksdb.WithStats(statsCli))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
@@ -359,16 +384,19 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	case "badger":
 		var badgerDb badger.DB
 		var err error
-		if disklessMode {
-			badgerDb, err = badger.OpenInMemDB(
-				badger.WithLogger(dkvLogger),
-				badger.WithStats(statsCli))
-		} else {
-			badgerDb, err = badger.OpenDB(dbDir,
-				badger.WithLogger(dkvLogger),
-				badger.WithSyncWrites(),
-				badger.WithStats(statsCli))
+		bdbOpts := []badger.DBOption{
+			badger.WithSyncWrites(),
+			badger.WithCacheSize(blockCacheSize),
+			badger.WithBadgerConfig(dbEngineIni),
+			badger.WithLogger(dkvLogger),
+			badger.WithStats(statsCli),
 		}
+		if disklessMode {
+			bdbOpts = append(bdbOpts, badger.WithInMemory())
+		} else {
+			bdbOpts = append(bdbOpts, badger.WithDBDir(dbDir))
+		}
+		badgerDb, err = badger.OpenDB(bdbOpts...)
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
@@ -401,9 +429,12 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	}
 }
 
-func btou(b bool) uint8 {
-	if b {
-		return 1
+func btou(conditions... bool) int {
+	cnt := 0
+	for _, cond := range conditions {
+		if cond {
+			cnt += 1
+		}
 	}
-	return 0
+	return cnt
 }
