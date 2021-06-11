@@ -329,6 +329,7 @@ func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverp
 	if err != nil {
 		ds.lg.Error("Unable to CAS in replicated storage", zap.Error(err))
 		res.Status = newErrorStatus(err)
+		return res, err
 	}
 	// '0' indicates CAS update was successful
 	res.Updated = casRes[0] == 0
