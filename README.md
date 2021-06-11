@@ -123,7 +123,7 @@ $ ./bin/dkvsrv \
     -dbFolder <folder_path> \
     -dbListenAddr <host:port> \
     -dbRole master \
-    -nexusNodeUrl http://<host:port> \
+    -nexusNodeUrl http://<host:port> \ #optional when running on separete nodes.
     -nexusClusterUrl <cluster_url>
 ```
 
