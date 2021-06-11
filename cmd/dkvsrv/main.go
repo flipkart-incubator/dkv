@@ -327,7 +327,7 @@ func setFlagsForNexusDirs() {
 
 func setupStats() {
 	if statsdAddr != "" {
-		statsCli = stats.NewStatsDClient(statsdAddr, "dkv")
+		statsCli = stats.NewStatsDClient(statsdAddr, "dkv.")
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
