@@ -378,7 +378,7 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 	defer f.Close()
 
 	// Create temp folder for the restored data
-	restoreDir, err := storage.CreateTempFolder(tempDirPrefx)
+	restoreDir, err := storage.CreateTempFolder("", tempDirPrefx)
 	if err != nil {
 		return
 	}
