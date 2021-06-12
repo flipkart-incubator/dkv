@@ -342,10 +342,6 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 	}
 
 	dataDir := path.Join(dbFolder, "data")
-	if err := os.MkdirAll(dataDir, 0777); err != nil {
-		slg.Fatalf("Unable to create DB folder at %s. Error: %v.", dbFolder, err)
-	}
-
 	slg.Infof("Using %s as data directory", dataDir)
 	switch dbEngine {
 	case "rocksdb":
