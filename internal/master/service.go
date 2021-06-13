@@ -344,7 +344,7 @@ func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.Delet
 		res.Status = newErrorStatus(err)
 	} else {
 		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
-			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			ds.lg.Error("Unable to delete in replicated storage", zap.Error(err))
 			res.Status = newErrorStatus(err)
 		}
 	}
