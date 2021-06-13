@@ -51,8 +51,8 @@ github.com/dgraph-io/badger/v2 v2.2007.2 h1:EjjK0KqwaFMlPin1ajhP943VPENHJdEz1KLI
 github.com/dgraph-io/badger/v2 v2.2007.2/go.mod h1:26P/7fbL4kUZVEVKLAKXkBXKOydDmM2p1e+NhhnBCAE=
 github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de h1:t0UHb5vdojIDUqktM6+xJAfScFBsVpXZmqC9dsgJmeA=
 github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de/go.mod h1:KPxhHT9ZxKefz+PCeOGsrHpl1qZ7i70dGTu2u+Ahh6E=
-github.com/dgraph-io/ristretto v0.0.3 h1:jh22xisGBjrEVnRZ1DVTpBVQm0Xndu8sMl0CWDzSIBI=
-github.com/dgraph-io/ristretto v0.0.3/go.mod h1:KPxhHT9ZxKefz+PCeOGsrHpl1qZ7i70dGTu2u+Ahh6E=
+github.com/dgraph-io/ristretto v0.0.4-0.20210415235014-b837fdf292c8 h1:T04XWEK9VBZl9EjnqHUm6AaMvEQYLgwliDH7l/6mMnU=
+github.com/dgraph-io/ristretto v0.0.4-0.20210415235014-b837fdf292c8/go.mod h1:fux0lOrBhrVCJd3lcTHsIJhq1T2rokOu6v9Vcb3Q9ug=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 h1:tdlZCpZ/P9DhczCTSixgIKmwPv6+wP5DGjqLYw5SUiA=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUnsFjfmXRMNPybcSiG0BgUW2AuFH8PAnS2iTw=
 github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 h1:fAjc9m62+UWV/WAFKLNi6ZS0675eEUC9y3AlwSbQu1Y=
@@ -72,10 +72,10 @@ github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 h1:JWuenKqqX8nojt
 github.com/facebookgo/stack v0.0.0-20160209184415-751773369052/go.mod h1:UbMTZqLaRiH3MsBH8va0n7s1pQYcu3uTb8G4tygF4Zg=
 github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 h1:7HZCaLC5+BZpmbhCOZJ293Lz68O7PYrF2EzeiFMwCLk=
 github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4/go.mod h1:5tD+neXqOorC30/tWg0LCSkrqj/AR6gu8yY8/fpw1q0=
-github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7 h1:PxlANvUXyHsBPYk3O8XGekF3WXnJmhYuXwcq6wv0atc=
-github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
-github.com/flipkart-incubator/nexus v0.0.0-20210612071733-03ce3d2a7406 h1:pK4tF2HPWYWs3w0Jf1Q0KwRQmvEPREYvStsPWJCBUVs=
-github.com/flipkart-incubator/nexus v0.0.0-20210612071733-03ce3d2a7406/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
+github.com/flipkart-incubator/gorocksdb v0.0.0-20210422080808-54e7b706f563 h1:TMlZy4K2S3hPuYvbHn6H3gu/pWUqVZ+4jNm1qG+Ch2k=
+github.com/flipkart-incubator/gorocksdb v0.0.0-20210422080808-54e7b706f563/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
+github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894 h1:AEA1XeBrw7rXU9BTKTjN9ZkivmEGyhqS/wXFp9eIAKw=
+github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=

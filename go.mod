@@ -4,10 +4,11 @@ go 1.13
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
+	github.com/OneOfOne/xxhash v1.2.2
 	github.com/coreos/etcd v3.3.19+incompatible // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
-	github.com/dgraph-io/ristretto v0.0.3 // indirect
+	github.com/dgraph-io/ristretto v0.0.4-0.20210415235014-b837fdf292c8
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7
 	github.com/flipkart-incubator/nexus v0.0.0-20210612071733-03ce3d2a7406
@@ -25,7 +26,7 @@ require (
 	go.uber.org/zap v1.14.1
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c // indirect
-	golang.org/x/sys v0.0.0-20201005065044-765f4ea38db3 // indirect
+	golang.org/x/sys v0.0.0-20210415045647-66c3f260301c // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
 	google.golang.org/grpc v1.28.0
