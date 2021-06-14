@@ -54,18 +54,18 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&disklessMode, "dbDiskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
-	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
-	flag.StringVar(&dbListenAddr, "dbListenAddr", "0.0.0.0:8080", "Address on which the DKV service binds")
-	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
-	flag.StringVar(&dbEngineIni, "dbEngineIni", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
-	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
-	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
-	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
-	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
-	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
+	flag.BoolVar(&disklessMode, "diskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
+	flag.StringVar(&dbFolder, "db-folder", "/tmp/dkvsrv", "DB folder path for storing data files")
+	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
+	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
+	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
+	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave")
+	flag.StringVar(&statsdAddr, "statsd-addr", "", "StatsD service address in host:port format")
+	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
+	flag.DurationVar(&replPollInterval, "repl-poll-interval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
+	flag.StringVar(&dbAccessLog, "access-log", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.Uint64Var(&blockCacheSize, "blockCacheSize", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
+	flag.Uint64Var(&blockCacheSize, "block-cache-size", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -288,7 +288,7 @@ func printFlagsWithPrefix(prefixes ...string) {
 }
 
 func toDKVSrvrRole(role string) dkvSrvrRole {
-	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
+	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(role)))
 }
 
 func (role dkvSrvrRole) printFlags() {
@@ -309,8 +309,8 @@ func (role dkvSrvrRole) printFlags() {
 }
 
 func setDKVDefaultsForNexusDirs() {
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexusLogDir"), flag.Lookup("nexusSnapDir")
-	dbPath := flag.Lookup("dbFolder").DefValue
+	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
+	dbPath := flag.Lookup("db-folder").DefValue
 	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
 	nexusLogDirFlag.Value.Set("")
 	nexusSnapDirFlag.Value.Set("")
