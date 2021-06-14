@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -28,6 +29,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+
+	_ "net/http/pprof"
 )
 
 var (
@@ -47,6 +50,7 @@ var (
 	verboseLogging bool
 	accessLogger   *zap.Logger
 	dkvLogger      *zap.Logger
+	pprofEnable    bool
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 
@@ -66,6 +70,7 @@ func init() {
 	flag.StringVar(&dbAccessLog, "access-log", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
 	flag.Uint64Var(&blockCacheSize, "block-cache-size", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
+	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -86,6 +91,13 @@ func main() {
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
+
+	if pprofEnable {
+		go func() {
+			log.Printf("[INFO] Starting pprof on port 6060\n")
+			log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+		}()
+	}
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
