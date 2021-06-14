@@ -77,9 +77,9 @@ A single DKV instance can be launched using the following command:
 
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_name> \
-    -dbListenAddr <host:port> \
-    -dbEngine <rocksdb|badger>
+    -db-folder <folder_name> \
+    -listen-addr <host:port> \
+    -db-engine <rocksdb|badger>
 ```
 
 ```bash
@@ -89,7 +89,7 @@ $ ./bin/dkvctl -dkvAddr <host:port> -get <key>
 
 Example session:
 ```bash
-$ ./bin/dkvsrv -dbFolder /tmp/db -dbListenAddr 127.0.0.1:8080 -dbEngine rocksdb
+$ ./bin/dkvsrv -db-folder /tmp/db -listen-addr 127.0.0.1:8080 -db-engine rocksdb
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
 bar
@@ -120,8 +120,8 @@ Assuming you have 3 availability zones, run the following 3 commands one in ever
 in order to setup these instances for synchronous replication.
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_path> \
-    -dbListenAddr <host:port> \
+    -db-folder <folder_path> \
+    -listen-addr <host:port> \
     -dbRole master \
     -nexus-node-url http://<host:port> \ #optional when running on separete nodes.
     -nexus-cluster-url <cluster_url>
@@ -151,9 +151,9 @@ Example session on local machine:
 Launch Node 1:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n1 \
-    -dbListenAddr 127.0.0.1:9081 \
-    -dbRole master \
+    -db-folder /tmp/dkvsrv/n1 \
+    -listen-addr 127.0.0.1:9081 \
+    -role master \
     -nexus-node-url http://127.0.0.1:9021 \
     -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
@@ -161,9 +161,9 @@ $ ./bin/dkvsrv \
 Launch Node 2:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n2 \
-    -dbListenAddr 127.0.0.1:9082 \
-    -dbRole master \
+    -db-folder /tmp/dkvsrv/n2 \
+    -listen-addr 127.0.0.1:9082 \
+    -role master \
     -nexus-node-url http://127.0.0.1:9022 \
     -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
@@ -171,9 +171,9 @@ $ ./bin/dkvsrv \
 Launch Node 3:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n3 \
-    -dbListenAddr 127.0.0.1:9083 \
-    -dbRole master \
+    -db-folder /tmp/dkvsrv/n3 \
+    -listen-addr 127.0.0.1:9083 \
+    -role master \
     -nexus-node-url http://127.0.0.1:9023 \
     -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
@@ -181,9 +181,9 @@ $ ./bin/dkvsrv \
 Launch Node 4, not yet part of the cluster:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n4 \
-    -dbListenAddr 127.0.0.1:9084 \
-    -dbRole master \
+    -db-folder /tmp/dkvsrv/n4 \
+    -listen-addr 127.0.0.1:9084 \
+    -role master \
     -nexus-node-url http://127.0.0.1:9024 \
     -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
     -nexusJoin
@@ -240,19 +240,19 @@ of reads far exceed the number of writes.
 First launch the DKV master node using the RocksDB engine with this command:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_name> \
-    -dbListenAddr <host:port> \
-    -dbRole master
+    -db-folder <folder_name> \
+    -listen-addr <host:port> \
+    -role master
 ```
 
 Then launch the DKV slave node using either RocksDB or Badger engine with this command:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_name> \
-    -dbListenAddr <host:port> \
-    -dbEngine <rocksdb|badger> \
-    -dbRole slave \
-    -replMasterAddr <dkv_master_listen_addr>
+    -db-folder <folder_name> \
+    -listen-addr <host:port> \
+    -db-engine <rocksdb|badger> \
+    -role slave \
+    -repl-master-addr <dkv_master_listen_addr>
 ```
 
 Subsequently, any mutations performed on the master node's keyspace using `dkvctl`
@@ -271,11 +271,11 @@ This can be achieved by using the `-dbDiskless` option during launch as shown he
 
 ```bash
 $ ./bin/dkvsrv \
-    -dbDiskless \
-    -dbListenAddr <host:port> \
-    -dbEngine badger \
-    -dbRole slave \
-    -replMasterAddr <dkv_master_listen_addr>
+    -diskless \
+    -listen-addr <host:port> \
+    -db-engine badger \
+    -role slave \
+    -repl-master-addr <dkv_master_listen_addr>
 ```
 
 This mode may provide better performance for reads and is also useful for deployments
