@@ -143,11 +143,13 @@ func validateFlags() {
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
 		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
 	}
-	if disklessMode && (strings.ToLower(dbEngine) == "rocksdb" || strings.ToLower(dbRole) == masterRole) {
-		log.Panicf("diskless is available only on Badger storage and for standalone and slave roles")
+
+	if disklessMode && strings.ToLower(dbEngine) == "rocksdb" {
+		log.Panicf("diskless is available only on Badger storage")
 	}
+
 	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
-		log.Panicf("replMasterAddr must be given in slave mode")
+		log.Panicf("repl-master-addr must be given in slave mode")
 	}
 	if dbEngineIni != "" {
 		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
@@ -380,7 +382,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
-		return badgerDb, nil, badgerDb, badgerDb
+		return badgerDb, badgerDb, badgerDb, badgerDb
 	default:
 		slg.Panicf("Unknown storage engine: %s", dbEngine)
 		return nil, nil, nil, nil

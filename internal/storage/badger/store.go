@@ -30,6 +30,7 @@ import (
 type DB interface {
 	storage.KVStore
 	storage.Backupable
+	storage.ChangePropagator
 	storage.ChangeApplier
 }
 
@@ -296,14 +297,14 @@ func (bdb *badgerDB) PutSnapshot(snap []byte) error {
 		return err
 	}
 
-	return bdb.db.Update(func(txn *badger.Txn) error {
-		for key, val := range data {
-			if err := txn.Set([]byte(key), val); err != nil {
-				return err
-			}
+	wb := bdb.db.NewWriteBatch()
+	defer wb.Cancel()
+	for key, val := range data {
+		if err := wb.Set([]byte(key), val); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return wb.Flush()
 }
 
 const backupBufSize = 64 << 20
@@ -506,6 +507,14 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 		}
 	}
 	return appldChngNum, lastErr
+}
+
+func (bdb *badgerDB) GetLatestCommittedChangeNumber() (uint64, error) {
+	return 0, errors.New("not implemented yet")
+}
+
+func (bdb *badgerDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
+	return nil, errors.New("not implemented yet")
 }
 
 type iter struct {
