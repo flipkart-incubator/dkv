@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,7 +24,12 @@ func TestStatsDClient(t *testing.T) {
 	defer statsCli.Close()
 
 	statsdAdminURL := fmt.Sprintf("%s:%d", statsDHost, adminPort)
-	conn := connectToStatsD(t, statsdAdminURL)
+	conn, err := connectToStatsD(t, statsdAdminURL)
+	if err != nil {
+		//failed to connect to statsd endpoint, skipping test.
+		t.Logf("TestStatsDClient- Skipping this test.")
+		return
+	}
 
 	s, w := bufio.NewScanner(conn), bufio.NewWriter(conn)
 	//flushDuration := statsdFlushInterval(s, w)
@@ -75,13 +79,13 @@ func statsdFlushInterval(s *bufio.Scanner, w *bufio.Writer) time.Duration {
 	return 10 * time.Millisecond
 }
 
-func connectToStatsD(t *testing.T, statsdAdminURL string) net.Conn {
+func connectToStatsD(t *testing.T, statsdAdminURL string) (net.Conn , error){
 	conn, err := net.Dial("tcp", statsdAdminURL)
 	if err != nil {
-		t.Logf("Unable to connect to StatsD admin endpoint: %s. Skipping this test.", statsdAdminURL)
-		os.Exit(0)
+		t.Logf("Unable to connect to StatsD admin endpoint: %s.", statsdAdminURL)
+		return nil, err
 	}
-	return conn
+	return conn, nil
 }
 
 func sendCommand(cmd string, w *bufio.Writer) {

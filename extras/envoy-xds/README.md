@@ -7,7 +7,7 @@ The cluster information is sourced from config file. Please look at the
 
 ### 1. Launch several DKV instances configured as masters or slaves
 ```bash
-$ ./bin/dkvsrv -access-log stdout -role master -dbFolder /tmp/dkvsrv -dbListenAddr 127.0.0.1:8080
+$ ./bin/dkvsrv -access-log stdout -role master -db-folder /tmp/dkvsrv -listen-addr 127.0.0.1:8080
 $ ./bin/dkvsrv -access-log stdout -db-engine badger -listen-addr 127.0.0.1:9090 -dbDiskless -role slave -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 5s
 $ ./bin/dkvsrv -access-log stdout -db-engine badger -listen-addr 127.0.0.1:9191 -dbDiskless -role slave -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 5s
 ```
