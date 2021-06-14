@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"os"
@@ -20,6 +19,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/shamaton/msgpack"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	ini "gopkg.in/ini.v1"
@@ -285,15 +285,12 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(snap)
-	return buf.Bytes(), err
+	return msgpack.Marshal(snap)
 }
 
 func (bdb *badgerDB) PutSnapshot(snap []byte) error {
-	buf := bytes.NewBuffer(snap)
 	data := make(map[string][]byte)
-	if err := gob.NewDecoder(buf).Decode(&data); err != nil {
+	if err := msgpack.Unmarshal(snap, data); err != nil {
 		return err
 	}
 
