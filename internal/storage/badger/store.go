@@ -272,6 +272,7 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 }
 
 func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
+	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()
 	snap := make(map[string][]byte)
@@ -289,8 +290,9 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 }
 
 func (bdb *badgerDB) PutSnapshot(snap []byte) error {
+	defer bdb.opts.statsCli.Timing("badger.snapshot.put.latency.ms", time.Now())
 	data := make(map[string][]byte)
-	if err := msgpack.Unmarshal(snap, data); err != nil {
+	if err := msgpack.Unmarshal(snap, &data); err != nil {
 		return err
 	}
 

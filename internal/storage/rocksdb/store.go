@@ -345,6 +345,7 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 const tempFilePrefix = "rocksdb-sstfile-"
 
 func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
 
@@ -392,6 +393,7 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	if snap == nil || len(snap) == 0 {
 		return nil
 	}
+	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 
 	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
 	if err != nil {
