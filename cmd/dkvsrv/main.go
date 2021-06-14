@@ -288,7 +288,7 @@ func printFlagsWithPrefix(prefixes ...string) {
 }
 
 func toDKVSrvrRole(role string) dkvSrvrRole {
-	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
+	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(role)))
 }
 
 func (role dkvSrvrRole) printFlags() {

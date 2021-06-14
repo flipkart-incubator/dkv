@@ -122,7 +122,7 @@ in order to setup these instances for synchronous replication.
 $ ./bin/dkvsrv \
     -db-folder <folder_path> \
     -listen-addr <host:port> \
-    -dbRole master \
+    -role master \
     -nexus-node-url http://<host:port> \ #optional when running on separete nodes.
     -nexus-cluster-url <cluster_url>
 ```
