@@ -123,8 +123,8 @@ $ ./bin/dkvsrv \
     -dbFolder <folder_path> \
     -dbListenAddr <host:port> \
     -dbRole master \
-    -nexusNodeUrl http://<host:port> \ #optional when running on separete nodes.
-    -nexusClusterUrl <cluster_url>
+    -nexus-node-url http://<host:port> \ #optional when running on separete nodes.
+    -nexus-cluster-url <cluster_url>
 ```
 
 All these 3 DKV instances form a database cluster each listening on separate ports for
@@ -154,8 +154,8 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n1 \
     -dbListenAddr 127.0.0.1:9081 \
     -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9021 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+    -nexus-node-url http://127.0.0.1:9021 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
 Launch Node 2:
@@ -164,8 +164,8 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n2 \
     -dbListenAddr 127.0.0.1:9082 \
     -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9022 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+    -nexus-node-url http://127.0.0.1:9022 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
 Launch Node 3:
@@ -174,8 +174,8 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n3 \
     -dbListenAddr 127.0.0.1:9083 \
     -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9023 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+    -nexus-node-url http://127.0.0.1:9023 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
 Launch Node 4, not yet part of the cluster:
@@ -184,8 +184,8 @@ $ ./bin/dkvsrv \
     -dbFolder /tmp/dkvsrv/n4 \
     -dbListenAddr 127.0.0.1:9084 \
     -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9024 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
+    -nexus-node-url http://127.0.0.1:9024 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
     -nexusJoin
 ```
 
