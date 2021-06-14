@@ -309,7 +309,7 @@ func (role dkvSrvrRole) printFlags() {
 }
 
 func setDKVDefaultsForNexusDirs() {
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexusLogDir"), flag.Lookup("nexusSnapDir")
+	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
 	dbPath := flag.Lookup("dbFolder").DefValue
 	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
 	nexusLogDirFlag.Value.Set("")
