@@ -69,7 +69,7 @@ func init() {
 	flag.StringVar(&keyPath, "keyPath", "", "Path for key file of this node")
 	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.Uint64Var(&blockCacheSize, "blockCacheSize", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
+	flag.Uint64Var(&blockCacheSize, "block-cache-size", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -182,11 +182,13 @@ func validateFlags() {
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
 		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
 	}
-	if disklessMode && (strings.ToLower(dbEngine) == "rocksdb" || strings.ToLower(dbRole) == masterRole) {
-		log.Panicf("diskless is available only on Badger storage and for standalone and slave roles")
+
+	if disklessMode && strings.ToLower(dbEngine) == "rocksdb" {
+		log.Panicf("diskless is available only on Badger storage")
 	}
+
 	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
-		log.Panicf("replMasterAddr must be given in slave mode")
+		log.Panicf("repl-master-addr must be given in slave mode")
 	}
 	nonNullAuthFlags := btou(certPath != "", keyPath != "", caCertPath != "")
 	if nonNullAuthFlags > 0 && nonNullAuthFlags < 3 {
@@ -335,8 +337,8 @@ func (role dkvSrvrRole) printFlags() {
 }
 
 func setDKVDefaultsForNexusDirs() {
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexusLogDir"), flag.Lookup("nexusSnapDir")
-	dbPath := flag.Lookup("dbFolder").DefValue
+	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
+	dbPath := flag.Lookup("db-folder").DefValue
 	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
 	nexusLogDirFlag.Value.Set("")
 	nexusSnapDirFlag.Value.Set("")
@@ -353,7 +355,7 @@ func setFlagsForNexusDirs() {
 
 func setupStats() {
 	if statsdAddr != "" {
-		statsCli = stats.NewStatsDClient(statsdAddr, "dkv")
+		statsCli = stats.NewStatsDClient(statsdAddr, "dkv.")
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
@@ -367,11 +369,17 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		slg.Fatalf("Unable to create DB folder at %s. Error: %v.", dbFolder, err)
 	}
 
-	dbDir := path.Join(dbFolder, "data")
-	slg.Infof("Using %s as data folder", dbDir)
+	dataDir := path.Join(dbFolder, "data")
+	slg.Infof("Using %s as data directory", dataDir)
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbDir,
+		sstDir := path.Join(dbFolder, "sst")
+		if err := os.MkdirAll(sstDir, 0777); err != nil {
+			slg.Fatalf("Unable to create sst folder at %s. Error: %v.", dbFolder, err)
+		}
+
+		rocksDb, err := rocksdb.OpenDB(dataDir,
+			rocksdb.WithSSTDir(sstDir),
 			rocksdb.WithSyncWrites(),
 			rocksdb.WithCacheSize(blockCacheSize),
 			rocksdb.WithRocksDBConfig(dbEngineIni),
@@ -394,13 +402,13 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		if disklessMode {
 			bdbOpts = append(bdbOpts, badger.WithInMemory())
 		} else {
-			bdbOpts = append(bdbOpts, badger.WithDBDir(dbDir))
+			bdbOpts = append(bdbOpts, badger.WithDBDir(dataDir))
 		}
 		badgerDb, err = badger.OpenDB(bdbOpts...)
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
-		return badgerDb, nil, badgerDb, badgerDb
+		return badgerDb, badgerDb, badgerDb, badgerDb
 	default:
 		slg.Panicf("Unknown storage engine: %s", dbEngine)
 		return nil, nil, nil, nil

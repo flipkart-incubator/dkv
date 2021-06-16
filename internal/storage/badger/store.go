@@ -30,6 +30,7 @@ import (
 type DB interface {
 	storage.KVStore
 	storage.Backupable
+	storage.ChangePropagator
 	storage.ChangeApplier
 }
 
@@ -271,6 +272,7 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 }
 
 func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
+	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()
 	snap := make(map[string][]byte)
@@ -290,20 +292,21 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 }
 
 func (bdb *badgerDB) PutSnapshot(snap []byte) error {
+	defer bdb.opts.statsCli.Timing("badger.snapshot.put.latency.ms", time.Now())
 	buf := bytes.NewBuffer(snap)
 	data := make(map[string][]byte)
 	if err := gob.NewDecoder(buf).Decode(&data); err != nil {
 		return err
 	}
 
-	return bdb.db.Update(func(txn *badger.Txn) error {
-		for key, val := range data {
-			if err := txn.Set([]byte(key), val); err != nil {
-				return err
-			}
+	wb := bdb.db.NewWriteBatch()
+	defer wb.Cancel()
+	for key, val := range data {
+		if err := wb.Set([]byte(key), val); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return wb.Flush()
 }
 
 const backupBufSize = 64 << 20
@@ -378,7 +381,7 @@ func (bdb *badgerDB) RestoreFrom(file string) (st storage.KVStore, ba storage.Ba
 	defer f.Close()
 
 	// Create temp folder for the restored data
-	restoreDir, err := storage.CreateTempFolder(tempDirPrefx)
+	restoreDir, err := storage.CreateTempFolder("", tempDirPrefx)
 	if err != nil {
 		return
 	}
@@ -506,6 +509,14 @@ func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, erro
 		}
 	}
 	return appldChngNum, lastErr
+}
+
+func (bdb *badgerDB) GetLatestCommittedChangeNumber() (uint64, error) {
+	return 0, errors.New("not implemented yet")
+}
+
+func (bdb *badgerDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
+	return nil, errors.New("not implemented yet")
 }
 
 type iter struct {

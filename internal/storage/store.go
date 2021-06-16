@@ -108,9 +108,9 @@ const timeFormatTempPath = "20060102150405"
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFile(prefix string) (string, error) {
+func CreateTempFile(dir string, prefix string) (string, error) {
 	tempFilePrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
-	tempFile, err := ioutil.TempFile("", string(tempFilePrefix))
+	tempFile, err := ioutil.TempFile(dir, string(tempFilePrefix))
 	if err != nil {
 		return "", err
 	}
@@ -121,9 +121,9 @@ func CreateTempFile(prefix string) (string, error) {
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFolder(prefix string) (string, error) {
+func CreateTempFolder(dir string, prefix string) (string, error) {
 	tempFolderPrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
-	return ioutil.TempDir("", string(tempFolderPrefix))
+	return ioutil.TempDir(dir, string(tempFolderPrefix))
 }
 
 // RenameFolder moves the given src path onto the given dst path by

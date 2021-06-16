@@ -50,6 +50,7 @@ type rocksDBOpts struct {
 	rocksDBOpts    *gorocksdb.Options
 	restoreOpts    *gorocksdb.RestoreOptions
 	folderName     string
+	sstDirectory   string
 	lgr            *zap.Logger
 	statsCli       stats.Client
 	cfNames        []string
@@ -86,6 +87,14 @@ func WithStats(statsCli stats.Client) DBOption {
 func WithSyncWrites() DBOption {
 	return func(opts *rocksDBOpts) {
 		opts.writeOpts.SetSync(true)
+	}
+}
+
+// WithSSTDir configures the directory to be used
+// for SST Operation on RocksDB.
+func WithSSTDir(sstDir string) DBOption {
+	return func(opts *rocksDBOpts) {
+		opts.sstDirectory = sstDir
 	}
 }
 
@@ -336,6 +345,7 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 const tempFilePrefix = "rocksdb-sstfile-"
 
 func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
 
@@ -344,7 +354,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 	sstWrtr := gorocksdb.NewSSTFileWriter(envOpts, opts)
 	defer sstWrtr.Destroy()
 
-	sstFile, err := storage.CreateTempFile(tempFilePrefix)
+	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -383,8 +393,9 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	if snap == nil || len(snap) == 0 {
 		return nil
 	}
+	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 
-	sstFile, err := storage.CreateTempFile(tempFilePrefix)
+	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
 	if err != nil {
 		return err
 	}
@@ -458,7 +469,7 @@ func (rdb *rocksDB) RestoreFrom(folder string) (st storage.KVStore, ba storage.B
 	defer be.Close()
 
 	// Create temp folder for the restored data
-	restoreFolder, err := storage.CreateTempFolder(tempDirPrefix)
+	restoreFolder, err := storage.CreateTempFolder(rdb.opts.sstDirectory, tempDirPrefix)
 	if err != nil {
 		return
 	}
