@@ -62,10 +62,8 @@ github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 h1:7HZCaLC5+BZpm
 github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4/go.mod h1:5tD+neXqOorC30/tWg0LCSkrqj/AR6gu8yY8/fpw1q0=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7 h1:PxlANvUXyHsBPYk3O8XGekF3WXnJmhYuXwcq6wv0atc=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
-github.com/flipkart-incubator/nexus v0.0.0-20210614094508-f3227c358082 h1:cu6XQ/jP5c9iTioEMzomSi6qHpuE3LqEyAzC3RMHsOs=
-github.com/flipkart-incubator/nexus v0.0.0-20210614094508-f3227c358082/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
-github.com/flipkart-incubator/nexus v0.0.0-20210614154113-25676d48da5f h1:TKl7Qd4+l2MRvolN1le3Ot6XigGLAlHDa20aNfwUdXA=
-github.com/flipkart-incubator/nexus v0.0.0-20210614154113-25676d48da5f/go.mod h1:fVG1ZE92jPxpDf45jImF5qffRqRAPUf2ZLbyI0Rhfu8=
+github.com/flipkart-incubator/nexus v0.0.0-20210615145717-03036f620277 h1:ekVMpRN3K/DdYN8aEO1cJNnonL3QgEHwn6iSR/qsoRQ=
+github.com/flipkart-incubator/nexus v0.0.0-20210615145717-03036f620277/go.mod h1:AamDqIsidJDjxy/XRKenK2HU+cLyCGXcPUlyt8hLU7c=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
 github.com/go-kit/kit v0.9.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
@@ -93,7 +91,6 @@ github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5y
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.2/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.3/go.mod h1:vzj43D7+SQXF/4pzW/hwtAqwc6iTitCiVSaWz5lYuqw=
-github.com/golang/protobuf v1.5.0/go.mod h1:FsONVRAS9T7sI+LIUmWTfcYkHO4aIWwzhcaSAoJOfIk=
 github.com/golang/protobuf v1.5.0/go.mod h1:FsONVRAS9T7sI+LIUmWTfcYkHO4aIWwzhcaSAoJOfIk=
 github.com/golang/protobuf v1.5.2 h1:ROPKBNFfQgOUMifHyP+KYbvpjbdoFNs+aK7DXlji0Tw=
 github.com/golang/protobuf v1.5.2/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiuN0vRsmY=
