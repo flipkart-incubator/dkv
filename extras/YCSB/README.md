@@ -33,3 +33,15 @@ Run the workload test:
 ```
 
 
+## Running on k8s
+
+#### 1. Start DKV
+
+#### 2. Set Up YCSB Docker Image
+
+
+```bash
+cd <dkv_root>/extras/YCSB
+
+
+```
