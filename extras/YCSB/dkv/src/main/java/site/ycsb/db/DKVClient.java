@@ -129,7 +129,12 @@ public class DKVClient extends DB {
 
   @Override
   public Status delete(String table, String key) {
-    throw new UnsupportedOperationException("Delete not implemented in DKV");
+    try {
+      CLIENT_REF.get().delete(toDKVKey(table, key));
+      return Status.OK;
+    } catch (Exception e) {
+      return handleErrStatus(e);
+    }
   }
 
   @Override
