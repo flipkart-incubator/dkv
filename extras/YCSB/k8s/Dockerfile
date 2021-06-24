@@ -20,7 +20,7 @@ RUN ln -s /usr/share/dkv-ycsb /opt/ycsb-0.18
 
 COPY k8s/start.sh /start.sh
 
-ENV ACTION='' DBTYPE='' WORKLETTER='' DBARGS='' RECNUM='' OPNUM=''
+ENV ACTION='' DBTYPE='' WORKLOAD='' DBARGS='' RECNUM='' OPNUM='' JVM_ARGS='' NUM_THREADS=''
 
 WORKDIR "/opt/ycsb-0.18"
 
