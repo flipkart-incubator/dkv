@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/bash 
 
-set -e
+set -ex
 
 function load_data
 {
@@ -13,7 +13,7 @@ function load_data
 # exit message
 # trap 'echo "ycsb-run has finished"' EXIT
 
-JVM_ARGUMENTS="${JVM_ARGS:-""}"
+JVM_ARGUMENTS="${JVM_ARGS:-"''"}"
 THREADS="${NUM_THREADS:-"1"}"
 
 
