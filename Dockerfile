@@ -20,7 +20,7 @@ RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v6.5.3.tar.gz | tar x
     && cd rocksdb-6.5.3 && make install
 
 # Install GoLang
-RUN curl -fsSL https://dl.google.com/go/go1.13.4.linux-amd64.tar.gz | tar xz \
+RUN curl -fsSL https://dl.google.com/go/go1.16.3.linux-amd64.tar.gz | tar xz \
     && chown -R root:root ./go && mv ./go /usr/local
 ENV PATH="/usr/local/go/bin:${PATH}"
 
