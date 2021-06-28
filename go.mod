@@ -4,17 +4,15 @@ go 1.13
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
-	github.com/coreos/etcd v3.3.19+incompatible // indirect
-	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7
-	github.com/flipkart-incubator/nexus v0.0.0-20210727093243-32ce0a3d3391
-	github.com/gogo/protobuf v1.3.1
+	github.com/flipkart-incubator/nexus v0.0.0-20210628074651-e0e198712a77
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2 // indirect
-	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/kpango/fastime v1.0.16
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
 	github.com/pkg/errors v0.9.1 // indirect
@@ -29,8 +27,10 @@ require (
 	golang.org/x/sys v0.0.0-20201005065044-765f4ea38db3 // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
-	google.golang.org/grpc v1.33.2
-	google.golang.org/protobuf v1.27.1
+	github.com/smira/go-statsd v1.3.1
+	go.uber.org/zap v1.17.0
+	google.golang.org/grpc v1.38.0
+	google.golang.org/protobuf v1.26.0
 	gopkg.in/ini.v1 v1.62.0
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
