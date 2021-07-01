@@ -568,7 +568,7 @@ func TestMultiGet(t *testing.T) {
 	} else {
 		for i, result := range results {
 			if string(result.Value) != vals[i] {
-				t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], result)
+				t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], result.Value)
 			}
 		}
 	}
@@ -1139,7 +1139,7 @@ func BenchmarkGetKey(b *testing.B) {
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(readResults[0].Value) != val {
-			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, readResults[0])
+			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, readResults[0].Value)
 		}
 	}
 }
@@ -1205,7 +1205,7 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(readResults[0].Value) != expectedValue {
-			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
+			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
 		}
 	}
 }
@@ -1220,7 +1220,7 @@ func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string, ttl int64) 
 			if readResults, err := store.Get([]byte(k)); err != nil {
 				t.Fatal(err)
 			} else if ttl > time.Now().Unix() && string(readResults[0].Value) != string(v) {
-				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0].Value)
 			} else {
 				data[k] = v
 			}
