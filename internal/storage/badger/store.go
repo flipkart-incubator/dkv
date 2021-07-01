@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/gob"
 	"errors"
 	"fmt"
+	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
@@ -44,9 +46,10 @@ type badgerDB struct {
 }
 
 type bdgrOpts struct {
-	opts     badger.Options
-	lgr      *zap.Logger
-	statsCli stats.Client
+	opts         badger.Options
+	lgr          *zap.Logger
+	statsCli     stats.Client
+	sstDirectory string
 }
 
 // DBOption is used to configure the Badger
@@ -139,6 +142,14 @@ func WithBadgerConfig(iniFile string) DBOption {
 func WithDBDir(dir string) DBOption {
 	return func(opts *bdgrOpts) {
 		opts.opts = opts.opts.WithDir(dir).WithValueDir(dir)
+	}
+}
+
+// WithSSTDir configures the directory to be used
+// for SST Operation on RocksDB.
+func WithSSTDir(sstDir string) DBOption {
+	return func(opts *bdgrOpts) {
+		opts.sstDirectory = sstDir
 	}
 }
 
@@ -273,12 +284,28 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 
 func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
+
+	sstFile, err := storage.CreateTempFile(bdb.opts.sstDirectory, "badger-snapshot")
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Create(sstFile)
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(sstFile)
+
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()
-	snap := make(map[string][]byte)
+	w := bufio.NewWriter(f)
+
 	strm.Send = func(list *badger_pb.KVList) error {
 		for _, kv := range list.Kv {
-			snap[string(kv.Key)] = kv.Value
+			entry := serverpb.PutRequest{Key: kv.Key, Value: kv.Value, ExpireTS: kv.ExpiresAt}
+			_, err := pbutil.WriteDelimited(w, &entry)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -286,23 +313,33 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(snap)
-	return buf.Bytes(), err
+	w.Flush()
+	f.Close()
+
+	return ioutil.ReadFile(sstFile)
 }
 
 func (bdb *badgerDB) PutSnapshot(snap []byte) error {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.put.latency.ms", time.Now())
-	buf := bytes.NewBuffer(snap)
-	data := make(map[string][]byte)
-	if err := gob.NewDecoder(buf).Decode(&data); err != nil {
-		return err
-	}
 
+	in := bytes.NewReader(snap)
 	wb := bdb.db.NewWriteBatch()
 	defer wb.Cancel()
-	for key, val := range data {
-		if err := wb.Set([]byte(key), val); err != nil {
+
+	entry := &serverpb.PutRequest{}
+	for {
+		entry.Reset()
+		if _, err := pbutil.ReadDelimited(in, entry); err != nil {
+			if err == io.EOF {
+				break
+			}
+		}
+
+		kv := badger.NewEntry(entry.Key, entry.Value)
+		if entry.ExpireTS > 0 {
+			kv.ExpiresAt = entry.ExpireTS
+		}
+		if err := wb.SetEntry(kv); err != nil {
 			return err
 		}
 	}
