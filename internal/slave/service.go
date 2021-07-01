@@ -93,6 +93,10 @@ func (ss *slaveService) Put(_ context.Context, _ *serverpb.PutRequest) (*serverp
 	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }
 
+func (ss *slaveService) MultiPut(_ context.Context, _ *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	return nil, errors.New("DKV slave service does not support keyspace mutations")
+}
+
 func (ss *slaveService) Delete(_ context.Context, _ *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
 	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }

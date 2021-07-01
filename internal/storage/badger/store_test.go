@@ -52,7 +52,7 @@ func TestPutAndGet(t *testing.T) {
 	numKeys := 10
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
-		if err := store.Put([]byte(key), []byte(value)); err != nil {
+		if err := store.Put(kvEntry(key, value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -63,6 +63,30 @@ func TestPutAndGet(t *testing.T) {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(results[0].Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, results[0])
+		}
+	}
+}
+
+func TestMultiPutAndGet(t *testing.T) {
+	numKeys := 10
+	items := make([]*storage.KVEntry, numKeys+1)
+	for i := 1; i <= numKeys; i++ {
+		key, value := fmt.Sprintf("MPK%d", i), fmt.Sprintf("VALUEXXXX%d", i)
+		items[i] = kvEntry(key, value)
+	}
+
+	if err := store.Put(items...); err != nil {
+		t.Fatalf("Unable to Batch PUT. Error: %v", err)
+	}
+
+	for i := 1; i <= numKeys; i++ {
+		key, expectedValue := fmt.Sprintf("MPK%d", i), fmt.Sprintf("VALUEXXXX%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if string(readResults[0].Value) != expectedValue {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
 		}
 	}
 }
@@ -80,7 +104,7 @@ func TestInMemPutAndGet(t *testing.T) {
 
 func TestPutEmptyValue(t *testing.T) {
 	key, val := "EmptyKey", ""
-	if err := store.Put([]byte(key), []byte(val)); err != nil {
+	if err := store.Put(kvEntry(key, val)); err != nil {
 		t.Fatalf("Unable to PUT empty value. Key: %s", key)
 	}
 
@@ -91,7 +115,7 @@ func TestPutEmptyValue(t *testing.T) {
 	}
 
 	// update nil value for same key
-	if err := store.Put([]byte(key), nil); err != nil {
+	if err := store.Put(&storage.KVEntry{Key: []byte(key)}); err != nil {
 		t.Fatalf("Unable to PUT empty value. Key: %s", key)
 	}
 
@@ -104,7 +128,7 @@ func TestPutEmptyValue(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	key, val := "SomeKey", "SomeValue"
-	if err := store.Put([]byte(key), []byte(val)); err != nil {
+	if err := store.Put(kvEntry(key, val)); err != nil {
 		t.Fatalf("Unable to PUT. Key: %s", key)
 	}
 
@@ -131,7 +155,7 @@ func TestMultiGet(t *testing.T) {
 	keys, vals := make([][]byte, numKeys), make([][]byte, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("MK%d", i), fmt.Sprintf("MV%d", i)
-		if err := store.Put([]byte(key), []byte(value)); err != nil {
+		if err := store.Put(kvEntry(key, value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		} else {
 			keys[i-1] = []byte(key)
@@ -197,7 +221,7 @@ func TestAtomicIncrDecr(t *testing.T) {
 		numThrs        = 10
 		casKey, casVal = []byte("ctrKey"), []byte{0}
 	)
-	store.Put(casKey, casVal)
+	store.Put(&storage.KVEntry{Key: casKey, Value: casVal})
 
 	// even threads increment, odd threads decrement
 	// a given key
@@ -426,14 +450,16 @@ func TestPutTTLAndGet(t *testing.T) {
 	numIteration := 10
 	for i := 1; i <= numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
-		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
+		if err := store.Put(&storage.KVEntry{Key: []byte(key), Value: []byte(value),
+			ExpireTS: uint64(time.Now().Add(2 * time.Second).Unix())}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
 	for i := 11; i <= 10+numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
-		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
+		if err := store.Put(&storage.KVEntry{Key: []byte(key), Value: []byte(value),
+			ExpireTS: uint64(time.Now().Add(-2 * time.Second).Unix())}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -650,7 +676,7 @@ func BenchmarkSaveChangesOneByOne(b *testing.B) {
 func BenchmarkPutNewKeys(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		key, value := fmt.Sprintf("BK%d", i), fmt.Sprintf("BV%d", i)
-		if err := store.Put([]byte(key), []byte(value)); err != nil {
+		if err := store.Put(kvEntry(key, value)); err != nil {
 			b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -658,12 +684,12 @@ func BenchmarkPutNewKeys(b *testing.B) {
 
 func BenchmarkPutExistingKey(b *testing.B) {
 	key := "BKey"
-	if err := store.Put([]byte(key), []byte("BVal")); err != nil {
+	if err := store.Put(kvEntry(key, "BVal")); err != nil {
 		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
 	}
 	for i := 0; i < b.N; i++ {
 		value := fmt.Sprintf("BVal%d", i)
-		if err := store.Put([]byte(key), []byte(value)); err != nil {
+		if err := store.Put(kvEntry(key, value)); err != nil {
 			b.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -671,7 +697,7 @@ func BenchmarkPutExistingKey(b *testing.B) {
 
 func BenchmarkGetKey(b *testing.B) {
 	key, val := "BGetKey", "BGetVal"
-	if err := store.Put([]byte(key), []byte(val)); err != nil {
+	if err := store.Put(kvEntry(key, val)); err != nil {
 		b.Fatalf("Unable to PUT. Key: %s. Error: %v", key, err)
 	}
 	for i := 0; i < b.N; i++ {
@@ -694,7 +720,7 @@ func BenchmarkGetMissingKey(b *testing.B) {
 
 func BenchmarkCompareAndSet(b *testing.B) {
 	ctrKey := []byte("num")
-	err := store.Put(ctrKey, []byte{0})
+	err := store.Put(&storage.KVEntry{Key: ctrKey, Value: []byte{0}})
 	if err != nil {
 		b.Errorf("Unable to PUT. Error: %v", err)
 	}
@@ -818,7 +844,7 @@ func putKeys(t testing.TB, bdb storage.KVStore, numKeys int, keyPrefix, valPrefi
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := bdb.Put([]byte(k), []byte(v)); err != nil {
+		if err := bdb.Put(kvEntry(k, v)); err != nil {
 			t.Fatal(err)
 		} else {
 			if readResults, err := bdb.Get([]byte(k)); err != nil {
@@ -887,4 +913,8 @@ func openBadgerDB() (*badgerDB, error) {
 	}
 	kvs, err := OpenDB(WithDBDir(dbFolder))
 	return kvs.(*badgerDB), err
+}
+
+func kvEntry(key, value string) *storage.KVEntry {
+	return &storage.KVEntry{Key: []byte(key), Value: []byte(value)}
 }

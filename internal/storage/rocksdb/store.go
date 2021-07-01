@@ -250,38 +250,38 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
-	if expireTS > 0 {
-		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
-		dF := ttlDataFormat{
-			ExpiryTS: expireTS,
-			Data:     value,
-		}
-		msgPack, err := msgpack.Marshal(dF)
-		if err != nil {
-			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-			return err
-		}
-		wb := gorocksdb.NewWriteBatch()
-		wb.Delete(key)
-		wb.PutCF(rdb.ttlCF, key, msgPack)
-		err = rdb.db.Write(rdb.opts.writeOpts, wb)
-		if err != nil {
-			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-		}
-		return err
+func (rdb *rocksDB) Put(pairs ...*storage.KVEntry) error {
+	metricsPrefix := "rocksdb.put.multi"
+	if len(pairs) == 1 {
+		metricsPrefix = "rocksdb.put.single"
 	}
-	return rdb.Put(key, value)
-}
 
-func (rdb *rocksDB) Put(key []byte, value []byte) error {
-	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
+	defer rdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
 	wb := gorocksdb.NewWriteBatch()
-	wb.DeleteCF(rdb.ttlCF, key)
-	wb.Put(key, value)
+	for _, kv := range pairs {
+		if kv == nil {
+			continue //skip nil entries
+		}
+		if kv.ExpireTS > 0 {
+			dF := ttlDataFormat{
+				ExpiryTS: kv.ExpireTS,
+				Data:     kv.Value,
+			}
+			msgPack, err := msgpack.Marshal(dF)
+			if err != nil {
+				rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
+				return err
+			}
+			wb.DeleteCF(rdb.normalCF, kv.Key)
+			wb.PutCF(rdb.ttlCF, kv.Key, msgPack)
+		} else {
+			wb.DeleteCF(rdb.ttlCF, kv.Key)
+			wb.PutCF(rdb.normalCF, kv.Key, kv.Value)
+		}
+	}
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
-		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
+		rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
 	}
 	return err
 }

@@ -148,27 +148,18 @@ func newMemStore() *memStore {
 	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
 }
 
-func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS uint64) error {
+func (ms *memStore) Put(pairs ...*storage.KVEntry) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	storeKey := string(key)
-	if _, present := ms.store[storeKey]; present {
-		return errors.New("Given key already exists")
+	for _, kv := range pairs {
+		storeKey := string(kv.Key)
+		if _, present := ms.store[storeKey]; present {
+			return errors.New("given key already exists")
+		}
+		ms.store[storeKey] = memStoreObject{kv.Value, 0}
 	}
-	ms.store[storeKey] = memStoreObject{value, expiryTS}
-	return nil
-}
 
-func (ms *memStore) Put(key []byte, value []byte) error {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-
-	storeKey := string(key)
-	if _, present := ms.store[storeKey]; present {
-		return errors.New("Given key already exists")
-	}
-	ms.store[storeKey] = memStoreObject{value, 0}
 	return nil
 }
 

@@ -58,7 +58,22 @@ func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
-	if err := ss.store.PutTTL(putReq.Key, putReq.Value, putReq.ExpireTS); err != nil {
+	if err := ss.store.Put(&storage.KVEntry{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS}); err != nil {
+		ss.lg.Error("Unable to PUT", zap.Error(err))
+		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
+	}
+	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
+}
+
+func (ss *standaloneService) MultiPut(ctx context.Context, putReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+	puts := make([]*storage.KVEntry, len(putReq.PutRequest))
+	for i, request := range putReq.PutRequest {
+		puts[i] = &storage.KVEntry{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
+	}
+
+	if err := ss.store.Put(puts...); err != nil {
 		ss.lg.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
@@ -169,7 +184,7 @@ func (ss *standaloneService) AddReplica(ctx context.Context, replica *serverpb.R
 
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
-	if err := ss.store.Put([]byte(replicaKey), []byte(replicaValue)); err != nil {
+	if err := ss.store.Put(&storage.KVEntry{Key: []byte(replicaKey), Value: []byte(replicaValue)}); err != nil {
 		ss.lg.Error("Unable to add replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
@@ -183,9 +198,7 @@ func (ss *standaloneService) RemoveReplica(ctx context.Context, replica *serverp
 
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
-	// We set the current replica key's value to empty - indicating a remove.
-	// Once storage layer exposes DEL primitives, this impl. needs to perhaps change.
-	if err := ss.store.Put([]byte(replicaKey), nil); err != nil {
+	if err := ss.store.Delete([]byte(replicaKey)); err != nil {
 		ss.lg.Error("Unable to remove replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
