@@ -31,6 +31,8 @@ func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
 	switch {
 	case intReq.Put != nil:
 		return dr.put(intReq.Put)
+	case intReq.MultiPut != nil:
+		return dr.multiPut(intReq.MultiPut)
 	case intReq.Delete != nil:
 		return dr.delete(intReq.Delete)
 	case intReq.Cas != nil:
@@ -56,7 +58,16 @@ func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 }
 
 func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
-	err := dr.kvs.Put(putReq.Key, putReq.Value)
+	err := dr.kvs.Put(&storage.KVEntry{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS})
+	return nil, err
+}
+
+func (dr *dkvReplStore) multiPut(multiPutReq *serverpb.MultiPutRequest) ([]byte, error) {
+	puts := make([]*storage.KVEntry, len(multiPutReq.PutRequest))
+	for i, request := range multiPutReq.PutRequest {
+		puts[i] = &storage.KVEntry{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
+	}
+	err := dr.kvs.Put(puts...)
 	return nil, err
 }
 
