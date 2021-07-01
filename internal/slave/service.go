@@ -124,7 +124,10 @@ func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.Mult
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		res.KeyValues = readResults
+		res.KeyValues = make([]*serverpb.KVPair, len(readResults))
+		for i, result := range readResults {
+			res.KeyValues[i] = &serverpb.KVPair{Key: result.Key,Value: result.Value}
+		}
 	}
 	return res, err
 }

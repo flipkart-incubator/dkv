@@ -120,7 +120,10 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 		ss.lg.Error("Unable to MultiGET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
-		res.KeyValues = readResults
+		res.KeyValues = make([]*serverpb.KVPair, len(readResults))
+		for i, result := range readResults {
+			res.KeyValues[i] = &serverpb.KVPair{Key: result.Key,Value: result.Value}
+		}
 	}
 	return res, err
 }

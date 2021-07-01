@@ -298,7 +298,7 @@ func (rdb *rocksDB) Delete(key []byte) error {
 	return err
 }
 
-func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
+func (rdb *rocksDB) Get(keys ...[]byte) ([]*storage.KVEntry, error) {
 	ro := rdb.opts.readOpts
 	switch numKeys := len(keys); {
 	case numKeys == 1:
@@ -738,7 +738,7 @@ func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 	return &row, err
 }
 
-func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
+func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*storage.KVEntry, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
 	values, err := rdb.db.MultiGetCFMultiCF(ro, []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
 	if err != nil {
@@ -750,16 +750,16 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	value1.Free()
 	value2.Free()
 	if kv != nil {
-		return []*serverpb.KVPair{kv}, nil
+		return []*storage.KVEntry{kv}, nil
 	}
 	return nil, nil
 }
 
-func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *serverpb.KVPair {
+func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *storage.KVEntry {
 	if value1.Size() > 0 {
 		//non ttl use-case
 		val := toByteArray(value1)
-		return &serverpb.KVPair{Key: key, Value: val}
+		return &storage.KVEntry{Key: key, Value: val}
 	}
 
 	if value2.Size() > 0 {
@@ -777,13 +777,13 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 		} else if ttlRow.ExpiryTS > 0 {
 			val = ttlRow.Data
 		}
-		return &serverpb.KVPair{Key: key, Value: val}
+		return &storage.KVEntry{Key: key, Value: val, ExpireTS: ttlRow.ExpiryTS}
 	}
 
 	return nil
 }
 
-func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
+func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*storage.KVEntry, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
 
 	kl := len(keys)
@@ -799,7 +799,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 		return nil, err
 	}
 
-	var results []*serverpb.KVPair
+	var results []*storage.KVEntry
 	for i := 0; i < kl; i++ {
 		value1, value2 := values[i], values[i+kl]
 		kv := rdb.extractResult(value1, value2, keys[i])

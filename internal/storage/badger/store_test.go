@@ -62,7 +62,7 @@ func TestPutAndGet(t *testing.T) {
 		if results, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(results[0].Value) != expectedValue {
-			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, results[0])
+			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, results[0].Value)
 		}
 	}
 }
@@ -704,7 +704,7 @@ func BenchmarkGetKey(b *testing.B) {
 		if results, err := store.Get([]byte(key)); err != nil {
 			b.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(results[0].Value) != val {
-			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, results[0])
+			b.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, val, results[0].Value)
 		}
 	}
 }
@@ -713,7 +713,7 @@ func BenchmarkGetMissingKey(b *testing.B) {
 	key := "BMissingKey"
 	for i := 0; i < b.N; i++ {
 		if res, err := store.Get([]byte(key)); err == nil {
-			b.Fatalf("Expected an error on missing key, but got no error. Key: %s, Value: %s", key, res)
+			b.Fatalf("Expected an error on missing key, but got no error. Key: %s, Value: %+v", key, res)
 		}
 	}
 }
@@ -814,7 +814,7 @@ func checkGetResults(t *testing.T, bdb storage.KVStore, ks, expVs [][]byte) {
 	} else {
 		for i, result := range results {
 			if string(result.Value) != string(expVs[i]) {
-				t.Errorf("Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", ks[i], expVs[i], result)
+				t.Errorf("Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", ks[i], expVs[i], result.Value)
 			}
 		}
 	}
@@ -835,7 +835,7 @@ func getKeys(t *testing.T, bdb storage.KVStore, numKeys int, keyPrefix, valPrefi
 		if readResults, err := bdb.Get([]byte(key)); err != nil {
 			t.Errorf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else if string(readResults[0].Value) != expectedValue {
-			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0])
+			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
 		}
 	}
 }
@@ -850,7 +850,7 @@ func putKeys(t testing.TB, bdb storage.KVStore, numKeys int, keyPrefix, valPrefi
 			if readResults, err := bdb.Get([]byte(k)); err != nil {
 				t.Fatal(err)
 			} else if string(readResults[0].Value) != string(v) {
-				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0].Value)
 			} else {
 				data[k] = v
 			}
@@ -862,7 +862,7 @@ func putKeys(t testing.TB, bdb storage.KVStore, numKeys int, keyPrefix, valPrefi
 func checkMissingGetResults(t *testing.T, bdb storage.KVStore, ks [][]byte) {
 	for _, k := range ks {
 		if result, _ := bdb.Get(k); len(result) > 0 {
-			t.Errorf("Expected missing entry for key: %s. But instead found value: %s", k, result)
+			t.Errorf("Expected missing entry for key: %s. But instead found value: %+v", k, result)
 		}
 	}
 }

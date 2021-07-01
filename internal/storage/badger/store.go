@@ -229,16 +229,16 @@ func (bdb *badgerDB) Delete(key []byte) error {
 	return err
 }
 
-func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
+func (bdb *badgerDB) Get(keys ...[]byte) ([]*storage.KVEntry, error) {
 	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
-	var results []*serverpb.KVPair
+	var results []*storage.KVEntry
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
 			item, err := txn.Get(key)
 			switch err {
 			case nil:
 				value, _ := item.ValueCopy(nil)
-				results = append(results, &serverpb.KVPair{Key: key, Value: value})
+				results = append(results, &storage.KVEntry{Key: key, Value: value})
 			case badger.ErrKeyNotFound:
 				continue
 			default:
