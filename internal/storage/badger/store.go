@@ -282,22 +282,22 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
+const (
+	badgerSSTPrefix = "badger-snapshot-"
+)
+
 func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
 
-	sstFile, err := storage.CreateTempFile(bdb.opts.sstDirectory, "badger-snapshot")
+	sstFile, err := storage.CreateTempFile(bdb.opts.sstDirectory, badgerSSTPrefix)
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.Create(sstFile)
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(sstFile)
+	defer os.Remove(sstFile.Name())
 
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()
-	w := bufio.NewWriter(f)
+	w := bufio.NewWriter(sstFile)
 
 	strm.Send = func(list *badger_pb.KVList) error {
 		for _, kv := range list.Kv {
@@ -314,9 +314,9 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	}
 
 	w.Flush()
-	f.Close()
+	sstFile.Close()
 
-	return ioutil.ReadFile(sstFile)
+	return ioutil.ReadFile(sstFile.Name())
 }
 
 func (bdb *badgerDB) PutSnapshot(snap []byte) error {

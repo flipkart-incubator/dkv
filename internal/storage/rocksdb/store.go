@@ -359,8 +359,8 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	defer os.Remove(sstFile)
-	if err = sstWrtr.Open(sstFile); err != nil {
+	defer os.Remove(sstFile.Name())
+	if err = sstWrtr.Open(sstFile.Name()); err != nil {
 		return nil, err
 	}
 
@@ -386,7 +386,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	return ioutil.ReadFile(sstFile)
+	return ioutil.ReadFile(sstFile.Name())
 }
 
 func (rdb *rocksDB) PutSnapshot(snap []byte) error {
