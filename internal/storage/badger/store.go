@@ -577,7 +577,7 @@ func (bdbIter *iter) HasNext() bool {
 	return bdbIter.it.Valid()
 }
 
-func (bdbIter *iter) Next() ([]byte, []byte) {
+func (bdbIter *iter) Next() *storage.KVEntry {
 	defer bdbIter.it.Next()
 	item := bdbIter.it.Item()
 	key := item.KeyCopy(nil)
@@ -585,7 +585,7 @@ func (bdbIter *iter) Next() ([]byte, []byte) {
 	if err != nil {
 		bdbIter.iterErr = err
 	}
-	return key, val
+	return &storage.KVEntry{Key: key, Value: val, ExpireTS: item.ExpiresAt()}
 }
 
 func (bdbIter *iter) Err() error {

@@ -572,7 +572,7 @@ func (rdbIter *iter) HasNext() bool {
 	return rdbIter.rdbIter.Valid()
 }
 
-func (rdbIter *iter) Next() ([]byte, []byte) {
+func (rdbIter *iter) Next() *storage.KVEntry {
 	defer rdbIter.rdbIter.Next()
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
@@ -581,9 +581,9 @@ func (rdbIter *iter) Next() ([]byte, []byte) {
 		ttlRow, _ = parseTTLMsgPackData(val)
 	}
 	if ttlRow != nil && ttlRow.ExpiryTS > 0 {
-		val = ttlRow.Data
+		return &storage.KVEntry{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}
-	return key, val
+	return &storage.KVEntry{Key: key, Value: val}
 }
 
 func (rdbIter *iter) Err() error {
