@@ -1,6 +1,7 @@
 package iterators
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/storage"
 	"testing"
 )
 
@@ -14,10 +15,10 @@ func (si *simpleIterator) HasNext() bool {
 	return si.currentPos < len(si.data)
 }
 
-func (si *simpleIterator) Next() ([]byte, []byte) {
+func (si *simpleIterator) Next() *storage.KVEntry {
 	d := si.data[si.currentPos]
 	si.currentPos++
-	return []byte(d), []byte(d)
+	return &storage.KVEntry{Key: []byte(d), Value: []byte(d)}
 }
 
 func (si *simpleIterator) Err() error {
@@ -45,8 +46,8 @@ func TestIterationConcat(t *testing.T) {
 	count := 0
 
 	for iter3.HasNext() {
-		k, _ := iter3.Next()
-		kS := string(k)
+		entry := iter3.Next()
+		kS := string(entry.Key)
 		aI := all[count]
 
 		if aI != kS {

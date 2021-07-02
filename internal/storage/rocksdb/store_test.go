@@ -358,12 +358,12 @@ func TestIteratorPrefixScan(t *testing.T) {
 
 	actCount := 0
 	for it.HasNext() {
-		key, val := it.Next()
+		entry := it.Next()
 		actCount++
-		if strings.HasPrefix(string(key), string(prefix)) {
-			t.Logf("Key: %s Value: %s\n", key, val)
+		if strings.HasPrefix(string(entry.Key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", entry.Key, entry.Value)
 		} else {
-			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			t.Errorf("Expected key %s to have prefix %s", entry.Key, prefix)
 		}
 	}
 
@@ -400,12 +400,12 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 
 	actCount := 0
 	for it.HasNext() {
-		key, val := it.Next()
+		entry := it.Next()
 		actCount++
-		if strings.HasPrefix(string(key), string(prefix)) {
-			t.Logf("Key: %s Value: %s\n", key, val)
+		if strings.HasPrefix(string(entry.Key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", entry.Key, entry.Value)
 		} else {
-			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			t.Errorf("Expected key %s to have prefix %s", entry.Key, prefix)
 		}
 	}
 
@@ -438,12 +438,12 @@ func TestIteratorFromStartKey(t *testing.T) {
 
 	actCount := 0
 	for it.HasNext() {
-		key, val := it.Next()
+		entry := it.Next()
 		actCount++
-		if strings.HasPrefix(string(key), string(prefix)) {
-			t.Logf("Key: %s Value: %s\n", key, val)
+		if strings.HasPrefix(string(entry.Key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", entry.Key, entry.Value)
 		} else {
-			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			t.Errorf("Expected key %s to have prefix %s", entry.Key, prefix)
 		}
 	}
 
