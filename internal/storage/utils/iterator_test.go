@@ -1,4 +1,4 @@
-package iterators
+package utils
 
 import (
 	"github.com/flipkart-incubator/dkv/internal/storage"
