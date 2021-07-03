@@ -377,11 +377,11 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 			it.Next()
 		}
 	} else {
-		return "", nil
+		return fileName, nil
 	}
 
 	if err := sstWrtr.Finish(); err != nil {
-		return "", err
+		return fileName, err
 	}
 
 	return fileName, nil
