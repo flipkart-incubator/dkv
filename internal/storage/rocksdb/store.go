@@ -7,6 +7,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
 	"github.com/flipkart-incubator/dkv/internal/storage/utils"
+	"github.com/mholt/archiver/v3"
 	"github.com/vmihailenco/msgpack/v5"
 	"io/ioutil"
 	"os"
@@ -345,20 +346,20 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 
 const tempFilePrefix = "rocksdb-sstfile-"
 
-func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) error {
+func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) (string, error) {
 	var fileName string
 	envOpts := gorocksdb.NewDefaultEnvOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	sstWrtr := gorocksdb.NewSSTFileWriter(envOpts, opts)
 	defer sstWrtr.Destroy()
 
-	if fileName = "/default.cf"; cf == rdb.ttlCF {
-		fileName = "/ttl.cf"
+	if fileName = sstDir + "/default.cf"; cf == rdb.ttlCF {
+		fileName = sstDir + "/ttl.cf"
 	}
 
-	if err := sstWrtr.Open(sstDir + fileName); err != nil {
+	if err := sstWrtr.Open(fileName); err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to open sst writer", zap.Error(err))
-		return err
+		return "", err
 	}
 
 	// TODO: Any options need to be set
@@ -376,14 +377,14 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 			it.Next()
 		}
 	} else {
-		return nil
+		return "", nil
 	}
 
 	if err := sstWrtr.Finish(); err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return fileName, nil
 }
 
 func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
@@ -398,27 +399,27 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 	}
 	defer os.RemoveAll(sstDir)
 
-	err = rdb.generateSST(snap, rdb.normalCF, sstDir)
+	normalSSTFile, err := rdb.generateSST(snap, rdb.normalCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate sst file", zap.Error(err))
 		return nil, err
 	}
 
-	err = rdb.generateSST(snap, rdb.ttlCF, sstDir)
+	ttlSSTFile, err := rdb.generateSST(snap, rdb.ttlCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate ttl sst file", zap.Error(err))
 		return nil, err
 	}
 
-	sstTarFile, _ := storage.CreateTempFile(rdb.opts.sstDirectory, "snap*.tar")
-	defer os.Remove(sstTarFile.Name())
-	err = utils.CreateTar(sstDir, sstTarFile.Name())
+	//TODO: figure out a better option, which doesn't require cpu or space.
+	archiveFile := sstDir + "/snap.zip"
+	err = archiver.Archive([]string{normalSSTFile, ttlSSTFile}, archiveFile)
 	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to tar sst files", zap.Error(err))
+		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
 	}
 
-	return ioutil.ReadFile(sstTarFile.Name())
+	return ioutil.ReadFile(archiveFile)
 }
 
 func (rdb *rocksDB) PutSnapshot(snap []byte) error {
@@ -427,21 +428,22 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 
-	sstTar, err := storage.CreateTempFile(rdb.opts.sstDirectory, "snap*.tar")
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, tempFilePrefix)
 	if err != nil {
-		rdb.opts.lgr.Error("PutSnapshot: Failed to create temporary file", zap.Error(err))
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return err
 	}
-	defer os.Remove(sstTar.Name())
-	if _, err = sstTar.Write(snap); err != nil {
+	defer os.RemoveAll(sstDir)
+
+	sstArchive := sstDir + "/snap.zip"
+	if err = ioutil.WriteFile(sstArchive, snap, 0644); err != nil {
 		rdb.opts.lgr.Error("PutSnapshot: Failed to download snapshot to temporary file", zap.Error(err))
 		return err
 	}
 
-	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, tempFilePrefix)
-	err = utils.ExtractTar(sstTar.Name(), sstDir)
+	err = archiver.Unarchive(sstArchive, sstDir)
 	if err != nil {
-		rdb.opts.lgr.Error("PutSnapshot: Failed to untar sst file", zap.Error(err))
+		rdb.opts.lgr.Error("PutSnapshot: Failed to extract sst archive", zap.Error(err))
 		return err
 	}
 
@@ -658,7 +660,7 @@ func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator 
 	readOpts := rdb.opts.readOpts
 	baseIter := rdb.newIterCF(readOpts, iterOpts, rdb.normalCF)
 	ttlIter := rdb.newIterCF(readOpts, iterOpts, rdb.ttlCF)
-	return utils.Concat(baseIter, ttlIter)
+	return iterators.Concat(baseIter, ttlIter)
 }
 
 func (rdb *rocksDB) toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
