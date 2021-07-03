@@ -376,7 +376,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 			it.Next()
 		}
 	} else {
-		return fileName , nil
+		return fileName, nil
 	}
 
 	if err := sstWrtr.Finish(); err != nil {
@@ -398,7 +398,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 	}
 	defer os.RemoveAll(sstDir)
 
-	normalSSTFile , err := rdb.generateSST(snap, rdb.normalCF, sstDir)
+	normalSSTFile, err := rdb.generateSST(snap, rdb.normalCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate sst file", zap.Error(err))
 		return nil, err
@@ -412,7 +412,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 
 	//TODO: figure out a better option, which doesn't require cpu or space.
 	archiveFile := sstDir + "/snap.zip"
-	err = archiver.Archive([]string{normalSSTFile,ttlSSTFile}, archiveFile)
+	err = archiver.Archive([]string{normalSSTFile, ttlSSTFile}, archiveFile)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
@@ -434,9 +434,8 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	}
 	defer os.RemoveAll(sstDir)
 
-
 	sstArchive := sstDir + "/snap.zip"
-	if 	err = ioutil.WriteFile(sstArchive, snap, 0644); err != nil {
+	if err = ioutil.WriteFile(sstArchive, snap, 0644); err != nil {
 		rdb.opts.lgr.Error("PutSnapshot: Failed to download snapshot to temporary file", zap.Error(err))
 		return err
 	}
