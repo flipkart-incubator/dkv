@@ -146,7 +146,7 @@ func WithDBDir(dir string) DBOption {
 }
 
 // WithSSTDir configures the directory to be used
-// for SST Operation on RocksDB.
+// for SST Operation on Badger.
 func WithSSTDir(sstDir string) DBOption {
 	return func(opts *bdgrOpts) {
 		opts.sstDirectory = sstDir

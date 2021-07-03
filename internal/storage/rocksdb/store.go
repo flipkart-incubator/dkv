@@ -344,7 +344,7 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
-const tempFilePrefix = "rocksdb-sstfile-"
+const sstPrefix = "rocksdb-sstfile-"
 
 func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) (string, error) {
 	var fileName string
@@ -392,7 +392,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
 
-	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, tempFilePrefix)
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return nil, err
@@ -428,7 +428,7 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 
-	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, tempFilePrefix)
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return err
