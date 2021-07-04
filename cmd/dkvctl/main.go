@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
@@ -31,6 +33,8 @@ var cmds = []*cmd{
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
 	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
+	{"updateStatus", "<dcId> <addr> <database> <vBucket> <status> <master> <nexusUrl>", "Updates the status in discovery server", (*cmd).updateStatus, "", false},
+	{"getClusterInfo", "<dcId> <database> <vBucket>", "Gets the latest cluster info", (*cmd).getStatus, "", false},
 }
 
 func (c *cmd) usage() {
@@ -190,6 +194,52 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 		}
 		for _, id := range ids {
 			fmt.Printf("%x => %s\n", id, nodes[id])
+		}
+	}
+}
+
+func (c *cmd) updateStatus(client *ctl.DKVClient, args ...string) {
+	if (len(args) != 7) {
+		c.usage();
+	} else {
+		status, _ := strconv.Atoi(args[4])
+		vbucketInfo := serverpb.RegionInfo{
+			DcID:            args[0],
+			NodeAddress:     args[1],
+			Database:        args[2],
+			VBucket:         args[3],
+			Status:          serverpb.RegionStatus(status),
+			MasterHost:      &args[5],
+			NexusClusterUrl: &args[6],
+		}
+		if err := client.UpdateStatus(vbucketInfo); err != nil {
+			fmt.Printf("Unable to update Status: Error: %v\n", err)
+		} else {
+			fmt.Printf("Updated status")
+		}
+	}
+}
+
+func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
+	dcId := ""
+	database := ""
+	vBucket := ""
+	if (len(args) > 0) {
+		dcId = args[0]
+	}
+	if (len(args) > 1) {
+		database = args[1]
+	}
+	if (len(args) > 2) {
+		vBucket = args[2]
+	}
+	vBuckets, err := client.GetClusterInfo(dcId, database, vBucket)
+	if (err != nil) {
+		fmt.Printf("Unable to get Status: Error: %v\n", err)
+	} else {
+		for _, vBucket := range vBuckets {
+			res, _ := json.Marshal(vBucket)
+			fmt.Println(string(res))
 		}
 	}
 }

@@ -3,7 +3,10 @@ package slave
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/discovery"
+	"github.com/flipkart-incubator/dkv/internal/utils"
 	"net"
 	"os/exec"
 	"sync"
@@ -51,6 +54,12 @@ func TestMasterRocksDBSlaveBadger(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newBadgerDBStore(slaveDBFolder)
 	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
+}
+
+func TestSlaveDiscoveryFunctionality(t *testing.T)  {
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newRocksDBStore(slaveDBFolder)
+	testGetStatus(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
 func TestLargePayloadsDuringRepl(t *testing.T) {
@@ -117,16 +126,13 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	}
 }
 
-func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
+func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable)  {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go serveStandaloneDKVMaster(&wg, masterStore, cp, masterBU)
 	wg.Wait()
 
 	masterCli = newDKVClient(masterSvcPort)
-	defer masterCli.Close()
-	defer masterSvc.Close()
-	defer masterGrpcSrvr.GracefulStop()
 
 	wg.Add(1)
 	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli)
@@ -139,9 +145,12 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	sleepInSecs(2)
 
 	slaveCli = newDKVClient(slaveSvcPort)
-	defer slaveCli.Close()
-	defer slaveSvc.Close()
-	defer slaveGrpcSrvr.GracefulStop()
+}
+
+func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
+
+	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
+	defer closeMasterAndSlave()
 
 	numKeys, keyPrefix, valPrefix := 10, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
@@ -151,6 +160,8 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	putKeys(t, masterCli, numKeys, ttlExpiredKeyPrefix, ttlValPrefix, uint64(time.Now().Add(-2*time.Second).Unix()))
 
 	testDelete(t, masterCli, keyPrefix)
+
+	maxNumChangesRepl := uint32(100)
 
 	if err := slaveSvc.(*slaveService).applyChangesFromMaster(maxNumChangesRepl); err != nil {
 		t.Error(err)
@@ -194,6 +205,60 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 		t.Error("Expected an error from slave instance")
 	} else {
 		t.Log(err)
+	}
+}
+
+func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable)  {
+	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
+	defer closeMaster()
+
+	numKeys, keyPrefix, valPrefix := 10, "KGetStatus", "VGetStatus"
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
+
+	slaveServer := slaveSvc.(*slaveService)
+	validateStatus(t, "replNotStarted", serverpb.RegionStatus_INACTIVE)
+
+	// Validate status when too high lag
+	if err := slaveServer.applyChangesFromMaster(2); err != nil {
+		t.Error(err)
+	}
+	if (slaveServer.replLag != 16) {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replLag)
+	}
+	validateStatus(t, "tooHighReplLag", serverpb.RegionStatus_INACTIVE)
+
+	// Validate status when replication catching up
+	if err := slaveServer.applyChangesFromMaster(4); err != nil {
+		t.Error(err)
+	}
+	if (slaveServer.replLag != 8) {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replLag)
+	}
+	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
+
+	// Validate status when replication not successful for long time
+	utils.SleepInSecs(7)
+	validateStatus(t, "replDelayed", serverpb.RegionStatus_INACTIVE)
+
+	// Validate status when replication caught up
+	if err := slaveServer.applyChangesFromMaster(10); err != nil {
+		t.Error(err)
+	}
+	if (slaveServer.replLag != 0) {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replLag)
+	}
+	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
+
+	// Validate status after closing
+	closeSlave()
+	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_INACTIVE)
+}
+
+func validateStatus(t *testing.T, useCase string, expectedStatus serverpb.RegionStatus)  {
+	regionInfo, _ := slaveSvc.GetStatus(nil, nil)
+	if (regionInfo.Status != expectedStatus) {
+		t.Errorf("Unexpected status. Use case: %s, Expected: %s, Actual: %s", useCase,
+			expectedStatus.String(), regionInfo.Status.String())
 	}
 }
 
@@ -289,7 +354,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
 	lgr, _ := zap.NewDevelopment()
-	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient())
+	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{})
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -301,10 +366,18 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
 	lgr, _ := zap.NewDevelopment()
-	if ss, err := NewService(store, ca, masterCli, replPollInterval, lgr, stats.NewNoOpClient()); err != nil {
+	replConf := ReplicationConfig{
+		maxNumChngs:          2,
+		replPollInterval:     5 * time.Second,
+		maxActiveReplLag:     10,
+		maxActiveReplElapsed: 5,
+		replMasterAddr:       "",
+	}
+	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, mockClusterInfoGetter()); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
+		slaveSvc.(*slaveService).replCli = masterCli
 		slaveGrpcSrvr = grpc.NewServer()
 		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
 		lis := listen(slaveSvcPort)
@@ -323,4 +396,33 @@ func listen(port int) net.Listener {
 
 func sleepInSecs(duration int) {
 	<-time.After(time.Duration(duration) * time.Second)
+}
+
+func closeMasterAndSlave()  {
+	closeMaster()
+	closeSlave()
+}
+
+func closeMaster()  {
+	masterCli.Close()
+	masterSvc.Close()
+	masterGrpcSrvr.GracefulStop()
+}
+
+func closeSlave()  {
+	slaveCli.Close()
+	slaveSvc.Close()
+	slaveGrpcSrvr.GracefulStop()
+}
+
+func mockClusterInfoGetter() discovery.ClusterInfoGetter {
+	return mockClusterInfo{}
+}
+
+type mockClusterInfo struct {
+
+}
+
+func (m mockClusterInfo) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {
+	return nil, errors.New("Not implemented")
 }

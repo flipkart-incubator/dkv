@@ -35,16 +35,22 @@ type standaloneService struct {
 	cp    storage.ChangePropagator
 	br    storage.Backupable
 
-	rwl      *sync.RWMutex
-	lg       *zap.Logger
-	statsCli stats.Client
+	rwl        *sync.RWMutex
+	lg         *zap.Logger
+	statsCli   stats.Client
+	regionInfo *serverpb.RegionInfo
+}
+
+func (ss *standaloneService) GetStatus(ctx context.Context, request *serverpb.GetStatusRequest) (*serverpb.RegionInfo, error) {
+	return ss.regionInfo, nil
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
 	rwl := &sync.RWMutex{}
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli}
+	regionInfo.Status = serverpb.RegionStatus_LEADER
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -260,6 +266,28 @@ func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.R
 	return newEmptyStatus(), nil
 }
 
+func (ss *standaloneService) PrefixMultiGet(ctx context.Context, prefixMultiGetRequest *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	// Convert prefix multi get request to prefix iterator and append the results to construct the response
+	iterReq := &serverpb.IterateRequest{KeyPrefix: prefixMultiGetRequest.KeyPrefix}
+	iteration := storage.NewIteration(ss.store, iterReq)
+
+	var results []*serverpb.KVPair
+
+	err := iteration.ForEach(func(k, v []byte) error {
+		results = append(results, &serverpb.KVPair{Key: k, Value: v})
+		return nil
+	})
+	if (err != nil) {
+		// Better to return error rather than partial results as incomplete results could cause client misbehaviour
+		ss.lg.Error("Unable to PrefixMultiGet", zap.Error(err))
+		return &serverpb.MultiGetResponse{Status: newErrorStatus(err)}, err
+	}
+	return &serverpb.MultiGetResponse{KeyValues: results, Status: newEmptyStatus()}, nil
+}
+
 func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
@@ -295,16 +323,17 @@ type DKVClusterService interface {
 
 type distributedService struct {
 	DKVService
-	raftRepl nexus_api.RaftReplicator
-	lg       *zap.Logger
-	statsCli stats.Client
+	raftRepl 	nexus_api.RaftReplicator
+	lg       	*zap.Logger
+	statsCli 	stats.Client
+	isClosed	bool
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli), raftRepl, lgr, statsCli}
+	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -401,6 +430,12 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 	}
 }
 
+func (ds *distributedService) PrefixMultiGet(ctx context.Context, prefixMultiGetReq *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	// TODO - implement linearizable consistency here. Requires iterator implementation on raft
+	// (or make sure followers which are partitioned from leader don't serve requests)
+	return ds.DKVService.PrefixMultiGet(ctx, prefixMultiGetReq)
+}
+
 func gobDecodeAsKVPairs(val []byte) ([]*serverpb.KVPair, error) {
 	buf := bytes.NewBuffer(val)
 	res := new([]*serverpb.KVPair)
@@ -442,10 +477,54 @@ func (ds *distributedService) ListNodes(ctx context.Context, _ *empty.Empty) (*s
 }
 
 func (ds *distributedService) Close() error {
+	ds.lg.Info("Closing the master service")
 	// Do not invoke DKVService::Close here since `raftRepl` already
 	// closes the underlying storage connection.
+	// TODO - fix the above as ideally it should call DKVService::Close if there are more aspects to DKVService to close other than storage
 	ds.raftRepl.Stop()
+
+	ds.isClosed = true
 	return nil
+}
+
+func (ds *distributedService) GetStatus(context context.Context, request *serverpb.GetStatusRequest) (*serverpb.RegionInfo, error) {
+	regionInfo := ds.DKVService.(*standaloneService).regionInfo
+
+	if (ds.isClosed) {
+		regionInfo.Status = serverpb.RegionStatus_INACTIVE
+	} else {
+		// Currently there is no way for this instance of DKVServer to know correctly if its the leader for its vBucket
+		// Neither does it know if its the local dc follower, or is a follower with a lot of lag
+		// Even the member list api ListMembers() is just an in memory lookup rather than actually looking at the current raft member state
+		// If the current node is itself disconnected, it will provide stale / incorrect member list
+		// For now, we will return status based on listMembers() and identify master based on IP address alone
+		// As of now, there is no hard requirement to identify true leader via service discovery thus using listmembers() is fine
+		// TODO - Provide correct status wrt master / local dc follower / follower with lot of lag
+		leaderId, members := ds.raftRepl.ListMembers()
+
+		// Get IP address of leader as identified by raft
+		if leaderURL, present := members[leaderId]; present {
+			leader := strings.Split(strings.Split(leaderURL, "http://")[1], ":")[0]
+
+			// Get IP address of current node
+			currentIp := strings.Split(regionInfo.NodeAddress, ":")[0]
+
+			// We are comparing IP address because nexus port is different from db listen port
+			// The assumption is that one node has only one dkv process which is definetely not the right assumption
+			// TODO - Have the db listen address as part of the raft metadata associated with a node
+			if (leader == currentIp) {
+				regionInfo.Status = serverpb.RegionStatus_LEADER
+			} else {
+				regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
+			}
+		} else {
+			// Leader is unknown. Could be when raft quorum is incomplete or leader election is in progress
+			// TODO - Provide correct status wrt local dc follower / follower with lot of lag
+			regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
+		}
+	}
+	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
+	return regionInfo, nil
 }
 
 func newErrorStatus(err error) *serverpb.Status {

@@ -56,6 +56,7 @@ func TestDistributedService(t *testing.T) {
 	t.Run("testDistAtomicIncrDecr", testDistAtomicIncrDecr)
 	t.Run("testLinearizableGet", testLinearizableGet)
 	t.Run("testRestore", testRestore)
+	t.Run("testGetStatus", testGetStatus)
 	t.Run("testNewDKVNodeJoiningAndLeaving", testNewDKVNodeJoiningAndLeaving)
 }
 
@@ -213,11 +214,19 @@ func testRestore(t *testing.T) {
 	}
 }
 
+func testGetStatus(t *testing.T)  {
+	for _, dkvSvc := range dkvSvcs {
+		info, _ := dkvSvc.GetStatus(nil, nil)
+		// Currently all regions will be marked as leader as current behaviour is based on ip address
+		if (info.Status != serverpb.RegionStatus_LEADER) {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_LEADER.String(), info.Status.String())
+		}
+	}
+}
+
 func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 	// Create and start the new DKV node
 	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, newNodeURL, clusterURL)
-	defer dkvSvc.Close()
-	defer grpcSrv.GracefulStop()
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
 	<-time.After(3 * time.Second)
 
@@ -242,11 +251,24 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
 			}
 		}
+		regionInfo, _ := dkvSvc.GetStatus(nil, nil)
+		// Currently new region will be marked as leader as current behaviour is based on ip address
+		if (regionInfo.Status != serverpb.RegionStatus_LEADER) {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_LEADER.String(), regionInfo.Status.String())
+		}
 		// Remove new DKV node through the client of any other DKV Node (2)
 		if err := dkvClis[2].RemoveNode(newNodeURL); err != nil {
 			t.Fatal(err)
 		}
+		// TODO - node should now ideally be marked inactive but since status check is using ip address, can't test here
 		<-time.After(3 * time.Second)
+
+		grpcSrv.GracefulStop()
+		dkvSvc.Close()
+		regionInfo, _ = dkvSvc.GetStatus(nil, nil)
+		if (regionInfo.Status != serverpb.RegionStatus_INACTIVE) {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_INACTIVE.String(), regionInfo.Status.String())
+		}
 	}
 }
 
@@ -336,7 +358,9 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	kvs, cp, br := newKVStoreWithID(id)
 	dkvRepl := newReplicator(kvs, nodeURL, clusURL)
 	dkvRepl.Start()
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, zap.NewNop(), stats.NewNoOpClient())
+	regionInfo := &serverpb.RegionInfo{}
+	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, zap.NewNop(), stats.NewNoOpClient(), regionInfo)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

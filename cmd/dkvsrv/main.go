@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/discovery"
+	"gopkg.in/ini.v1"
 	"log"
 	"net"
 	"os"
@@ -19,7 +21,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/internal/sync"
-	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
@@ -31,16 +32,26 @@ import (
 )
 
 var (
+	// region level configuration.
+	// TODO - move them to config file to setup multiple regions in a node
 	disklessMode     bool
 	dbEngine         string
 	dbEngineIni      string
-	dbFolder         string
-	dbListenAddr     string
 	dbRole           string
-	statsdAddr       string
-	replMasterAddr   string
 	replPollInterval time.Duration
 	blockCacheSize   uint64
+	dcID			 string
+	database		 string
+	vBucket		  string
+
+	// Node level configuration common for all regions in the node
+	dbFolder         string
+	dbListenAddr     string
+	statsdAddr       string
+
+	// Service discovery related params
+	isDiscoverySrv   bool
+	discoveryConfIni string
 
 	// Logging vars
 	dbAccessLog    string
@@ -60,12 +71,16 @@ func init() {
 	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave")
+	flag.BoolVar(&isDiscoverySrv, "use-as-discovery-srv", false, "Use this node as discovery server")
+	flag.StringVar(&discoveryConfIni, "discovery-service-config-file", "", "An .ini file for configuring discovery server parameters")
 	flag.StringVar(&statsdAddr, "statsd-addr", "", "StatsD service address in host:port format")
-	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.DurationVar(&replPollInterval, "repl-poll-interval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "access-log", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
 	flag.Uint64Var(&blockCacheSize, "block-cache-size", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
+	flag.StringVar(&dcID, "dc-id", "default", "DC / Availability zone identifier")
+	flag.StringVar(&database, "database", "default", "Database identifier")
+	flag.StringVar(&vBucket, "vBucket", "default", "vBucket identifier")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -78,6 +93,11 @@ const (
 )
 
 const defBlockCacheSize = 3 << 30
+
+const (
+	discoveryServerConfig	= "serverConfig"
+	discoveryClientConfig	= "clientConfig"
+)
 
 func main() {
 	flag.Parse()
@@ -93,9 +113,28 @@ func main() {
 	srvrRole := toDKVSrvrRole(dbRole)
 	srvrRole.printFlags()
 
+	// Create the region info which is passed to DKVServer
+	regionInfo := &serverpb.RegionInfo{
+		DcID:            dcID,
+		NodeAddress:     dbListenAddr,
+		Database:        database,
+		VBucket:         vBucket,
+		Status:          serverpb.RegionStatus_INACTIVE,
+		MasterHost:      nil,
+		NexusClusterUrl: nil,
+	}
+
+	statusPropagator, clusterInfoGetter := getDiscoveryClients()
+
+	if (statusPropagator != nil) {
+		// Currently statusPropagator and clusterInfoGetter are same instances hence closing just one
+		// but ideally this information should be abstracted from main and we should call close on both
+		defer statusPropagator.Close()
+	}
+
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -105,26 +144,40 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli)
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli, regionInfo)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-	case slaveRole:
-		// TODO: Check if authority override option is needed for slaves
-		// while they connect with masters
-		if replCli, err := ctl.NewInSecureDKVClient(replMasterAddr, ""); err != nil {
-			panic(err)
+
+		// Discovery servers can be only configured if node started as master.
+		if isDiscoverySrv {
+			discoveryConf, _ := ini.Load(discoveryConfIni)
+			if discoveryServerSection, err := discoveryConf.GetSection(discoveryServerConfig); err == nil {
+				discoverySrvConfig := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
+				discoveryService := discovery.NewDiscoveryService(dkvSvc, dkvLogger, discoverySrvConfig)
+				serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
+			} else {
+				panic(fmt.Errorf("started as discovery server but can't load the section %s in file %s, error: %v",
+					discoveryServerConfig, discoveryConfIni, err))
+			}
 		} else {
-			defer replCli.Close()
-			dkvSvc, _ := slave.NewService(kvs, ca, replCli, replPollInterval, dkvLogger, statsCli)
-			defer dkvSvc.Close()
-			serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+			// Currently nodes can be either discovery server or client. This will change when a node supports multiple regions
+			statusPropagator.RegisterRegion(dkvSvc)
 		}
+	case slaveRole:
+		// TODO - construct replConfig from region level config described in LLD
+		maxNumChanges := uint32(10000)
+		replConfig := slave.NewReplicationConfig(maxNumChanges, replPollInterval, uint64(maxNumChanges * 10), uint64(replPollInterval.Seconds()) * 10)
+
+		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, clusterInfoGetter)
+		defer dkvSvc.Close()
+		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+		statusPropagator.RegisterRegion(dkvSvc)
 	default:
 		panic("Invalid 'dbRole'. Allowed values are none|master|slave.")
 	}
@@ -137,9 +190,6 @@ func validateFlags() {
 	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
 		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
 	}
-	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
-		log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
-	}
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
 		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
 	}
@@ -148,9 +198,6 @@ func validateFlags() {
 		log.Panicf("diskless is available only on Badger storage")
 	}
 
-	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
-		log.Panicf("repl-master-addr must be given in slave mode")
-	}
 	if dbEngineIni != "" {
 		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
 			log.Panicf("given storage configuration file: %s does not exist", dbEngineIni)
@@ -408,5 +455,26 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	} else {
 		nexusRepl.Start()
 		return nexusRepl
+	}
+}
+
+func getDiscoveryClients() (discovery.StatusPropagator, discovery.ClusterInfoGetter) {
+	discoveryConf, err := ini.Load(discoveryConfIni)
+	if err != nil {
+		panic(fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConfIni, err))
+	}
+	if (!isDiscoverySrv) {
+		if discoveryClientSection, err := discoveryConf.GetSection(discoveryClientConfig); err == nil {
+			clientConfig := discovery.NewDiscoveryClientConfigFromIni(discoveryClientSection)
+			statusPropagator, clusterInfoGetter, _ := discovery.NewDiscoveryClient(clientConfig, dkvLogger)
+			return statusPropagator, clusterInfoGetter
+		} else {
+			panic(fmt.Errorf("Can't load discovery client configuration from section %s in file %s, error: %v",
+				discoveryClientConfig, discoveryConfIni, err))
+		}
+	} else {
+		// Discovery server won't have a discovery client as client needs a server to be started
+		// When supporting multiple regions in a node, this can be made feasible by re-attempting client connection
+		return nil, nil
 	}
 }

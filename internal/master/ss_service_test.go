@@ -3,30 +3,14 @@ package master
 import (
 	"bytes"
 	"fmt"
-	"net"
-	"os/exec"
+	"google.golang.org/grpc"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/stats"
-	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/dkv/internal/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-)
-
-const (
-	dbFolder   = "/tmp/dkv_test_db"
-	cacheSize  = 3 << 30
-	dkvSvcPort = 8080
-	dkvSvcHost = "localhost"
-	engine     = "rocksdb"
-	// engine = "badger"
 )
 
 var (
@@ -36,7 +20,8 @@ var (
 )
 
 func TestStandaloneService(t *testing.T) {
-	go serveStandaloneDKV()
+	dkvSvc, grpcSrvr = ServeStandaloneDKV(&serverpb.RegionInfo{}, dbFolder)
+	go ListenAndServe(grpcSrvr, dkvSvcPort)
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
@@ -52,6 +37,7 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
 		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
+		t.Run("testPrefixMultiGet", testPrefixMultiGet)
 		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
@@ -203,6 +189,31 @@ func testMultiGet(t *testing.T) {
 	}
 }
 
+func testPrefixMultiGet(t *testing.T)  {
+	numKeys, keyPrefix, valPrefix := 10, "PrefixIterK", "IterV"
+	putKeys(t, numKeys, keyPrefix, valPrefix)
+	numNewKeys, newKeyPrefix, newValPrefix := 5, "NewPrefixIterK", "NewIterV"
+	putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
+
+	validateResultsForPrefix(t, "PrefixIterK", 10)
+	validateResultsForPrefix(t, "NewPrefixIterK", 5)
+}
+
+func validateResultsForPrefix(t *testing.T, prefix string, count int)  {
+	if results, err := dkvCli.PrefixMultiGet([]byte(prefix)); err != nil {
+		t.Fatalf("Unable to PrefixMultiGet. Error: %v", err)
+	} else {
+		if (len(results) != count) {
+			t.Errorf("Expected number of results to be: %v. Actual: %v", count, len(results))
+		}
+		for _, result := range results {
+			if !strings.HasPrefix(string(result.GetKey()), prefix) {
+				t.Errorf("Key doesn't start with expected prefix: %s. Key: %s", prefix, string(result.GetKey()))
+			}
+		}
+	}
+}
+
 func testIteration(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "IterK", "IterV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
@@ -311,47 +322,6 @@ func testBackupRestore(t *testing.T) {
 			getKeys(t, numKeys, keyPrefix, valPrefix)
 			noKeys(t, numKeys, missKeyPrefix)
 		}
-	}
-}
-
-func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
-	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
-		panic(err)
-	}
-	switch engine {
-	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder,
-			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
-		if err != nil {
-			panic(err)
-		}
-		return rocksDb, rocksDb, rocksDb
-	case "badger":
-		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
-		if err != nil {
-			panic(err)
-		}
-		return bdgrDb, nil, bdgrDb
-	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
-	}
-}
-
-func serveStandaloneDKV() {
-	kvs, cp, ba := newKVStore()
-	dkvSvc = NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient())
-	grpcSrvr = grpc.NewServer()
-	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
-	listenAndServe(grpcSrvr, dkvSvcPort)
-}
-
-func listenAndServe(grpcSrvr *grpc.Server, port int) {
-	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
-		panic(fmt.Sprintf("failed to listen: %v", err))
-	} else {
-		grpcSrvr.Serve(lis)
 	}
 }
 
