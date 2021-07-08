@@ -141,7 +141,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.2</version>
+                <version>3.2.1</version>
                 <configuration>
                     <!--<createDependencyReducedPom>true</createDependencyReducedPom>-->
                     <filters>
@@ -166,7 +166,7 @@
                             <relocations>
                                 <relocation>
                                     <pattern>com.google.</pattern>
-                                    <shadedPattern>dkv.shaded.com.google.</shadedPattern>
+                                    <shadedPattern>shaded.com.google.</shadedPattern>
                                 </relocation>
                             </relocations>
                         </configuration>
