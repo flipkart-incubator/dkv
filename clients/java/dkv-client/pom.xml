@@ -9,6 +9,20 @@
         <proto-file-path>../../../pkg/serverpb</proto-file-path>
     </properties>
     <name>dkv-client</name>
+
+    <distributionManagement>
+        <repository>
+            <id>fk-art-release</id>
+            <name>libs-rel</name>
+            <url>http://artifactory.fkinternal.com/artifactory/v1.0/artifacts/libs-release-local</url>
+        </repository>
+        <snapshotRepository>
+            <id>fk-art-snapshot</id>
+            <name>libs-snapshot</name>
+            <url>http://artifactory.fkinternal.com/artifactory/v1.0/artifacts/libs-snapshots-local</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <dependencies>
         <dependency>
             <groupId>io.grpc</groupId>
@@ -149,6 +163,12 @@
                         </goals>
                         <configuration>
                             <finalName>dkv-client-shaded-${pom.version}</finalName>
+                            <relocations>
+                                <relocation>
+                                    <pattern>com.google.</pattern>
+                                    <shadedPattern>dkv.shaded.com.google.</shadedPattern>
+                                </relocation>
+                            </relocations>
                         </configuration>
                     </execution>
                 </executions>
