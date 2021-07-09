@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shamaton/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
