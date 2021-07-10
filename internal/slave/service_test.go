@@ -56,7 +56,7 @@ func TestMasterRocksDBSlaveBadger(t *testing.T) {
 	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
-func TestSlaveDiscoveryFunctionality(t *testing.T)  {
+func TestSlaveDiscoveryFunctionality(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
 	testGetStatus(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
@@ -126,7 +126,7 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	}
 }
 
-func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable)  {
+func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go serveStandaloneDKVMaster(&wg, masterStore, cp, masterBU)
@@ -208,7 +208,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	}
 }
 
-func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable)  {
+func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
 	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
 	defer closeMaster()
 
@@ -222,7 +222,7 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	if err := slaveServer.applyChangesFromMaster(2); err != nil {
 		t.Error(err)
 	}
-	if (slaveServer.replLag != 16) {
+	if slaveServer.replLag != 16 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replLag)
 	}
 	validateStatus(t, "tooHighReplLag", serverpb.RegionStatus_INACTIVE)
@@ -231,7 +231,7 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	if err := slaveServer.applyChangesFromMaster(4); err != nil {
 		t.Error(err)
 	}
-	if (slaveServer.replLag != 8) {
+	if slaveServer.replLag != 8 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replLag)
 	}
 	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
@@ -244,7 +244,7 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	if err := slaveServer.applyChangesFromMaster(10); err != nil {
 		t.Error(err)
 	}
-	if (slaveServer.replLag != 0) {
+	if slaveServer.replLag != 0 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replLag)
 	}
 	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
@@ -254,9 +254,9 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_INACTIVE)
 }
 
-func validateStatus(t *testing.T, useCase string, expectedStatus serverpb.RegionStatus)  {
+func validateStatus(t *testing.T, useCase string, expectedStatus serverpb.RegionStatus) {
 	regionInfo, _ := slaveSvc.GetStatus(nil, nil)
-	if (regionInfo.Status != expectedStatus) {
+	if regionInfo.Status != expectedStatus {
 		t.Errorf("Unexpected status. Use case: %s, Expected: %s, Actual: %s", useCase,
 			expectedStatus.String(), regionInfo.Status.String())
 	}
@@ -398,18 +398,18 @@ func sleepInSecs(duration int) {
 	<-time.After(time.Duration(duration) * time.Second)
 }
 
-func closeMasterAndSlave()  {
+func closeMasterAndSlave() {
 	closeMaster()
 	closeSlave()
 }
 
-func closeMaster()  {
+func closeMaster() {
 	masterCli.Close()
 	masterSvc.Close()
 	masterGrpcSrvr.GracefulStop()
 }
 
-func closeSlave()  {
+func closeSlave() {
 	slaveCli.Close()
 	slaveSvc.Close()
 	slaveGrpcSrvr.GracefulStop()
@@ -420,7 +420,6 @@ func mockClusterInfoGetter() discovery.ClusterInfoGetter {
 }
 
 type mockClusterInfo struct {
-
 }
 
 func (m mockClusterInfo) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {

@@ -214,11 +214,11 @@ func testRestore(t *testing.T) {
 	}
 }
 
-func testGetStatus(t *testing.T)  {
+func testGetStatus(t *testing.T) {
 	for _, dkvSvc := range dkvSvcs {
 		info, _ := dkvSvc.GetStatus(nil, nil)
 		// Currently all regions will be marked as leader as current behaviour is based on ip address
-		if (info.Status != serverpb.RegionStatus_LEADER) {
+		if info.Status != serverpb.RegionStatus_LEADER {
 			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_LEADER.String(), info.Status.String())
 		}
 	}
@@ -253,7 +253,7 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 		}
 		regionInfo, _ := dkvSvc.GetStatus(nil, nil)
 		// Currently new region will be marked as leader as current behaviour is based on ip address
-		if (regionInfo.Status != serverpb.RegionStatus_LEADER) {
+		if regionInfo.Status != serverpb.RegionStatus_LEADER {
 			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_LEADER.String(), regionInfo.Status.String())
 		}
 		// Remove new DKV node through the client of any other DKV Node (2)
@@ -266,7 +266,7 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 		grpcSrv.GracefulStop()
 		dkvSvc.Close()
 		regionInfo, _ = dkvSvc.GetStatus(nil, nil)
-		if (regionInfo.Status != serverpb.RegionStatus_INACTIVE) {
+		if regionInfo.Status != serverpb.RegionStatus_INACTIVE {
 			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_INACTIVE.String(), regionInfo.Status.String())
 		}
 	}

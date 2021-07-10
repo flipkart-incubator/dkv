@@ -200,17 +200,17 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 	dcId := ""
 	database := ""
 	vBucket := ""
-	if (len(args) > 0) {
+	if len(args) > 0 {
 		dcId = args[0]
 	}
-	if (len(args) > 1) {
+	if len(args) > 1 {
 		database = args[1]
 	}
-	if (len(args) > 2) {
+	if len(args) > 2 {
 		vBucket = args[2]
 	}
 	vBuckets, err := client.GetClusterInfo(dcId, database, vBucket)
-	if (err != nil) {
+	if err != nil {
 		fmt.Printf("Unable to get Status: Error: %v\n", err)
 	} else {
 		for _, vBucket := range vBuckets {

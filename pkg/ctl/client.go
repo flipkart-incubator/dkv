@@ -218,7 +218,7 @@ func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
 	defer cancel()
 	_, err := dkvClnt.dkvDisCli.UpdateStatus(ctx, &serverpb.UpdateStatusRequest{
 		RegionInfo: &info,
-		Timestamp:   hlc.UnixNow(),
+		Timestamp:  hlc.UnixNow(),
 	})
 	return err
 }

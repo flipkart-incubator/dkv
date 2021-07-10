@@ -40,18 +40,18 @@ var (
 	dbRole           string
 	replPollInterval time.Duration
 	blockCacheSize   uint64
-	dcID			 string
-	database		 string
-	vBucket		  string
+	dcID             string
+	database         string
+	vBucket          string
 
 	// Node level configuration common for all regions in the node
-	dbFolder         string
-	dbListenAddr     string
-	statsdAddr       string
+	dbFolder     string
+	dbListenAddr string
+	statsdAddr   string
 
 	// Service discovery related params
-	isDiscoverySrv   bool
-	discoveryConf	 string
+	isDiscoverySrv bool
+	discoveryConf  string
 
 	// Logging vars
 	dbAccessLog    string
@@ -95,8 +95,8 @@ const (
 const defBlockCacheSize = 3 << 30
 
 const (
-	discoveryServerConfig	= "serverConfig"
-	discoveryClientConfig	= "clientConfig"
+	discoveryServerConfig = "serverConfig"
+	discoveryClientConfig = "clientConfig"
 )
 
 func main() {
@@ -126,7 +126,7 @@ func main() {
 
 	statusPropagator, clusterInfoGetter := getDiscoveryClients()
 
-	if (statusPropagator != nil) {
+	if statusPropagator != nil {
 		// Currently statusPropagator and clusterInfoGetter are same instances hence closing just one
 		// but ideally this information should be abstracted from main and we should call close on both
 		defer statusPropagator.Close()
@@ -164,7 +164,7 @@ func main() {
 	case slaveRole:
 		// TODO - construct replConfig from region level config described in LLD
 		maxNumChanges := uint32(10000)
-		replConfig := slave.NewReplicationConfig(maxNumChanges, replPollInterval, uint64(maxNumChanges * 10), uint64(replPollInterval.Seconds()) * 10)
+		replConfig := slave.NewReplicationConfig(maxNumChanges, replPollInterval, uint64(maxNumChanges*10), uint64(replPollInterval.Seconds())*10)
 
 		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, clusterInfoGetter)
 		defer dkvSvc.Close()
@@ -450,7 +450,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	}
 }
 
-func setupDiscoveryServer(dkvSvc serverpb.DKVServer, grpcSrvr *grpc.Server)  {
+func setupDiscoveryServer(dkvSvc serverpb.DKVServer, grpcSrvr *grpc.Server) {
 	discoveryConf, _ := ini.Load(discoveryConf)
 	if discoveryServerSection, err := discoveryConf.GetSection(discoveryServerConfig); err == nil {
 		discoverySrvConfig := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
@@ -467,7 +467,7 @@ func getDiscoveryClients() (discovery.StatusPropagator, discovery.ClusterInfoGet
 	if err != nil {
 		panic(fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConf, err))
 	}
-	if (!isDiscoverySrv) {
+	if !isDiscoverySrv {
 		if discoveryClientSection, err := discoveryConf.GetSection(discoveryClientConfig); err == nil {
 			clientConfig := discovery.NewDiscoveryClientConfigFromIni(discoveryClientSection)
 			statusPropagator, clusterInfoGetter, _ := discovery.NewDiscoveryClient(clientConfig, dkvLogger)

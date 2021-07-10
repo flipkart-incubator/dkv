@@ -189,7 +189,7 @@ func testMultiGet(t *testing.T) {
 	}
 }
 
-func testPrefixMultiGet(t *testing.T)  {
+func testPrefixMultiGet(t *testing.T) {
 	numKeys, keyPrefix, valPrefix := 10, "PrefixIterK", "IterV"
 	putKeys(t, numKeys, keyPrefix, valPrefix)
 	numNewKeys, newKeyPrefix, newValPrefix := 5, "NewPrefixIterK", "NewIterV"
@@ -199,11 +199,11 @@ func testPrefixMultiGet(t *testing.T)  {
 	validateResultsForPrefix(t, "NewPrefixIterK", 5)
 }
 
-func validateResultsForPrefix(t *testing.T, prefix string, count int)  {
+func validateResultsForPrefix(t *testing.T, prefix string, count int) {
 	if results, err := dkvCli.PrefixMultiGet([]byte(prefix)); err != nil {
 		t.Fatalf("Unable to PrefixMultiGet. Error: %v", err)
 	} else {
-		if (len(results) != count) {
+		if len(results) != count {
 			t.Errorf("Expected number of results to be: %v. Actual: %v", count, len(results))
 		}
 		for _, result := range results {

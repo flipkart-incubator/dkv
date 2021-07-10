@@ -281,7 +281,7 @@ func (ss *standaloneService) PrefixMultiGet(ctx context.Context, prefixMultiGetR
 		results = append(results, &serverpb.KVPair{Key: k, Value: v})
 		return nil
 	})
-	if (err != nil) {
+	if err != nil {
 		// Better to return error rather than partial results as incomplete results could cause client misbehaviour
 		ss.lg.Error("Unable to PrefixMultiGet", zap.Error(err))
 		return &serverpb.MultiGetResponse{Status: newErrorStatus(err)}, err
@@ -324,10 +324,10 @@ type DKVClusterService interface {
 
 type distributedService struct {
 	DKVService
-	raftRepl 	nexus_api.RaftReplicator
-	lg       	*zap.Logger
-	statsCli 	stats.Client
-	isClosed	bool
+	raftRepl nexus_api.RaftReplicator
+	lg       *zap.Logger
+	statsCli stats.Client
+	isClosed bool
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
@@ -491,7 +491,7 @@ func (ds *distributedService) Close() error {
 func (ds *distributedService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	regionInfo := ds.DKVService.(*standaloneService).regionInfo
 
-	if (ds.isClosed) {
+	if ds.isClosed {
 		regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	} else {
 		// Currently there is no way for this instance of DKVServer to know correctly if its the leader for its vBucket
@@ -513,7 +513,7 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 			// We are comparing IP address because nexus port is different from db listen port
 			// The assumption is that one node has only one dkv process which is definetely not the right assumption
 			// TODO - Have the db listen address as part of the raft metadata associated with a node
-			if (leader == currentIp) {
+			if leader == currentIp {
 				regionInfo.Status = serverpb.RegionStatus_LEADER
 			} else {
 				regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
