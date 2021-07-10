@@ -360,7 +360,8 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, zap.NewNop(), stats.NewNoOpClient(), regionInfo)
+	lgr, _ := zap.NewDevelopment()
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, lgr, stats.NewNoOpClient(), regionInfo)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

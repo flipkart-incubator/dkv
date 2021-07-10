@@ -101,6 +101,18 @@ jobs:
         run: |
           chmod +x bin/dkvsrv
           ls -lRth bin
+      - name : Install goreman
+        run : |
+          set -x
+          cd /tmp
+          go get -u github.com/mattn/goreman
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+          cd -
+      - name : Start DKV Cluster
+        run : |
+          echo "$PATH"
+          goreman -exit-on-error -f clients/java/dkv-client/src/test/resources/Procfile start &
+          sleep 10
       - name: Build with Maven
         run: |
           cd clients/java/dkv-client
