@@ -36,18 +36,14 @@ $ docker run -it dkv/dkv-deb9-amd64:latest dkvsrv --help
 
 ## Building DKV on Mac OSX
 
-### Building RocksDB
-- Ensure [HomeBrew](https://brew.sh/) is installed
-- brew install gcc49
-- brew install rocksdb
-- Install [ZStd](https://github.com/facebook/zstd)
-- Execute this command:
+### Installing Dependencies 
 
-```bash
-CGO_CFLAGS="-I/usr/local/Cellar/rocksdb/6.1.2/include" \
-CGO_LDFLAGS="-L/usr/local/Cellar/rocksdb/6.1.2 -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" \
-go get github.com/tecbot/gorocksdb
-```
+DKV depends on RocksDB, and its CGo bindings, so we need to install rocksdb along with its dependecies.
+
+- Ensure [HomeBrew](https://brew.sh/) is installed
+- `brew install gcc49`
+- `brew install rocksdb zstd`
+
 
 ### Building DKV
 
@@ -112,9 +108,8 @@ Under the hood, we use [Nexus](https://github.com/flipkart-incubator/nexus) to r
 keyspace mutations across multiple DKV instances using the RAFT consensus protocol.
 Currently, the `put` API automatically replicates changes when the request is handled
 by given DKV instance started in a special distributed mode (see below). However, `get`
-and `multiget` APIs targetting such an instance serve the data from its own local store.
-Hence such calls may or may not reflect the latest changes to the keyspace and hence are
-not *linearizable*. In the future, these APIs will be enhanced to support linearizability.
+and `multiget` APIs targetting such an instance serve the data either from its own local store 
+or from the current raft leader based on the `consistency` factor.
 
 Assuming you have 3 availability zones, run the following 3 commands one in every zone
 in order to setup these instances for synchronous replication.
