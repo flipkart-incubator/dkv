@@ -23,7 +23,7 @@ service DKV {
 
   // Get status of region
   // TODO - remove this from gRPC interface and create an internal server/resource interface
-  rpc GetStatus (GetStatusRequest) returns (regionInfo);
+  rpc GetStatus (google.protobuf.Empty) returns (regionInfo);
 
   // Iterate iterates through the entire keyspace in no particular order and
   // returns the results as a stream of key value pairs.

@@ -3,7 +3,6 @@ package discovery
 import (
     "fmt"
     "github.com/flipkart-incubator/dkv/internal/master"
-    "github.com/flipkart-incubator/dkv/internal/utils"
     "github.com/flipkart-incubator/dkv/pkg/serverpb"
     "go.uber.org/zap"
     "testing"
@@ -21,7 +20,6 @@ func TestDiscoveryClient(t *testing.T) {
     statusPropagator.(*discoveryClient).statusUpdateTicker.Stop()
     statusPropagator.(*discoveryClient).pollClusterInfoTicker.Stop()
     statusPropagator.(*discoveryClient).stopChannel <- struct{}{}
-    utils.SleepInSecs(2)
 
     regionInfo1 := serverpb.RegionInfo{
         DcID:            "dc1",

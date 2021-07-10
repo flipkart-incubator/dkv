@@ -231,11 +231,10 @@ func (dkvClnt *DKVClient) GetClusterInfo(dcId string, database string, vBucket s
 		Database: &database,
 		VBucket:  &vBucket,
 	})
-	if err == nil {
-		return clusterInfo.GetRegionInfos(), nil
-	} else {
+	if err != nil {
 		return nil, err
 	}
+	return clusterInfo.GetRegionInfos(), nil
 }
 
 // KVPair is convenience wrapper that captures a key and its value.

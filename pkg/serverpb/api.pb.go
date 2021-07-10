@@ -2443,7 +2443,7 @@ var file_pkg_serverpb_api_proto_depIdxs = []int32{
 	10, // 21: dkv.serverpb.DKV.Get:input_type -> dkv.serverpb.GetRequest
 	12, // 22: dkv.serverpb.DKV.MultiGet:input_type -> dkv.serverpb.MultiGetRequest
 	15, // 23: dkv.serverpb.DKV.PrefixMultiGet:input_type -> dkv.serverpb.PrefixMultiGetRequest
-	16, // 24: dkv.serverpb.DKV.GetStatus:input_type -> dkv.serverpb.GetStatusRequest
+	36, // 24: dkv.serverpb.DKV.GetStatus:input_type -> google.protobuf.Empty
 	17, // 25: dkv.serverpb.DKV.Iterate:input_type -> dkv.serverpb.IterateRequest
 	3,  // 26: dkv.serverpb.DKV.CompareAndSet:input_type -> dkv.serverpb.CompareAndSetRequest
 	22, // 27: dkv.serverpb.DKVReplication.GetChanges:input_type -> dkv.serverpb.GetChangesRequest
@@ -2923,7 +2923,7 @@ type DKVClient interface {
 	PrefixMultiGet(ctx context.Context, in *PrefixMultiGetRequest, opts ...grpc.CallOption) (*MultiGetResponse, error)
 	// Get status of region
 	// TODO - remove this from gRPC interface and create an internal server/resource interface
-	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*RegionInfo, error)
+	GetStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*RegionInfo, error)
 	// Iterate iterates through the entire keyspace in no particular order and
 	// returns the results as a stream of key value pairs.
 	Iterate(ctx context.Context, in *IterateRequest, opts ...grpc.CallOption) (DKV_IterateClient, error)
@@ -2985,7 +2985,7 @@ func (c *dKVClient) PrefixMultiGet(ctx context.Context, in *PrefixMultiGetReques
 	return out, nil
 }
 
-func (c *dKVClient) GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*RegionInfo, error) {
+func (c *dKVClient) GetStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*RegionInfo, error) {
 	out := new(RegionInfo)
 	err := c.cc.Invoke(ctx, "/dkv.serverpb.DKV/GetStatus", in, out, opts...)
 	if err != nil {
@@ -3051,7 +3051,7 @@ type DKVServer interface {
 	PrefixMultiGet(context.Context, *PrefixMultiGetRequest) (*MultiGetResponse, error)
 	// Get status of region
 	// TODO - remove this from gRPC interface and create an internal server/resource interface
-	GetStatus(context.Context, *GetStatusRequest) (*RegionInfo, error)
+	GetStatus(context.Context, *emptypb.Empty) (*RegionInfo, error)
 	// Iterate iterates through the entire keyspace in no particular order and
 	// returns the results as a stream of key value pairs.
 	Iterate(*IterateRequest, DKV_IterateServer) error
@@ -3079,7 +3079,7 @@ func (*UnimplementedDKVServer) MultiGet(context.Context, *MultiGetRequest) (*Mul
 func (*UnimplementedDKVServer) PrefixMultiGet(context.Context, *PrefixMultiGetRequest) (*MultiGetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrefixMultiGet not implemented")
 }
-func (*UnimplementedDKVServer) GetStatus(context.Context, *GetStatusRequest) (*RegionInfo, error) {
+func (*UnimplementedDKVServer) GetStatus(context.Context, *emptypb.Empty) (*RegionInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
 }
 func (*UnimplementedDKVServer) Iterate(*IterateRequest, DKV_IterateServer) error {
@@ -3184,7 +3184,7 @@ func _DKV_PrefixMultiGet_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _DKV_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetStatusRequest)
+	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -3196,7 +3196,7 @@ func _DKV_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(inter
 		FullMethod: "/dkv.serverpb.DKV/GetStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DKVServer).GetStatus(ctx, req.(*GetStatusRequest))
+		return srv.(DKVServer).GetStatus(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }

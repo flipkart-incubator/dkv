@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"math/rand"
 	"strings"
@@ -59,11 +60,6 @@ type slaveService struct {
 	replConfig	*ReplicationConfig
 	clusterInfo discovery.ClusterInfoGetter
 	isClosed	bool
-}
-
-func (ss *slaveService) PrefixMultiGet(ctx context.Context, request *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	// TODO - share code between standalone server and slave server where applicable (like here)
-	panic("implement me")
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -136,6 +132,11 @@ func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr se
 	return nil
 }
 
+func (ss *slaveService) PrefixMultiGet(ctx context.Context, request *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
+	// TODO - share code between standalone server and slave server where applicable (like here)
+	panic("implement me")
+}
+
 func (ss *slaveService) Close() error {
 	ss.lg.Info("Closing the slave service")
 	ss.replStop <- struct{}{}
@@ -168,7 +169,9 @@ func (ss *slaveService) pollAndApplyChanges() {
 			ss.statsCli.Gauge("replication.lag", int64(ss.replLag))
 			if err := ss.applyChangesFromMaster(ss.replConfig.maxNumChngs); err != nil {
 				ss.lg.Error("Unable to retrieve changes from master", zap.Error(err))
-				ss.replaceMasterIfInactive()
+				if err := ss.replaceMasterIfInactive(); err != nil {
+					ss.lg.Error("Unable to replace master", zap.Error(err))
+				}
 			}
 		case <-ss.replStop:
 			ss.lg.Info("Stopping the change poller")
@@ -244,7 +247,7 @@ func newEmptyStatus() *serverpb.Status {
 	return &serverpb.Status{Code: 0, Message: ""}
 }
 
-func (ss *slaveService) GetStatus(context context.Context, request *serverpb.GetStatusRequest) (*serverpb.RegionInfo, error) {
+func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	if (ss.replLag > ss.replConfig.maxActiveReplLag) {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	} else if (ss.lastReplTime == 0 || hlc.GetTimeAgo(ss.lastReplTime) > ss.replConfig.maxActiveReplElapsed) {
@@ -260,29 +263,32 @@ func (ss *slaveService) GetStatus(context context.Context, request *serverpb.Get
 	return ss.regionInfo, nil
 }
 
-func (ss *slaveService) replaceMasterIfInactive() {
-	if vBuckets, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
-		currentMasterIdx := len(vBuckets)
-		for i, vBucket := range vBuckets {
-			if vBucket.NodeAddress == ss.replConfig.replMasterAddr {
+func (ss *slaveService) replaceMasterIfInactive() (error) {
+	if regions, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
+		currentMasterIdx := len(regions)
+		for i, region := range regions {
+			if region.NodeAddress == ss.replConfig.replMasterAddr {
 				currentMasterIdx = i
 				break
 			}
 		}
 
-		if (currentMasterIdx == len(vBuckets)) {
+		if (currentMasterIdx == len(regions)) {
 			// Current Master not found in cluster. implies current master is inactive
-			ss.reconnectMaster()
-		} else if (!isVBucketApplicableToBeMaster(vBuckets[currentMasterIdx])) {
-			ss.reconnectMaster()
+			return ss.reconnectMaster()
+		} else if (!isVBucketApplicableToBeMaster(regions[currentMasterIdx])) {
+			return ss.reconnectMaster()
 		} else {
 			// current master is active. No action required as replication error could be temporary
 			// need to validate this assumption though
+			return nil
 		}
+	} else {
+		return err
 	}
 }
 
-func (ss *slaveService) reconnectMaster() {
+func (ss *slaveService) reconnectMaster() (error) {
 	// Close any existing client connection
 	// This is so that replication doesn't happen from inactive master
 	// which could otherwise result in slave marking itself active if no errors in replication
@@ -291,10 +297,10 @@ func (ss *slaveService) reconnectMaster() {
 		ss.replCli = nil
 		ss.replConfig.replMasterAddr = ""
 	}
-	ss.findAndConnectToMaster()
+	return ss.findAndConnectToMaster()
 }
 
-func (ss *slaveService) findAndConnectToMaster() {
+func (ss *slaveService) findAndConnectToMaster() (error) {
 	if master, err := ss.findNewMaster(); err == nil {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
 		if replCli, err := ctl.NewInSecureDKVClient(master, ""); err == nil {
@@ -303,10 +309,13 @@ func (ss *slaveService) findAndConnectToMaster() {
 			ss.replConfig.replMasterAddr = master
 		} else {
 			ss.lg.Warn("Unable to create a replication client", zap.Error(err))
+			return err
 		}
 	} else {
 		ss.lg.Warn("Unable to find a master for this slave to replicate from", zap.Error(err))
+		return err
 	}
+	return nil
 }
 
 // Finds a new active master for the region

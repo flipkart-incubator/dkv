@@ -94,22 +94,21 @@ func (d *discoverService) GetClusterInfo(ctx Context, request *GetClusterInfoReq
 
 	if clusterInfo, err := d.dkvServer.PrefixMultiGet(ctx, &getRequest); err == nil {
 		regionsInfo := []*RegionInfo{};
-		i := 0;
 		for _, serializedStatusUpdate := range clusterInfo.KeyValues {
 			statusUpdate := UpdateStatusRequest{};
-			if err := json.Unmarshal(serializedStatusUpdate.Value, &statusUpdate); err == nil {
-				// Filter regions within the requested DC (if provided)
-				if (request.GetDcID() == "" || request.GetDcID() == statusUpdate.GetRegionInfo().GetDcID()) {
-					// Filter inactive regions and regions whose status was updated long time back and hence considered inactive
-					if (hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < d.config.heartbeatTimeout && statusUpdate.GetRegionInfo().GetStatus() != RegionStatus_INACTIVE) {
-						regionsInfo = append(regionsInfo, statusUpdate.GetRegionInfo());
-						i++;
-					}
-				}
-				// TODO : Filter such that only 1 master is returned per region
-			} else {
+			if err := json.Unmarshal(serializedStatusUpdate.Value, &statusUpdate); err != nil {
 				d.logger.Error("Unable to unmarshal status request", zap.Error(err));
+				continue
 			}
+			// Filter regions outside the requested DC (if provided)
+			if (request.GetDcID() != "" && request.GetDcID() != statusUpdate.GetRegionInfo().GetDcID()) {
+				continue
+			}
+			// Filter inactive regions and regions whose status was updated long time back and hence considered inactive
+			if (hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < d.config.HeartbeatTimeout && statusUpdate.GetRegionInfo().GetStatus() != RegionStatus_INACTIVE) {
+				regionsInfo = append(regionsInfo, statusUpdate.GetRegionInfo());
+			}
+			// TODO : Filter such that only 1 master is returned per region
 		}
 		return &GetClusterInfoResponse{RegionInfos: regionsInfo}, nil;
 	} else {

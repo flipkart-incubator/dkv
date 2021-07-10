@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"strconv"
 	"strings"
@@ -41,7 +42,7 @@ type standaloneService struct {
 	regionInfo *serverpb.RegionInfo
 }
 
-func (ss *standaloneService) GetStatus(ctx context.Context, request *serverpb.GetStatusRequest) (*serverpb.RegionInfo, error) {
+func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	return ss.regionInfo, nil
 }
 
@@ -487,7 +488,7 @@ func (ds *distributedService) Close() error {
 	return nil
 }
 
-func (ds *distributedService) GetStatus(context context.Context, request *serverpb.GetStatusRequest) (*serverpb.RegionInfo, error) {
+func (ds *distributedService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	regionInfo := ds.DKVService.(*standaloneService).regionInfo
 
 	if (ds.isClosed) {

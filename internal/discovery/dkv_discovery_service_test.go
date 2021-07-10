@@ -160,6 +160,5 @@ func setupDiscoveryServer() (master.DKVService, *grpc.Server) {
     serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 
     go master.ListenAndServe(grpcSrvr, dkvSvcPort)
-    utils.SleepInSecs(3)
     return dkvSvc, grpcSrvr
 }

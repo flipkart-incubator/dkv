@@ -51,7 +51,7 @@ var (
 
 	// Service discovery related params
 	isDiscoverySrv   bool
-	discoveryConfIni string
+	discoveryConf	 string
 
 	// Logging vars
 	dbAccessLog    string
@@ -72,7 +72,7 @@ func init() {
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave")
 	flag.BoolVar(&isDiscoverySrv, "use-as-discovery-srv", false, "Use this node as discovery server")
-	flag.StringVar(&discoveryConfIni, "discovery-service-config-file", "", "An .ini file for configuring discovery server parameters")
+	flag.StringVar(&discoveryConf, "discovery-service-config", "", "A .ini file for configuring discovery service parameters")
 	flag.StringVar(&statsdAddr, "statsd-addr", "", "StatsD service address in host:port format")
 	flag.DurationVar(&replPollInterval, "repl-poll-interval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
 	flag.StringVar(&dbAccessLog, "access-log", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
@@ -156,15 +156,7 @@ func main() {
 
 		// Discovery servers can be only configured if node started as master.
 		if isDiscoverySrv {
-			discoveryConf, _ := ini.Load(discoveryConfIni)
-			if discoveryServerSection, err := discoveryConf.GetSection(discoveryServerConfig); err == nil {
-				discoverySrvConfig := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
-				discoveryService := discovery.NewDiscoveryService(dkvSvc, dkvLogger, discoverySrvConfig)
-				serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
-			} else {
-				panic(fmt.Errorf("started as discovery server but can't load the section %s in file %s, error: %v",
-					discoveryServerConfig, discoveryConfIni, err))
-			}
+			setupDiscoveryServer(dkvSvc, grpcSrvr)
 		} else {
 			// Currently nodes can be either discovery server or client. This will change when a node supports multiple regions
 			statusPropagator.RegisterRegion(dkvSvc)
@@ -458,10 +450,22 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	}
 }
 
+func setupDiscoveryServer(dkvSvc serverpb.DKVServer, grpcSrvr *grpc.Server)  {
+	discoveryConf, _ := ini.Load(discoveryConf)
+	if discoveryServerSection, err := discoveryConf.GetSection(discoveryServerConfig); err == nil {
+		discoverySrvConfig := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
+		discoveryService := discovery.NewDiscoveryService(dkvSvc, dkvLogger, discoverySrvConfig)
+		serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
+	} else {
+		panic(fmt.Errorf("started as discovery server but can't load the section %s in file %s, error: %v",
+			discoveryServerConfig, discoveryConf, err))
+	}
+}
+
 func getDiscoveryClients() (discovery.StatusPropagator, discovery.ClusterInfoGetter) {
-	discoveryConf, err := ini.Load(discoveryConfIni)
+	discoveryConf, err := ini.Load(discoveryConf)
 	if err != nil {
-		panic(fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConfIni, err))
+		panic(fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConf, err))
 	}
 	if (!isDiscoverySrv) {
 		if discoveryClientSection, err := discoveryConf.GetSection(discoveryClientConfig); err == nil {
@@ -470,7 +474,7 @@ func getDiscoveryClients() (discovery.StatusPropagator, discovery.ClusterInfoGet
 			return statusPropagator, clusterInfoGetter
 		} else {
 			panic(fmt.Errorf("Can't load discovery client configuration from section %s in file %s, error: %v",
-				discoveryClientConfig, discoveryConfIni, err))
+				discoveryClientConfig, discoveryConf, err))
 		}
 	} else {
 		// Discovery server won't have a discovery client as client needs a server to be started
