@@ -15,17 +15,8 @@ import (
 )
 
 const (
-	letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	testDir     = "/tmp/tar_test"
 )
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
-}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -122,8 +113,8 @@ func verifyTar(t *testing.T, tarF io.Reader, files []*os.File) {
 				log.Fatal(err)
 			}
 
-			if string(fileContents) != string(contents) {
-				t.Error("Text 1 didn't match in with original file")
+			if bytes.Compare(fileContents, contents) != 0 {
+				t.Error("Tar extracted contents didn't match in with original file")
 			}
 		}
 		i++
