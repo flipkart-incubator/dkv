@@ -70,6 +70,20 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 	return errorFromStatus(status, err)
 }
 
+// PutTTL takes the key and value as byte arrays, expireTS as epoch seconds and invokes the
+// GRPC Put method. This is a convenience wrapper.
+func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	putReq := &serverpb.PutRequest{Key: key, Value: value, ExpireTS: expireTS}
+	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
+	var status *serverpb.Status
+	if res != nil {
+		status = res.Status
+	}
+	return errorFromStatus(status, err)
+}
+
 // CompareAndSet provides the wrapper for the standard CAS primitive.
 // It invokes the underlying GRPC CompareAndSet method. This is a
 // convenience wrapper.

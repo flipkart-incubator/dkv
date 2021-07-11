@@ -1,0 +1,19 @@
+# run using `goreman -exit-on-error start`
+
+dkv_master1:./bin/dkvsrv -role master -listen-addr 127.0.0.1:7080 -db-folder /tmp/dkvsrv/s0 
+dkv_slave1a:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:7091 -repl-master-addr 127.0.0.1:7080 -repl-poll-interval 100ms  
+dkv_slave1b:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:7092 -repl-master-addr 127.0.0.1:7080 -repl-poll-interval 100ms  
+dkv_slave1c:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:7093 -repl-master-addr 127.0.0.1:7080 -repl-poll-interval 100ms  
+dkv_slave1d:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:7094 -repl-master-addr 127.0.0.1:7080 -repl-poll-interval 100ms  
+
+dkv_master2:./bin/dkvsrv -role master -listen-addr 127.0.0.1:8080 -db-folder /tmp/dkvsrv/s1  
+dkv_slave2a:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:8091 -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 100ms  
+dkv_slave2b:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:8092 -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 100ms  
+dkv_slave2c:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:8093 -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 100ms  
+dkv_slave2d:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:8094 -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 100ms  
+
+dkv_master3:./bin/dkvsrv -role master -listen-addr 127.0.0.1:9080 -db-folder /tmp/dkvsrv/s2  
+dkv_slave3a:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:9091 -repl-master-addr 127.0.0.1:9080 -repl-poll-interval 100ms  
+dkv_slave3b:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:9092 -repl-master-addr 127.0.0.1:9080 -repl-poll-interval 100ms  
+dkv_slave3c:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:9093 -repl-master-addr 127.0.0.1:9080 -repl-poll-interval 100ms  
+dkv_slave3d:./bin/dkvsrv -diskless -db-engine badger -role slave -listen-addr 127.0.0.1:9094 -repl-master-addr 127.0.0.1:9080 -repl-poll-interval 100ms  

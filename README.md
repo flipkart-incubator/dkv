@@ -36,18 +36,14 @@ $ docker run -it dkv/dkv-deb9-amd64:latest dkvsrv --help
 
 ## Building DKV on Mac OSX
 
-### Building RocksDB
-- Ensure [HomeBrew](https://brew.sh/) is installed
-- brew install gcc49
-- brew install rocksdb
-- Install [ZStd](https://github.com/facebook/zstd)
-- Execute this command:
+### Installing Dependencies 
 
-```bash
-CGO_CFLAGS="-I/usr/local/Cellar/rocksdb/6.1.2/include" \
-CGO_LDFLAGS="-L/usr/local/Cellar/rocksdb/6.1.2 -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" \
-go get github.com/tecbot/gorocksdb
-```
+DKV depends on RocksDB, and its CGo bindings, so we need to install rocksdb along with its dependecies.
+
+- Ensure [HomeBrew](https://brew.sh/) is installed
+- `brew install gcc49`
+- `brew install rocksdb zstd`
+
 
 ### Building DKV
 
@@ -77,9 +73,9 @@ A single DKV instance can be launched using the following command:
 
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_name> \
-    -dbListenAddr <host:port> \
-    -dbEngine <rocksdb|badger>
+    -db-folder <folder_name> \
+    -listen-addr <host:port> \
+    -db-engine <rocksdb|badger>
 ```
 
 ```bash
@@ -89,7 +85,7 @@ $ ./bin/dkvctl -dkvAddr <host:port> -get <key>
 
 Example session:
 ```bash
-$ ./bin/dkvsrv -dbFolder /tmp/db -dbListenAddr 127.0.0.1:8080 -dbEngine rocksdb
+$ ./bin/dkvsrv -db-folder /tmp/db -listen-addr 127.0.0.1:8080 -db-engine rocksdb
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
 bar
@@ -112,19 +108,18 @@ Under the hood, we use [Nexus](https://github.com/flipkart-incubator/nexus) to r
 keyspace mutations across multiple DKV instances using the RAFT consensus protocol.
 Currently, the `put` API automatically replicates changes when the request is handled
 by given DKV instance started in a special distributed mode (see below). However, `get`
-and `multiget` APIs targetting such an instance serve the data from its own local store.
-Hence such calls may or may not reflect the latest changes to the keyspace and hence are
-not *linearizable*. In the future, these APIs will be enhanced to support linearizability.
+and `multiget` APIs targetting such an instance serve the data either from its own local store 
+or from the current raft leader based on the `consistency` factor.
 
 Assuming you have 3 availability zones, run the following 3 commands one in every zone
 in order to setup these instances for synchronous replication.
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_path> \
-    -dbListenAddr <host:port> \
-    -dbRole master \
-    -nexusNodeUrl http://<host:port> \
-    -nexusClusterUrl <cluster_url>
+    -db-folder <folder_path> \
+    -listen-addr <host:port> \
+    -role master \
+    -nexus-node-url http://<host:port> \ #optional when running on separete nodes.
+    -nexus-cluster-url <cluster_url>
 ```
 
 All these 3 DKV instances form a database cluster each listening on separate ports for
@@ -151,41 +146,41 @@ Example session on local machine:
 Launch Node 1:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n1 \
-    -dbListenAddr 127.0.0.1:9081 \
-    -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9021 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+    -db-folder /tmp/dkvsrv/n1 \
+    -listen-addr 127.0.0.1:9081 \
+    -role master \
+    -nexus-node-url http://127.0.0.1:9021 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
 Launch Node 2:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n2 \
-    -dbListenAddr 127.0.0.1:9082 \
-    -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9022 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+    -db-folder /tmp/dkvsrv/n2 \
+    -listen-addr 127.0.0.1:9082 \
+    -role master \
+    -nexus-node-url http://127.0.0.1:9022 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
 Launch Node 3:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n3 \
-    -dbListenAddr 127.0.0.1:9083 \
-    -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9023 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
+    -db-folder /tmp/dkvsrv/n3 \
+    -listen-addr 127.0.0.1:9083 \
+    -role master \
+    -nexus-node-url http://127.0.0.1:9023 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
 ```
 
 Launch Node 4, not yet part of the cluster:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder /tmp/dkvsrv/n4 \
-    -dbListenAddr 127.0.0.1:9084 \
-    -dbRole master \
-    -nexusNodeUrl http://127.0.0.1:9024 \
-    -nexusClusterUrl "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
+    -db-folder /tmp/dkvsrv/n4 \
+    -listen-addr 127.0.0.1:9084 \
+    -role master \
+    -nexus-node-url http://127.0.0.1:9024 \
+    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
     -nexusJoin
 ```
 
@@ -240,19 +235,19 @@ of reads far exceed the number of writes.
 First launch the DKV master node using the RocksDB engine with this command:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_name> \
-    -dbListenAddr <host:port> \
-    -dbRole master
+    -db-folder <folder_name> \
+    -listen-addr <host:port> \
+    -role master
 ```
 
 Then launch the DKV slave node using either RocksDB or Badger engine with this command:
 ```bash
 $ ./bin/dkvsrv \
-    -dbFolder <folder_name> \
-    -dbListenAddr <host:port> \
-    -dbEngine <rocksdb|badger> \
-    -dbRole slave \
-    -replMasterAddr <dkv_master_listen_addr>
+    -db-folder <folder_name> \
+    -listen-addr <host:port> \
+    -db-engine <rocksdb|badger> \
+    -role slave \
+    -repl-master-addr <dkv_master_listen_addr>
 ```
 
 Subsequently, any mutations performed on the master node's keyspace using `dkvctl`
@@ -271,11 +266,11 @@ This can be achieved by using the `-dbDiskless` option during launch as shown he
 
 ```bash
 $ ./bin/dkvsrv \
-    -dbDiskless \
-    -dbListenAddr <host:port> \
-    -dbEngine badger \
-    -dbRole slave \
-    -replMasterAddr <dkv_master_listen_addr>
+    -diskless \
+    -listen-addr <host:port> \
+    -db-engine badger \
+    -role slave \
+    -repl-master-addr <dkv_master_listen_addr>
 ```
 
 This mode may provide better performance for reads and is also useful for deployments

@@ -2,7 +2,9 @@ package rocksdb
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +13,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/shamaton/msgpack"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -52,19 +57,144 @@ func TestINIFileOption(t *testing.T) {
 func TestPutAndGet(t *testing.T) {
 	numKeys := 10
 	for i := 1; i <= numKeys; i++ {
-		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		key, value := fmt.Sprintf("K%d", i), fmt.Sprintf("VALUEXXXX%d", i)
 		if err := store.Put([]byte(key), []byte(value)); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
 
 	for i := 1; i <= numKeys; i++ {
-		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("V%d", i)
+		key, expectedValue := fmt.Sprintf("K%d", i), fmt.Sprintf("VALUEXXXX%d", i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
 		} else {
 			if string(readResults[0].Value) != expectedValue {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+}
+
+func TestPutIntAndGet(t *testing.T) {
+	numIteration := 10
+
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(math.MaxInt64))
+
+	//for _, b2 := range b {
+	//	fmt.Printf( " %d" ,b2)
+	//}
+	//fmt.Println("")
+
+	for i := 1; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("KI%d", i), fmt.Sprintf("V%d", i)
+		ttl := time.Now().Add(2 * time.Second).Unix()
+		if i%2 == 0 {
+			ttl = 0
+		}
+		if err := store.PutTTL([]byte(key), b, uint64(ttl)); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 1; i <= numIteration; i++ {
+		key, expectedValue := fmt.Sprintf("KI%d", i), fmt.Sprintf("V%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			readVal := int64(binary.LittleEndian.Uint64(readResults[0].Value))
+			if readVal != math.MaxInt64 {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+}
+
+func TestMsgPack(t *testing.T) {
+	expirtyTs := uint64(time.Now().Add(2 * time.Second).Unix())
+	v := ttlDataFormat{
+		ExpiryTS: expirtyTs,
+		Data:     []byte("someValue"),
+	}
+	b, err := msgpack.Marshal(v)
+	if err != nil {
+		t.Error(err)
+	}
+
+	var item ttlDataFormat
+	err = msgpack.Unmarshal(b, &item)
+	if err != nil {
+		panic(err)
+	}
+
+	if item.ExpiryTS != v.ExpiryTS {
+		t.Errorf("Unpack int mismatch. Expected Value: %d, Actual Value: %d", v.ExpiryTS, item.ExpiryTS)
+	}
+
+	if string(item.Data) != string(v.Data) {
+		t.Errorf("Unpack string mismatch. Expected Value: %s, Actual Value: %s", v.Data, item.Data)
+	}
+}
+
+func TestCompactionFilterOnExpiredKeys(t *testing.T) {
+	numKeys := 10
+	keyPref := "Expired"
+	for i := 1; i <= numKeys; i++ {
+		key, value := fmt.Sprintf("%s_%d", keyPref, i), fmt.Sprintf("V%d", i)
+		expireAt := time.Now().Add(-2 * time.Second).Unix()
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(expireAt)); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	store.db.CompactRangeCF(store.ttlCF, gorocksdb.Range{nil, nil})
+	for i := 1; i <= numKeys; i++ {
+		key := fmt.Sprintf("%s_%d", keyPref, i)
+		if value, err := store.db.GetCF(store.opts.readOpts, store.ttlCF, []byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			val := toByteArray(value)
+			if len(val) > 0 {
+				t.Errorf("Expected missing for key: %s. But found it with value: %v", key, val)
+			}
+		}
+	}
+}
+
+func TestPutTTLAndGet(t *testing.T) {
+	numIteration := 10
+	for i := 1; i <= numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(2*time.Second).Unix())); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 11; i <= 10+numIteration; i++ {
+		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if err := store.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(-2*time.Second).Unix())); err != nil {
+			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
+		}
+	}
+
+	for i := 1; i <= numIteration; i++ {
+		key, expectedValue := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if string(readResults[0].Value) != expectedValue {
+				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
+			}
+		}
+	}
+
+	for i := 11; i <= 10+numIteration; i++ {
+		key := fmt.Sprintf("KTTL%d", i)
+		if readResults, err := store.Get([]byte(key)); err != nil {
+			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else {
+			if len(readResults) > 0 {
+				t.Errorf("GET mismatch post TTL Expiry. Key: %s, Expected Value: %s, Actual Value: %s", key, "nil", readResults[0].Value)
 			}
 		}
 	}
@@ -119,16 +249,17 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGetLatestChangeNumber(t *testing.T) {
-	expNumTrxns := uint64(5)
+	numInsert := 5
 	beforeChngNum, _ := store.GetLatestCommittedChangeNumber()
-	putKeys(t, int(expNumTrxns), "aaKey", "aaVal")
+	putKeys(t, numInsert, "aaKey", "aaVal", 0)
 	afterChngNum, _ := store.GetLatestCommittedChangeNumber()
 	actNumTrxns := afterChngNum - beforeChngNum
+	expNumTrxns := uint64(10)
 	if expNumTrxns != actNumTrxns {
 		t.Errorf("Mismatch in number of transactions. Expected: %d, Actual: %d", expNumTrxns, actNumTrxns)
 	}
 	beforeChngNum = afterChngNum
-	getKeys(t, int(expNumTrxns), "aaKey", "aaVal")
+	getKeys(t, numInsert, "aaKey", "aaVal")
 	afterChngNum, _ = store.GetLatestCommittedChangeNumber()
 	actNumTrxns = afterChngNum - beforeChngNum
 	if actNumTrxns != 0 {
@@ -141,7 +272,7 @@ func TestLoadChanges(t *testing.T) {
 	keyPrefix, valPrefix := "bbKey", "bbVal"
 	chngNum, _ := store.GetLatestCommittedChangeNumber()
 	chngNum++ // due to possible previous transaction
-	putKeys(t, expNumTrxns, keyPrefix, valPrefix)
+	putKeys(t, expNumTrxns, keyPrefix, valPrefix, 0)
 	if chngs, err := store.LoadChanges(chngNum, maxChngs); err != nil {
 		t.Fatal(err)
 	} else {
@@ -153,13 +284,13 @@ func TestLoadChanges(t *testing.T) {
 		if firstChngNum != chngNum {
 			t.Errorf("Expected first change number to be %d but it is %d", chngNum, firstChngNum)
 		}
-		for i := 0; i < actNumChngs; i++ {
+		for i := 0; i < actNumChngs; i += 2 {
 			chng := chngs[i]
 			// t.Log(string(chng.SerialisedForm))
-			if chng.NumberOfTrxns != 1 {
-				t.Errorf("Expected only one transaction in this change but found %d transactions", chng.NumberOfTrxns)
+			if chng.NumberOfTrxns != 2 {
+				t.Errorf("Expected only two transaction in this change but found %d transactions", chng.NumberOfTrxns)
 			}
-			trxnRec := chng.Trxns[0]
+			trxnRec := chng.Trxns[1]
 			if trxnRec.Type != serverpb.TrxnRecord_Put {
 				t.Errorf("Expected transaction type to be Put but found %s", trxnRec.Type.String())
 			}
@@ -178,7 +309,7 @@ func TestLoadChanges(t *testing.T) {
 func TestSaveChanges(t *testing.T) {
 	numTrxns := 3
 	putKeyPrefix, putValPrefix := "ccKey", "ccVal"
-	putKeys(t, numTrxns, putKeyPrefix, putValPrefix)
+	putKeys(t, numTrxns, putKeyPrefix, putValPrefix, 0)
 	chngNum, _ := store.GetLatestCommittedChangeNumber()
 	chngNum++ // due to possible previous transaction
 	wbPutKeyPrefix, wbPutValPrefix := "ddKey", "ddVal"
@@ -190,7 +321,7 @@ func TestSaveChanges(t *testing.T) {
 		wb.Put([]byte(ks), []byte(vs))
 		delKs := fmt.Sprintf("%s_%d", putKeyPrefix, i+1)
 		wb.Delete([]byte(delKs))
-		chngs[i] = toChangeRecord(wb, chngNum)
+		chngs[i] = store.toChangeRecord(wb, chngNum)
 		chngNum++
 	}
 	expChngNum := chngNum - 1
@@ -209,11 +340,11 @@ func TestSaveChanges(t *testing.T) {
 func TestIteratorPrefixScan(t *testing.T) {
 	numTrxns := 3
 	keyPrefix1, valPrefix1 := "aaPrefixKey", "aaPrefixVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 	keyPrefix2, valPrefix2 := "bbPrefixKey", "bbPrefixVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 	keyPrefix3, valPrefix3 := "ccPrefixKey", "ccPrefixVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, 0)
 
 	prefix := []byte("bbPrefix")
 	itOpts, err := storage.NewIteratorOptions(
@@ -245,14 +376,54 @@ func TestIteratorPrefixScan(t *testing.T) {
 	}
 }
 
+func TestIteratorFromStartKeyWithTTL(t *testing.T) {
+	numTrxns := 3
+	keyPrefix1, valPrefix1 := "TTLStartKeyAA", "aaStartVal"
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
+	keyPrefix2, valPrefix2 := "TTLStartKeyBB", "bbStartVal"
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
+	keyPrefix3, valPrefix3 := "TTLStartKeyCC", "ccStartVal"
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, time.Now().Add(2*time.Second).Unix())
+	keyPrefix4, valPrefix4 := "TTLStartKeyDD", "ccStartVal"
+	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2*time.Second).Unix())
+
+	prefix, startKey := []byte("TTLStartKey"), []byte("TTLStartKeyBB_2")
+	itOpts, err := storage.NewIteratorOptions(
+		storage.IterationPrefixKey(prefix),
+		storage.IterationStartKey(startKey),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := store.Iterate(itOpts)
+	defer it.Close()
+
+	actCount := 0
+	for it.HasNext() {
+		key, val := it.Next()
+		actCount++
+		if strings.HasPrefix(string(key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", key, val)
+		} else {
+			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+		}
+	}
+
+	expCount := 5
+	if expCount != actCount {
+		t.Errorf("Expected %d records with prefix: %s, start key: %s. But got %d records.", expCount, prefix, startKey, actCount)
+	}
+
+}
+
 func TestIteratorFromStartKey(t *testing.T) {
 	numTrxns := 3
 	keyPrefix1, valPrefix1 := "StartKeyAA", "aaStartVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 	keyPrefix2, valPrefix2 := "StartKeyBB", "bbStartVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 	keyPrefix3, valPrefix3 := "StartKeyCC", "ccStartVal"
-	putKeys(t, numTrxns, keyPrefix3, valPrefix3)
+	putKeys(t, numTrxns, keyPrefix3, valPrefix3, 0)
 
 	prefix, startKey := []byte("StartKey"), []byte("StartKeyBB_2")
 	itOpts, err := storage.NewIteratorOptions(
@@ -351,7 +522,12 @@ func TestMultiGet(t *testing.T) {
 	keys, vals := make([][]byte, numKeys), make([]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("MK%d", i), fmt.Sprintf("MV%d", i)
-		if err := store.Put([]byte(key), []byte(value)); err != nil {
+		ttl := int64(0)
+		if i&1 == 1 {
+			ttl = time.Now().Add(2 * time.Second).Unix()
+		}
+		err := store.PutTTL([]byte(key), []byte(value), uint64(ttl))
+		if err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		} else {
 			keys[i-1] = []byte(key)
@@ -396,14 +572,14 @@ func TestRestoreFolderValidity(t *testing.T) {
 
 func TestBackupAndRestore(t *testing.T) {
 	numTrxns, keyPrefix, valPrefix := 5, "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, numTrxns, keyPrefix, valPrefix, 0)
 
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "backup")
 	if err := store.BackupTo(backupPath); err != nil {
 		t.Fatal(err)
 	} else {
 		missKeyPrefix, missValPrefix := "mbrKey", "mbrVal"
-		putKeys(t, numTrxns, missKeyPrefix, missValPrefix)
+		putKeys(t, numTrxns, missKeyPrefix, missValPrefix, 0)
 		store.Close()
 		if st, _, _, _, err := store.RestoreFrom(backupPath); err != nil {
 			t.Fatal(err)
@@ -418,14 +594,14 @@ func TestBackupAndRestore(t *testing.T) {
 func TestGetPutSnapshot(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1, newValPrefix1 := "firSnapKey", "firSnapVal", "newFirSnapVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 
 	if snap, err := store.GetSnapshot(); err != nil {
 		t.Fatal(err)
 	} else {
-		putKeys(t, numTrxns, keyPrefix1, newValPrefix1)
+		putKeys(t, numTrxns, keyPrefix1, newValPrefix1, 0)
 		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
-		putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+		putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 
 		if err := store.PutSnapshot(snap); err != nil {
 			t.Fatal(err)
@@ -439,13 +615,13 @@ func TestGetPutSnapshot(t *testing.T) {
 func TestIterationOnExplicitSnapshot(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1 := "firKey", "firVal"
-	putKeys(t, numTrxns, keyPrefix1, valPrefix1)
+	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
 
 	snap := store.db.NewSnapshot()
 	defer store.db.ReleaseSnapshot(snap)
 
 	keyPrefix2, valPrefix2 := "secKey", "secVal"
-	putKeys(t, numTrxns, keyPrefix2, valPrefix2)
+	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 
 	readOpts := gorocksdb.NewDefaultReadOptions()
 	defer readOpts.Destroy()
@@ -478,7 +654,7 @@ func TestIterationOnExplicitSnapshot(t *testing.T) {
 func TestPreventParallelBackups(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, numTrxns, keyPrefix, valPrefix, 0)
 
 	parallelism := 5
 	var succ, fail uint32
@@ -509,7 +685,7 @@ func TestPreventParallelBackups(t *testing.T) {
 func TestPreventParallelRestores(t *testing.T) {
 	numTrxns := 500
 	keyPrefix, valPrefix := "brKey", "brVal"
-	putKeys(t, numTrxns, keyPrefix, valPrefix)
+	putKeys(t, numTrxns, keyPrefix, valPrefix, 0)
 	backupPath := fmt.Sprintf("%s/%s", dbFolder, "test_backup")
 	if err := store.BackupTo(backupPath); err != nil {
 		t.Fatal(err)
@@ -687,7 +863,7 @@ func TestLoadChangesForOptimisticTransactions(t *testing.T) {
 	for chngIter.Valid() {
 		wb, chngNum := chngIter.GetBatch()
 		defer wb.Destroy()
-		chngs = append(chngs, toChangeRecord(wb, chngNum))
+		chngs = append(chngs, store.toChangeRecord(wb, chngNum))
 		chngIter.Next()
 	}
 
@@ -954,7 +1130,7 @@ func BenchmarkIteration(b *testing.B) {
 	b.ResetTimer()
 	numTrxns := b.N
 	keyPrefix, valPrefix := "snapBenchKey", "snapBenchVal"
-	data := putKeys(b, numTrxns, keyPrefix, valPrefix)
+	data := putKeys(b, numTrxns, keyPrefix, valPrefix, 0)
 	b.StartTimer()
 
 	snap := store.db.NewSnapshot()
@@ -1006,16 +1182,16 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 	}
 }
 
-func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string) map[string]string {
+func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string, ttl int64) map[string]string {
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := store.Put([]byte(k), []byte(v)); err != nil {
+		if err := store.PutTTL([]byte(k), []byte(v), uint64(ttl)); err != nil {
 			t.Fatal(err)
 		} else {
 			if readResults, err := store.Get([]byte(k)); err != nil {
 				t.Fatal(err)
-			} else if string(readResults[0].Value) != string(v) {
+			} else if ttl > time.Now().Unix() && string(readResults[0].Value) != string(v) {
 				t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", k, v, readResults[0])
 			} else {
 				data[k] = v

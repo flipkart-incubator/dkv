@@ -55,6 +55,8 @@ message PutRequest {
   bytes key = 1;
   // Value is the value, in bytes, to associate with the key in the key value store.
   bytes value = 2;
+  // expireTS is the epoch seconds value, in int64 to associate with the key in the key value store.
+  uint64 expireTS = 3;
 }
 
 message PutResponse {
@@ -203,6 +205,8 @@ message TrxnRecord {
   bytes key = 2;
   // Value is the byte array representation of the value associated with this transaction.
   bytes value = 3;
+  // expireTS is the epoch seconds value, in int64 to associate with the key in the key value store.
+  uint64 expireTS = 4;
 }
 
 service DKVBackupRestore {

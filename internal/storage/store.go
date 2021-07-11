@@ -16,6 +16,9 @@ type KVStore interface {
 	io.Closer
 	// Put stores the association between the given key and value
 	Put(key []byte, value []byte) error
+	// PutTTL stores the association between the given key and value
+	// and sets the expireTS of the key to the provided epoch in seconds
+	PutTTL(key []byte, value []byte, expireTS uint64) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
@@ -105,9 +108,9 @@ const timeFormatTempPath = "20060102150405"
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFile(prefix string) (string, error) {
+func CreateTempFile(dir string, prefix string) (string, error) {
 	tempFilePrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
-	tempFile, err := ioutil.TempFile("", string(tempFilePrefix))
+	tempFile, err := ioutil.TempFile(dir, string(tempFilePrefix))
 	if err != nil {
 		return "", err
 	}
@@ -118,9 +121,9 @@ func CreateTempFile(prefix string) (string, error) {
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFolder(prefix string) (string, error) {
+func CreateTempFolder(dir string, prefix string) (string, error) {
 	tempFolderPrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
-	return ioutil.TempDir("", string(tempFolderPrefix))
+	return ioutil.TempDir(dir, string(tempFolderPrefix))
 }
 
 // RenameFolder moves the given src path onto the given dst path by

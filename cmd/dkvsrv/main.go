@@ -54,18 +54,18 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&disklessMode, "dbDiskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
-	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
-	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
-	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
-	flag.StringVar(&dbEngineIni, "dbEngineIni", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
-	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
-	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
-	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
-	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
-	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
+	flag.BoolVar(&disklessMode, "diskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
+	flag.StringVar(&dbFolder, "db-folder", "/tmp/dkvsrv", "DB folder path for storing data files")
+	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
+	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
+	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
+	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave")
+	flag.StringVar(&statsdAddr, "statsd-addr", "", "StatsD service address in host:port format")
+	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
+	flag.DurationVar(&replPollInterval, "repl-poll-interval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
+	flag.StringVar(&dbAccessLog, "access-log", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
 	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.Uint64Var(&blockCacheSize, "blockCacheSize", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
+	flag.Uint64Var(&blockCacheSize, "block-cache-size", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -143,11 +143,13 @@ func validateFlags() {
 	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
 		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
 	}
-	if disklessMode && (strings.ToLower(dbEngine) == "rocksdb" || strings.ToLower(dbRole) == masterRole) {
-		log.Panicf("diskless is available only on Badger storage and for standalone and slave roles")
+
+	if disklessMode && strings.ToLower(dbEngine) == "rocksdb" {
+		log.Panicf("diskless is available only on Badger storage")
 	}
+
 	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
-		log.Panicf("replMasterAddr must be given in slave mode")
+		log.Panicf("repl-master-addr must be given in slave mode")
 	}
 	if dbEngineIni != "" {
 		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
@@ -288,7 +290,7 @@ func printFlagsWithPrefix(prefixes ...string) {
 }
 
 func toDKVSrvrRole(role string) dkvSrvrRole {
-	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(dbRole)))
+	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(role)))
 }
 
 func (role dkvSrvrRole) printFlags() {
@@ -309,8 +311,8 @@ func (role dkvSrvrRole) printFlags() {
 }
 
 func setDKVDefaultsForNexusDirs() {
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexusLogDir"), flag.Lookup("nexusSnapDir")
-	dbPath := flag.Lookup("dbFolder").DefValue
+	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
+	dbPath := flag.Lookup("db-folder").DefValue
 	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
 	nexusLogDirFlag.Value.Set("")
 	nexusSnapDirFlag.Value.Set("")
@@ -327,7 +329,7 @@ func setFlagsForNexusDirs() {
 
 func setupStats() {
 	if statsdAddr != "" {
-		statsCli = stats.NewStatsDClient(statsdAddr, "dkv")
+		statsCli = stats.NewStatsDClient(statsdAddr, "dkv.")
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
@@ -341,11 +343,17 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		slg.Fatalf("Unable to create DB folder at %s. Error: %v.", dbFolder, err)
 	}
 
-	dbDir := path.Join(dbFolder, "data")
-	slg.Infof("Using %s as data folder", dbDir)
+	dataDir := path.Join(dbFolder, "data")
+	slg.Infof("Using %s as data directory", dataDir)
 	switch dbEngine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbDir,
+		sstDir := path.Join(dbFolder, "sst")
+		if err := os.MkdirAll(sstDir, 0777); err != nil {
+			slg.Fatalf("Unable to create sst folder at %s. Error: %v.", dbFolder, err)
+		}
+
+		rocksDb, err := rocksdb.OpenDB(dataDir,
+			rocksdb.WithSSTDir(sstDir),
 			rocksdb.WithSyncWrites(),
 			rocksdb.WithCacheSize(blockCacheSize),
 			rocksdb.WithRocksDBConfig(dbEngineIni),
@@ -368,13 +376,13 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		if disklessMode {
 			bdbOpts = append(bdbOpts, badger.WithInMemory())
 		} else {
-			bdbOpts = append(bdbOpts, badger.WithDBDir(dbDir))
+			bdbOpts = append(bdbOpts, badger.WithDBDir(dataDir))
 		}
 		badgerDb, err = badger.OpenDB(bdbOpts...)
 		if err != nil {
 			dkvLogger.Panic("Badger engine init failed", zap.Error(err))
 		}
-		return badgerDb, nil, badgerDb, badgerDb
+		return badgerDb, badgerDb, badgerDb, badgerDb
 	default:
 		slg.Panicf("Unknown storage engine: %s", dbEngine)
 		return nil, nil, nil, nil

@@ -82,6 +82,34 @@ public interface DKVClient extends Closeable {
     long addAndGet(byte[] key, long delta);
 
     /**
+     * Associates the specified value with the specified key
+     * inside DKV database. Also sets the expiryTS of the key to the provided value.
+     * If this association already exists in the database, the old value is
+     * replaced with the given value.
+     *
+     * @param key key with which the specified value is to be associated
+     * @param value value to be associated with the specified key
+     * @param expiryTS the expiryTS in epoch seconds at which this key should be expired
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void put(String key, String value, long expiryTS);
+
+    /**
+     * Associates the specified value with the specified key
+     * inside DKV database. Also sets the expiryTS of the key to the provided value.
+     * If this association already exists in the database, the old value is
+     * replaced with the given value.
+     *
+     * @param key key with which the specified value is to be associated
+     * @param value value to be associated with the specified key
+     * @param expiryTS the expiryTS in epoch seconds at which this key should be expired
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void put(byte[] key, byte[] value, long expiryTS);
+
+    /**
      * Retrieves the value associated with the given key from the DKV
      * database. How recent the value needs to be can be controlled
      * through the <tt>consistency</tt> parameter.
@@ -150,6 +178,24 @@ public interface DKVClient extends Closeable {
      * @see Api.ReadConsistency
      */
     KV.Bytes[] multiGet(Api.ReadConsistency consistency, byte[][] keys);
+
+    /**
+     * Deleted the specified key inside DKV database.
+     *
+     * @param key key with which the specified value is to be associated
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void delete(String key);
+
+    /**
+     * Deleted the specified key inside DKV database.
+     *
+     * @param key key with which the specified value is to be associated
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void delete(byte[] key);
 
     /**
      * Iterates through the various key value associations found in the

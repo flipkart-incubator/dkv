@@ -7,9 +7,9 @@ The cluster information is sourced from config file. Please look at the
 
 ### 1. Launch several DKV instances configured as masters or slaves
 ```bash
-$ ./bin/dkvsrv -dbAccessLog stdout -dbRole master -dbFolder /tmp/dkvsrv -dbListenAddr 127.0.0.1:8080
-$ ./bin/dkvsrv -dbAccessLog stdout -dbEngine badger -dbListenAddr 127.0.0.1:9090 -dbDiskless -dbRole slave -replMasterAddr 127.0.0.1:8080 -replPollInterval 5s
-$ ./bin/dkvsrv -dbAccessLog stdout -dbEngine badger -dbListenAddr 127.0.0.1:9191 -dbDiskless -dbRole slave -replMasterAddr 127.0.0.1:8080 -replPollInterval 5s
+$ ./bin/dkvsrv -access-log stdout -role master -db-folder /tmp/dkvsrv -listen-addr 127.0.0.1:8080
+$ ./bin/dkvsrv -access-log stdout -db-engine badger -listen-addr 127.0.0.1:9090 -dbDiskless -role slave -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 5s
+$ ./bin/dkvsrv -access-log stdout -db-engine badger -listen-addr 127.0.0.1:9191 -dbDiskless -role slave -repl-master-addr 127.0.0.1:8080 -repl-poll-interval 5s
 ```
 
 ### 2. Build and launch envoy-xds

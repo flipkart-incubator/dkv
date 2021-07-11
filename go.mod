@@ -9,15 +9,17 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
-	github.com/flipkart-incubator/gorocksdb v0.0.0-20210422080808-54e7b706f563
-	github.com/flipkart-incubator/nexus v0.0.0-20210407114342-3079ef506894
+	github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7
+	github.com/flipkart-incubator/nexus v0.0.0-20210614094508-f3227c358082
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
+	github.com/kpango/fastime v1.0.16
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
+	github.com/shamaton/msgpack v1.2.1
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/smira/go-statsd v1.3.1
 	go.uber.org/zap v1.14.1
