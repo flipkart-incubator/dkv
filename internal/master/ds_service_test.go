@@ -13,8 +13,6 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/dkv/internal/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	dkv_sync "github.com/flipkart-incubator/dkv/internal/sync"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -330,32 +328,8 @@ func newListener(port int) net.Listener {
 	}
 }
 
-func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
-	dbFolder := fmt.Sprintf("%s_%d", dbFolder, id)
-	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
-		panic(err)
-	}
-	switch engine {
-	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder,
-			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
-		if err != nil {
-			panic(err)
-		}
-		return rocksDb, rocksDb, rocksDb
-	case "badger":
-		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
-		if err != nil {
-			panic(err)
-		}
-		return bdgrDb, nil, bdgrDb
-	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
-	}
-}
-
 func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server) {
-	kvs, cp, br := newKVStoreWithID(id)
+	kvs, cp, br := NewKVStoreWithID(dbFolder, id)
 	dkvRepl := newReplicator(kvs, nodeURL, clusURL)
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}

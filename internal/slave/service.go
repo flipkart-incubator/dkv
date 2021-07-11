@@ -27,22 +27,16 @@ type DKVService interface {
 
 type ReplicationConfig struct {
 	// Max num changes to poll from master in a single replication call
-	maxNumChngs uint32
+	MaxNumChngs uint32
 	// Interval to periodically poll changes from master
-	replPollInterval time.Duration
+	ReplPollInterval time.Duration
 	// Maximum allowed replication lag from master for the slave to be considered valid
-	maxActiveReplLag uint64
+	MaxActiveReplLag uint64
 	// Maximum allowed replication time elapsed from master for the slave to be considered valid
 	// Applicable when replication requests are erroring out due to an issue with master / slave
-	maxActiveReplElapsed uint64
+	MaxActiveReplElapsed uint64
 	// Listener address of the master node
 	replMasterAddr string
-}
-
-func NewReplicationConfig(maxNumChanges uint32, replPollInterval time.Duration,
-	maxActiveReplLag uint64, maxActiveReplElapsed uint64) *ReplicationConfig {
-	return &ReplicationConfig{maxNumChngs: maxNumChanges, replPollInterval: replPollInterval,
-		maxActiveReplLag: maxActiveReplLag, maxActiveReplElapsed: maxActiveReplElapsed}
 }
 
 type slaveService struct {
@@ -132,11 +126,6 @@ func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr se
 	return nil
 }
 
-func (ss *slaveService) PrefixMultiGet(ctx context.Context, request *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	// TODO - share code between standalone server and slave server where applicable (like here)
-	panic("implement me")
-}
-
 func (ss *slaveService) Close() error {
 	ss.lg.Info("Closing the slave service")
 	ss.replStop <- struct{}{}
@@ -150,13 +139,13 @@ func (ss *slaveService) Close() error {
 }
 
 func (ss *slaveService) startReplication() {
-	ss.replTckr = time.NewTicker(ss.replConfig.replPollInterval)
+	ss.replTckr = time.NewTicker(ss.replConfig.ReplPollInterval)
 	latestChngNum, _ := ss.ca.GetLatestAppliedChangeNumber()
 	ss.fromChngNum = 1 + latestChngNum
 	ss.replStop = make(chan struct{})
 	slg := ss.lg.Sugar()
 	slg.Infof("Replicating changes from change number: %d and polling interval: %s",
-		ss.fromChngNum, ss.replConfig.replPollInterval.String())
+		ss.fromChngNum, ss.replConfig.ReplPollInterval.String())
 	slg.Sync()
 	go ss.pollAndApplyChanges()
 }
@@ -167,7 +156,7 @@ func (ss *slaveService) pollAndApplyChanges() {
 		case <-ss.replTckr.C:
 			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replLag))
 			ss.statsCli.Gauge("replication.lag", int64(ss.replLag))
-			if err := ss.applyChangesFromMaster(ss.replConfig.maxNumChngs); err != nil {
+			if err := ss.applyChangesFromMaster(ss.replConfig.MaxNumChngs); err != nil {
 				ss.lg.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
 					ss.lg.Error("Unable to replace master", zap.Error(err))
@@ -248,9 +237,9 @@ func newEmptyStatus() *serverpb.Status {
 }
 
 func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
-	if ss.replLag > ss.replConfig.maxActiveReplLag {
+	if ss.replLag > ss.replConfig.MaxActiveReplLag {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
-	} else if ss.lastReplTime == 0 || hlc.GetTimeAgo(ss.lastReplTime) > ss.replConfig.maxActiveReplElapsed {
+	} else if ss.lastReplTime == 0 || hlc.GetTimeAgo(ss.lastReplTime) > ss.replConfig.MaxActiveReplElapsed {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	} else if ss.isClosed {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
@@ -326,7 +315,7 @@ func (ss *slaveService) findNewMaster() (string, error) {
 	// Get all active regions
 	if vBuckets, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
 		// Filter regions applicable to become master for this slave
-		filteredVBuckets := []*serverpb.RegionInfo{}
+		var filteredVBuckets []*serverpb.RegionInfo
 		for _, vBucket := range vBuckets {
 			if isVBucketApplicableToBeMaster(vBucket) {
 				filteredVBuckets = append(filteredVBuckets, vBucket)
@@ -340,7 +329,7 @@ func (ss *slaveService) findNewMaster() (string, error) {
 		}
 
 		// If any region exists within the DC, prefer those.
-		localDCVBuckets := []*serverpb.RegionInfo{}
+		var localDCVBuckets []*serverpb.RegionInfo
 		for _, vBucket := range vBuckets {
 			if vBucket.DcID == ss.regionInfo.DcID {
 				localDCVBuckets = append(localDCVBuckets, vBucket)
@@ -351,7 +340,7 @@ func (ss *slaveService) findNewMaster() (string, error) {
 		}
 
 		// If any non master region exists, prefer those.
-		followers := []*serverpb.RegionInfo{}
+		var followers []*serverpb.RegionInfo
 		for _, vBucket := range vBuckets {
 			if vBucket.Status != serverpb.RegionStatus_LEADER {
 				followers = append(followers, vBucket)

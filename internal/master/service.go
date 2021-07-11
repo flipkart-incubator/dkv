@@ -267,28 +267,6 @@ func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.R
 	return newEmptyStatus(), nil
 }
 
-func (ss *standaloneService) PrefixMultiGet(ctx context.Context, prefixMultiGetRequest *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	ss.rwl.RLock()
-	defer ss.rwl.RUnlock()
-
-	// Convert prefix multi get request to prefix iterator and append the results to construct the response
-	iterReq := &serverpb.IterateRequest{KeyPrefix: prefixMultiGetRequest.KeyPrefix}
-	iteration := storage.NewIteration(ss.store, iterReq)
-
-	var results []*serverpb.KVPair
-
-	err := iteration.ForEach(func(k, v []byte) error {
-		results = append(results, &serverpb.KVPair{Key: k, Value: v})
-		return nil
-	})
-	if err != nil {
-		// Better to return error rather than partial results as incomplete results could cause client misbehaviour
-		ss.lg.Error("Unable to PrefixMultiGet", zap.Error(err))
-		return &serverpb.MultiGetResponse{Status: newErrorStatus(err)}, err
-	}
-	return &serverpb.MultiGetResponse{KeyValues: results, Status: newEmptyStatus()}, nil
-}
-
 func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
@@ -429,12 +407,6 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 	default:
 		return nil, fmt.Errorf("Unknown read consistency level: %d", multiGetReq.ReadConsistency)
 	}
-}
-
-func (ds *distributedService) PrefixMultiGet(ctx context.Context, prefixMultiGetReq *serverpb.PrefixMultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	// TODO - implement linearizable consistency here. Requires iterator implementation on raft
-	// (or make sure followers which are partitioned from leader don't serve requests)
-	return ds.DKVService.PrefixMultiGet(ctx, prefixMultiGetReq)
 }
 
 func gobDecodeAsKVPairs(val []byte) ([]*serverpb.KVPair, error) {

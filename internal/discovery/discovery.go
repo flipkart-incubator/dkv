@@ -1,6 +1,8 @@
 package discovery
 
-import "github.com/flipkart-incubator/dkv/pkg/serverpb"
+import (
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+)
 
 // StatusPropagator is the interface to propagate status updates of all regions in the node to the discovery system
 type StatusPropagator interface {
@@ -15,6 +17,11 @@ type StatusPropagator interface {
 
 // ClusterInfoGetter is the interface to get status updates of cluster based on request criteria
 type ClusterInfoGetter interface {
-	// get cluster status of nodes matching given database and vBucket
+	// GetClusterStatus get the status of nodes matching given database and vBucket
 	GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error)
+}
+
+type Client interface {
+	StatusPropagator
+	ClusterInfoGetter
 }
