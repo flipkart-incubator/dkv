@@ -137,17 +137,6 @@ func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) 
 	return res.KeyValues, nil
 }
 
-func (dkvClnt *DKVClient) PrefixMultiGet(keyPrefix []byte) ([]*serverpb.KVPair, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	request := &serverpb.PrefixMultiGetRequest{KeyPrefix: keyPrefix}
-	res, err := dkvClnt.dkvCli.PrefixMultiGet(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-	return res.KeyValues, nil
-}
-
 // GetChanges retrieves changes since the given change number
 // using the underlying GRPC GetChanges method. One can limit the
 // number of changes retrieved using the maxNumChanges parameter.

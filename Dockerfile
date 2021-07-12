@@ -25,9 +25,9 @@ RUN curl -fsSL https://dl.google.com/go/go1.13.4.linux-amd64.tar.gz | tar xz \
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install Protobuf
-RUN curl -fsSL -O https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip \
-    && unzip protoc-3.5.1-linux-x86_64.zip -d protoc && chown -R root:root ./protoc && mv ./protoc /usr/local \
-    && rm protoc-3.5.1-linux-x86_64.zip
+RUN curl -fsSL -O https://github.com/protocolbuffers/protobuf/releases/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip \
+    && unzip protoc-3.15.8-linux-x86_64.zip -d protoc && chown -R root:root ./protoc && mv ./protoc /usr/local \
+    && rm protoc-3.15.8-linux-x86_64.zip
 ENV PATH="/usr/local/protoc/bin:${PATH}"
 
 # Install GoRocksDB

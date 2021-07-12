@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"github.com/flipkart-incubator/dkv/internal/utils"
 	"net"
 	"os/exec"
 	"sync"
@@ -237,7 +236,7 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
 
 	// Validate status when replication not successful for long time
-	utils.SleepInSecs(7)
+	time.Sleep(7 * time.Second)
 	validateStatus(t, "replDelayed", serverpb.RegionStatus_INACTIVE)
 
 	// Validate status when replication caught up
@@ -367,10 +366,10 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
 	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
-		maxNumChngs:          2,
-		replPollInterval:     5 * time.Second,
-		maxActiveReplLag:     10,
-		maxActiveReplElapsed: 5,
+		MaxNumChngs:          2,
+		ReplPollInterval:     5 * time.Second,
+		MaxActiveReplLag:     10,
+		MaxActiveReplElapsed: 5,
 		replMasterAddr:       "",
 	}
 	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, mockClusterInfoGetter()); err != nil {

@@ -19,6 +19,14 @@ var (
 	grpcSrvr *grpc.Server
 )
 
+const (
+	dbFolder   = "/tmp/dkv_test_db"
+	dkvSvcPort = 8080
+	dkvSvcHost = "localhost"
+	//engine     = "rocksdb"
+	// engine = "badger"
+)
+
 func TestStandaloneService(t *testing.T) {
 	dkvSvc, grpcSrvr = ServeStandaloneDKV(&serverpb.RegionInfo{}, dbFolder)
 	go ListenAndServe(grpcSrvr, dkvSvcPort)
@@ -37,7 +45,6 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
 		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
-		t.Run("testPrefixMultiGet", testPrefixMultiGet)
 		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
@@ -184,31 +191,6 @@ func testMultiGet(t *testing.T) {
 		for i, result := range results {
 			if string(result.Value) != vals[i] {
 				t.Errorf("Multi Get value mismatch. Key: %s, Expected Value: %s, Actual Value: %s", keys[i], vals[i], result)
-			}
-		}
-	}
-}
-
-func testPrefixMultiGet(t *testing.T) {
-	numKeys, keyPrefix, valPrefix := 10, "PrefixIterK", "IterV"
-	putKeys(t, numKeys, keyPrefix, valPrefix)
-	numNewKeys, newKeyPrefix, newValPrefix := 5, "NewPrefixIterK", "NewIterV"
-	putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
-
-	validateResultsForPrefix(t, "PrefixIterK", 10)
-	validateResultsForPrefix(t, "NewPrefixIterK", 5)
-}
-
-func validateResultsForPrefix(t *testing.T, prefix string, count int) {
-	if results, err := dkvCli.PrefixMultiGet([]byte(prefix)); err != nil {
-		t.Fatalf("Unable to PrefixMultiGet. Error: %v", err)
-	} else {
-		if len(results) != count {
-			t.Errorf("Expected number of results to be: %v. Actual: %v", count, len(results))
-		}
-		for _, result := range results {
-			if !strings.HasPrefix(string(result.GetKey()), prefix) {
-				t.Errorf("Key doesn't start with expected prefix: %s. Key: %s", prefix, string(result.GetKey()))
 			}
 		}
 	}
