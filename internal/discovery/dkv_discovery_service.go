@@ -105,7 +105,7 @@ func (d *discoverService) GetClusterInfo(ctx Context, request *GetClusterInfoReq
 				continue
 			}
 			// Filter inactive regions and regions whose status was updated long time back and hence considered inactive
-			if (hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < d.config.HeartbeatTimeout && statusUpdate.GetRegionInfo().GetStatus() != RegionStatus_INACTIVE) {
+			if (hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < d.config.heartbeatTimeout && statusUpdate.GetRegionInfo().GetStatus() != RegionStatus_INACTIVE) {
 				regionsInfo = append(regionsInfo, statusUpdate.GetRegionInfo());
 			}
 			// TODO : Filter such that only 1 master is returned per region
