@@ -213,8 +213,8 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 	if err != nil {
 		fmt.Printf("Unable to get Status: Error: %v\n", err)
 	} else {
-		for _, vBucket := range vBuckets {
-			res, _ := json.Marshal(vBucket)
+		for _, bucket := range vBuckets {
+			res, _ := json.Marshal(bucket)
 			fmt.Println(string(res))
 		}
 	}

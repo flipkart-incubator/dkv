@@ -187,6 +187,9 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 				err = errors.New("change number of the master node can not be lesser than the change number of the slave node")
 			} else {
 				err = ss.applyChanges(res)
+				if err == nil {
+					ss.lastReplTime = hlc.UnixNow()
+				}
 			}
 		}
 	} else {
@@ -205,9 +208,6 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 				err = errors.New("unable to retrieve changes from master due to GRPC resource exhaustion on slave")
 			}
 		}
-	}
-	if err == nil {
-		ss.lastReplTime = hlc.UnixNow()
 	}
 	return err
 }

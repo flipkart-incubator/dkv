@@ -124,13 +124,13 @@ func main() {
 		NexusClusterUrl: nil,
 	}
 
-	discoveryClient, err := newDiscoveryClient()
-	if err != nil {
-		//TODO: fix this panic
-		panic(err.Error())
-	}
-
-	if discoveryClient != nil {
+	var discoveryClient discovery.Client
+	if srvrRole != noRole && !isDiscoverySrv {
+		var err error
+		discoveryClient, err = newDiscoveryClient()
+		if err != nil {
+			log.Panicf("Failed to start Discovery Client %v.", err)
+		}
 		// Currently statusPropagator and clusterInfoGetter are same instances hence closing just one
 		// but ideally this information should be abstracted from main and we should call close on both
 		defer discoveryClient.Close()
@@ -160,7 +160,7 @@ func main() {
 
 		// Discovery servers can be only configured if node started as master.
 		if isDiscoverySrv {
-			err = registerDiscoveryServer(dkvSvc, grpcSrvr)
+			err := registerDiscoveryServer(dkvSvc, grpcSrvr)
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
 			}
@@ -485,12 +485,6 @@ func newDiscoveryClient() (discovery.Client, error) {
 	iniConfig, err := ini.Load(discoveryConf)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConf, err)
-	}
-
-	if isDiscoverySrv {
-		// Discovery server won't have a discovery client as client needs a server to be started
-		// When supporting multiple regions in a node, this can be made feasible by re-attempting client connection
-		return nil, nil
 	}
 
 	if discoveryClientSection, err := iniConfig.GetSection(discoveryClientConfig); err == nil {

@@ -3,9 +3,7 @@ package slave
 import (
 	"bytes"
 	"crypto/rand"
-	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"net"
 	"os/exec"
 	"sync"
@@ -372,7 +370,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplElapsed: 5,
 		replMasterAddr:       "",
 	}
-	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, mockClusterInfoGetter()); err != nil {
+	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, mockClusterInfo{}); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
@@ -414,13 +412,20 @@ func closeSlave() {
 	slaveGrpcSrvr.GracefulStop()
 }
 
-func mockClusterInfoGetter() discovery.ClusterInfoGetter {
-	return mockClusterInfo{}
-}
 
 type mockClusterInfo struct {
+	region *serverpb.RegionInfo
 }
 
 func (m mockClusterInfo) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {
-	return nil, errors.New("Not implemented")
+	regions := make([]*serverpb.RegionInfo, 1)
+	regions[0] = &serverpb.RegionInfo{
+		NodeAddress: fmt.Sprintf("127.0.0.1:%d", masterSvcPort),
+		Database: "default",
+		DcID: "default",
+		VBucket: "default",
+		Status: serverpb.RegionStatus_LEADER,
+	}
+
+	return regions, nil
 }

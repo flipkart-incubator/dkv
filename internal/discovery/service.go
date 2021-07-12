@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -127,7 +126,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 	return &serverpb.GetClusterInfoResponse{RegionInfos: regionsInfo}, nil
 }
 
-func NewDiscoveryService(dkvService master.DKVService, logger *zap.Logger, config *DiscoveryConfig) (serverpb.DKVDiscoveryServer, error) {
+func NewDiscoveryService(dkvService serverpb.DKVServer, logger *zap.Logger, config *DiscoveryConfig) (serverpb.DKVDiscoveryServer, error) {
 	dkvClient, err := ctl.CreateInProcessDKVClient(dkvService).GRPCClient()
 	if err != nil {
 		return nil, err

@@ -9,10 +9,15 @@ import (
 	"time"
 )
 
-func TestDiscoveryClient(t *testing.T) {
-	_, _ = setupDiscoveryServer(dbFolder + "_DC")
+const (
+	discoverySvcPort = 8070
+)
 
-	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort),
+
+func TestDiscoveryClient(t *testing.T) {
+	_, _ = setupDiscoveryServer(dbFolder + "_DC", discoverySvcPort)
+
+	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 
 	dClient, _ := NewDiscoveryClient(clientConfig, zap.NewNop())

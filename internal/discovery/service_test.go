@@ -24,7 +24,7 @@ var (
 )
 
 func TestDKVDiscoveryService(t *testing.T) {
-	dkvSvc, grpcSrvr = setupDiscoveryServer(dbFolder + "_DS")
+	dkvSvc, grpcSrvr = setupDiscoveryServer(dbFolder + "_DS", dkvSvcPort)
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
 
@@ -152,13 +152,13 @@ func TestDKVDiscoveryService(t *testing.T) {
 	}
 }
 
-func setupDiscoveryServer(dbDir string) (master.DKVService, *grpc.Server) {
+func setupDiscoveryServer(dbDir string, port int) (master.DKVService, *grpc.Server) {
 	dkvSvc, grpcSrvr = master.ServeStandaloneDKV(&serverpb.RegionInfo{}, dbDir)
 
 	discoverServiceConf := &DiscoveryConfig{StatusTTl: 5, HeartbeatTimeout: 2}
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 
-	go master.ListenAndServe(grpcSrvr, dkvSvcPort)
+	go master.ListenAndServe(grpcSrvr, port)
 	return dkvSvc, grpcSrvr
 }

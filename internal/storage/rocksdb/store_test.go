@@ -324,12 +324,12 @@ func TestSaveChanges(t *testing.T) {
 		chngs[i] = store.toChangeRecord(wb, chngNum)
 		chngNum++
 	}
-	expChngNum := chngNum - 1
+	expChngNum := chngNum 
 
 	if actChngNum, err := store.SaveChanges(chngs); err != nil {
 		t.Fatal(err)
 	} else {
-		if expChngNum != actChngNum {
+		if chngNum != actChngNum {
 			t.Errorf("Change numbers mismatch. Expected: %d, Actual: %d", expChngNum, actChngNum)
 		}
 		getKeys(t, numTrxns, wbPutKeyPrefix, wbPutValPrefix)
