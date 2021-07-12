@@ -40,11 +40,6 @@ func NewDiscoveryClientConfigFromIni(sect *ini.Section) (*DiscoveryClientConfig,
 	return nil, fmt.Errorf("Invalid discovery client configuration. Check section %s", sect.Name())
 }
 
-func NewDiscoveryClientConfig(discoveryServiceAddr string, pushStatusInterval int, pollClusterInfoInterval int) *DiscoveryClientConfig {
-	return &DiscoveryClientConfig{discoveryServiceAddr,
-		time.Duration(pushStatusInterval), time.Duration(pollClusterInfoInterval)}
-}
-
 type discoveryClient struct {
 	// All the regions hosted in the current node
 	regions               []serverpb.DKVServer
