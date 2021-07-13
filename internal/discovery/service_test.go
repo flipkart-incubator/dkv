@@ -21,16 +21,15 @@ const (
 	dkvSvcPort = 8080
 	dkvSvcHost = "localhost"
 	dbFolder   = "/tmp/dkv_discovery_test_db"
-	cacheSize = 3 << 30
-	engine    = "rocksdb"
+	cacheSize  = 3 << 30
+	engine     = "rocksdb"
 )
-
 
 func TestDKVDiscoveryService(t *testing.T) {
 	var dkvCli *ctl.DKVClient
 	var err error
 
-	dkvSvc, grpcSvc := serveStandaloneDKVWithDiscovery(dkvSvcPort, &serverpb.RegionInfo{} , dbFolder + "_DS")
+	dkvSvc, grpcSvc := serveStandaloneDKVWithDiscovery(dkvSvcPort, &serverpb.RegionInfo{}, dbFolder+"_DS")
 	defer dkvSvc.Close()
 	defer grpcSvc.GracefulStop()
 

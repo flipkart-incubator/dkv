@@ -28,7 +28,7 @@ var (
 
 const (
 	dbFolder   = "/tmp/dkv_test_db"
-	cacheSize = 3 << 30
+	cacheSize  = 3 << 30
 	dkvSvcPort = 8080
 	dkvSvcHost = "localhost"
 	engine     = "rocksdb"
@@ -337,7 +337,7 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 	}
 }
 
-func serveStandaloneDKV()  {
+func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore(dbFolder)
 	lgr, _ := zap.NewDevelopment()
 	dkvSvc = NewStandaloneService(kvs, cp, ba, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{})

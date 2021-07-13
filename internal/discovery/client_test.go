@@ -14,9 +14,8 @@ const (
 	discoverySvcPort = 8070
 )
 
-
 func TestDiscoveryClient(t *testing.T) {
-	dkvSvc, grpcSrvr := serveStandaloneDKVWithDiscovery(discoverySvcPort, &serverpb.RegionInfo{} , dbFolder + "_DC")
+	dkvSvc, grpcSrvr := serveStandaloneDKVWithDiscovery(discoverySvcPort, &serverpb.RegionInfo{}, dbFolder+"_DC")
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
 

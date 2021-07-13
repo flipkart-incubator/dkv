@@ -368,9 +368,8 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		ReplPollInterval:     5 * time.Second,
 		MaxActiveReplLag:     10,
 		MaxActiveReplElapsed: 5,
-		replMasterAddr:       "",
 	}
-	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, mockClusterInfo{}); err != nil {
+	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
@@ -412,19 +411,18 @@ func closeSlave() {
 	slaveGrpcSrvr.GracefulStop()
 }
 
-
-type mockClusterInfo struct {
+type testingClusterInfo struct {
 	region *serverpb.RegionInfo
 }
 
-func (m mockClusterInfo) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {
+func (m testingClusterInfo) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {
 	regions := make([]*serverpb.RegionInfo, 1)
 	regions[0] = &serverpb.RegionInfo{
 		NodeAddress: fmt.Sprintf("127.0.0.1:%d", masterSvcPort),
-		Database: "default",
-		DcID: "default",
-		VBucket: "default",
-		Status: serverpb.RegionStatus_LEADER,
+		Database:    database,
+		DcID:        "default",
+		VBucket:     vBucket,
+		Status:      serverpb.RegionStatus_LEADER,
 	}
 
 	return regions, nil

@@ -212,7 +212,7 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 	if err != nil {
 		fmt.Printf("Unable to get Status: Error: %v\n", err)
 	} else {
-		if len (vBuckets) == 0 {
+		if len(vBuckets) == 0 {
 			fmt.Println("Found no nodes with the provided filters")
 		} else {
 			fmt.Println("Current DKV cluster nodes:")

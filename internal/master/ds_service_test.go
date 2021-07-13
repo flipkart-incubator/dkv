@@ -217,10 +217,10 @@ func testGetStatus(t *testing.T) {
 	followerCount := 0
 	for _, dkv := range dkvSvcs {
 		info, _ := dkv.GetStatus(nil, nil)
-		if info.Status == serverpb.RegionStatus_LEADER{
+		if info.Status == serverpb.RegionStatus_LEADER {
 			leaderCount++
 		} else if info.Status == serverpb.RegionStatus_PRIMARY_FOLLOWER {
-			followerCount ++
+			followerCount++
 		} else {
 			t.Errorf("Incorrect node status. Actual %s", info.Status.String())
 		}
@@ -229,7 +229,7 @@ func testGetStatus(t *testing.T) {
 		t.Errorf("Incorrect leader counts . Expected %d, Actual %d", 1, leaderCount)
 	}
 	expectedFollowerCount := len(dkvSvcs) - 1
-	if followerCount != expectedFollowerCount  {
+	if followerCount != expectedFollowerCount {
 		t.Errorf("Incorrect follower counts . Expected %d, Actual %d", expectedFollowerCount, followerCount)
 	}
 }
