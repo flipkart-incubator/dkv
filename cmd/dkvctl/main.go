@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -213,9 +212,13 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 	if err != nil {
 		fmt.Printf("Unable to get Status: Error: %v\n", err)
 	} else {
-		for _, bucket := range vBuckets {
-			res, _ := json.Marshal(bucket)
-			fmt.Println(string(res))
+		if len (vBuckets) == 0 {
+			fmt.Println("Found no nodes with the provided filters")
+		} else {
+			fmt.Println("Current DKV cluster nodes:")
+			for _, bucket := range vBuckets {
+				fmt.Println(bucket.String())
+			}
 		}
 	}
 }

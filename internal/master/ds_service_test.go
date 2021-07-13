@@ -213,12 +213,24 @@ func testRestore(t *testing.T) {
 }
 
 func testGetStatus(t *testing.T) {
-	for _, dkvSvc := range dkvSvcs {
-		info, _ := dkvSvc.GetStatus(nil, nil)
-		// Currently all regions will be marked as leader as current behaviour is based on ip address
-		if info.Status != serverpb.RegionStatus_LEADER {
-			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_LEADER.String(), info.Status.String())
+	leaderCount := 0
+	followerCount := 0
+	for _, dkv := range dkvSvcs {
+		info, _ := dkv.GetStatus(nil, nil)
+		if info.Status == serverpb.RegionStatus_LEADER{
+			leaderCount++
+		} else if info.Status == serverpb.RegionStatus_PRIMARY_FOLLOWER {
+			followerCount ++
+		} else {
+			t.Errorf("Incorrect node status. Actual %s", info.Status.String())
 		}
+	}
+	if leaderCount != 1 {
+		t.Errorf("Incorrect leader counts . Expected %d, Actual %d", 1, leaderCount)
+	}
+	expectedFollowerCount := len(dkvSvcs) - 1
+	if followerCount != expectedFollowerCount  {
+		t.Errorf("Incorrect follower counts . Expected %d, Actual %d", expectedFollowerCount, followerCount)
 	}
 }
 
@@ -250,9 +262,9 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 			}
 		}
 		regionInfo, _ := dkvSvc.GetStatus(nil, nil)
-		// Currently new region will be marked as leader as current behaviour is based on ip address
-		if regionInfo.Status != serverpb.RegionStatus_LEADER {
-			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_LEADER.String(), regionInfo.Status.String())
+		// Currently new region will be marked as follower
+		if regionInfo.Status != serverpb.RegionStatus_PRIMARY_FOLLOWER {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_PRIMARY_FOLLOWER.String(), regionInfo.Status.String())
 		}
 		// Remove new DKV node through the client of any other DKV Node (2)
 		if err := dkvClis[2].RemoveNode(newNodeURL); err != nil {

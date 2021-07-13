@@ -140,24 +140,25 @@ func (m *discoveryClient) Close() error {
 	return m.conn.Close()
 }
 
-func (m *discoveryClient) pollClusterInfo() {
+func (m *discoveryClient) pollClusterInfo() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	response, err := m.dkvClient.GetClusterInfo(ctx, &serverpb.GetClusterInfoRequest{})
 	if err != nil {
 		m.logger.Error("Unable to poll cluster info", zap.Error(err))
+		return err
 	} else {
 		m.clusterInfo = response.GetRegionInfos()
+		return nil
 	}
 }
 
 func (m *discoveryClient) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {
 	if m.clusterInfo == nil {
 		// When called before cluster info is initialised
-		m.pollClusterInfo()
-		if m.clusterInfo == nil {
-			// in case cluster info initialise fails
-			return nil, fmt.Errorf("Unable to get cluster info")
+		err := m.pollClusterInfo()
+		if err != nil {
+			return nil, err
 		}
 	}
 	var regions []*serverpb.RegionInfo

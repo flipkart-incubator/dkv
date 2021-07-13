@@ -473,23 +473,11 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 		// For now, we will return status based on listMembers() and identify master based on IP address alone
 		// As of now, there is no hard requirement to identify true leader via service discovery thus using listmembers() is fine
 		// TODO - Provide correct status wrt master / local dc follower / follower with lot of lag
-		leaderId, members := ds.raftRepl.ListMembers()
+		leaderId, _ := ds.raftRepl.ListMembers()
+		selfId := ds.raftRepl.Id()
 
-		// Get IP address of leader as identified by raft
-		if leaderURL, present := members[leaderId]; present {
-			leader := strings.Split(strings.Split(leaderURL, "http://")[1], ":")[0]
-
-			// Get IP address of current node
-			currentIp := strings.Split(regionInfo.NodeAddress, ":")[0]
-
-			// We are comparing IP address because nexus port is different from db listen port
-			// The assumption is that one node has only one dkv process which is definetely not the right assumption
-			// TODO - Have the db listen address as part of the raft metadata associated with a node
-			if leader == currentIp {
-				regionInfo.Status = serverpb.RegionStatus_LEADER
-			} else {
-				regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
-			}
+		if leaderId == selfId {
+			regionInfo.Status = serverpb.RegionStatus_LEADER
 		} else {
 			// Leader is unknown. Could be when raft quorum is incomplete or leader election is in progress
 			// TODO - Provide correct status wrt local dc follower / follower with lot of lag

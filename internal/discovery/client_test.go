@@ -74,7 +74,10 @@ func TestDiscoveryClient(t *testing.T) {
 
 	dClient.propagateStatus()
 
-	regionInfos, _ := dClient.GetClusterStatus("db1", "vbucket1")
+	regionInfos, err := dClient.GetClusterStatus("db1", "vbucket1")
+	if err != nil {
+		t.Errorf(err.Error())
+	}
 	if len(regionInfos) != 2 {
 		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "DB1 vBucket1", 2, len(regionInfos))
 	}

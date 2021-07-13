@@ -86,10 +86,8 @@ func (d *discoverService) UpdateStatus(ctx context.Context, request *serverpb.Up
 }
 
 func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.GetClusterInfoRequest) (*serverpb.GetClusterInfoResponse, error) {
-	// Create a prefix multi get request to loop through all required status updates
-	// Iterator sends the responses on grpc stream which is unnecessary here
 	iterReq := &serverpb.IterateRequest{KeyPrefix: createKeyToGet(request)}
-	kvStrm, err := d.dkvCli.Iterate(context.Background(), iterReq)
+	kvStrm, err := d.dkvCli.Iterate(ctx, iterReq)
 	if err != nil {
 		return nil, err
 	}
