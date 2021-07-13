@@ -341,7 +341,8 @@ func newListener(port int) net.Listener {
 }
 
 func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server) {
-	kvs, cp, br := NewKVStoreWithID(dbFolder, id)
+	dir := fmt.Sprintf("%s_%d", dbFolder, id)
+	kvs, cp, br := newKVStore(dir)
 	dkvRepl := newReplicator(kvs, nodeURL, clusURL)
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}

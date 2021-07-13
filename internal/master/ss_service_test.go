@@ -3,7 +3,14 @@ package master
 import (
 	"bytes"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"net"
+	"os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -21,15 +28,15 @@ var (
 
 const (
 	dbFolder   = "/tmp/dkv_test_db"
+	cacheSize = 3 << 30
 	dkvSvcPort = 8080
 	dkvSvcHost = "localhost"
-	//engine     = "rocksdb"
+	engine     = "rocksdb"
 	// engine = "badger"
 )
 
 func TestStandaloneService(t *testing.T) {
-	dkvSvc, grpcSrvr = ServeStandaloneDKV(&serverpb.RegionInfo{}, dbFolder)
-	go ListenAndServe(grpcSrvr, dkvSvcPort)
+	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
@@ -304,6 +311,48 @@ func testBackupRestore(t *testing.T) {
 			getKeys(t, numKeys, keyPrefix, valPrefix)
 			noKeys(t, numKeys, missKeyPrefix)
 		}
+	}
+}
+
+func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
+	if err := exec.Command("rm", "-rf", dir).Run(); err != nil {
+		panic(err)
+	}
+	switch engine {
+	case "rocksdb":
+		rocksDb, err := rocksdb.OpenDB(dir,
+			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
+		if err != nil {
+			panic(err)
+		}
+		return rocksDb, rocksDb, rocksDb
+	case "badger":
+		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dir))
+		if err != nil {
+			panic(err)
+		}
+		return bdgrDb, nil, bdgrDb
+	default:
+		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
+	}
+}
+
+func serveStandaloneDKV()  {
+	kvs, cp, ba := newKVStore(dbFolder)
+	lgr, _ := zap.NewDevelopment()
+	dkvSvc = NewStandaloneService(kvs, cp, ba, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{})
+	grpcSrvr = grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
+	listenAndServe(grpcSrvr, dkvSvcPort)
+}
+
+func listenAndServe(grpcSrvr *grpc.Server, port int) {
+	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
+		panic(fmt.Sprintf("failed to listen: %v", err))
+	} else {
+		grpcSrvr.Serve(lis)
 	}
 }
 

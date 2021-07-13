@@ -3,10 +3,16 @@ package discovery
 import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/master"
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"net"
+	"os/exec"
 	"testing"
 	"time"
 )
@@ -15,24 +21,22 @@ const (
 	dkvSvcPort = 8080
 	dkvSvcHost = "localhost"
 	dbFolder   = "/tmp/dkv_discovery_test_db"
+	cacheSize = 3 << 30
+	engine    = "rocksdb"
 )
 
-var (
-	dkvCli   *ctl.DKVClient
-	dkvSvc   master.DKVService
-	grpcSrvr *grpc.Server
-)
 
 func TestDKVDiscoveryService(t *testing.T) {
-	dkvSvc, grpcSrvr = setupDiscoveryServer(dbFolder + "_DS", dkvSvcPort)
+	var dkvCli *ctl.DKVClient
+	var err error
+
+	dkvSvc, grpcSvc := serveStandaloneDKVWithDiscovery(dkvSvcPort, &serverpb.RegionInfo{} , dbFolder + "_DS")
 	defer dkvSvc.Close()
-	defer grpcSrvr.GracefulStop()
+	defer grpcSvc.GracefulStop()
 
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if client, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+	if dkvCli, err = ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
 		panic(err)
-	} else {
-		dkvCli = client
 	}
 	defer dkvCli.Close()
 
@@ -152,13 +156,49 @@ func TestDKVDiscoveryService(t *testing.T) {
 	}
 }
 
-func setupDiscoveryServer(dbDir string, port int) (master.DKVService, *grpc.Server) {
-	dkvSvc, grpcSrvr = master.ServeStandaloneDKV(&serverpb.RegionInfo{}, dbDir)
+func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFolder string) (master.DKVService, *grpc.Server) {
+	kvs, cp, ba := newKVStore(dbFolder)
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info)
+	grpcSrvr := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 
 	discoverServiceConf := &DiscoveryConfig{StatusTTl: 5, HeartbeatTimeout: 2}
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 
-	go master.ListenAndServe(grpcSrvr, port)
+	go listenAndServe(grpcSrvr, port)
 	return dkvSvc, grpcSrvr
+}
+
+func listenAndServe(grpcSrvr *grpc.Server, port int) {
+	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
+		panic(fmt.Sprintf("failed to listen: %v", err))
+	} else {
+		grpcSrvr.Serve(lis)
+	}
+}
+
+func newKVStore(dbDir string) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
+	if err := exec.Command("rm", "-rf", dbDir).Run(); err != nil {
+		panic(err)
+	}
+	switch engine {
+	case "rocksdb":
+		rocksDb, err := rocksdb.OpenDB(dbDir,
+			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
+		if err != nil {
+			panic(err)
+		}
+		return rocksDb, rocksDb, rocksDb
+	case "badger":
+		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbDir))
+		if err != nil {
+			panic(err)
+		}
+		return bdgrDb, nil, bdgrDb
+	default:
+		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
+	}
 }

@@ -144,8 +144,7 @@ func (ss *slaveService) startReplication() {
 	ss.fromChngNum = 1 + latestChngNum
 	ss.replStop = make(chan struct{})
 	slg := ss.lg.Sugar()
-	slg.Infof("Replicating changes from change number: %d and polling interval: %s",
-		ss.fromChngNum, ss.replConfig.ReplPollInterval.String())
+	slg.Infof("Replicating changes from change number: %d and polling interval: %s", ss.fromChngNum, ss.replConfig.ReplPollInterval.String())
 	slg.Sync()
 	go ss.pollAndApplyChanges()
 }
@@ -186,8 +185,7 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 				ss.lg.Error("change number of the master node can not be lesser than the change number of the slave node", zap.Uint64("MasterChangeNum", res.MasterChangeNumber), zap.Uint64("FromChangeNum", ss.fromChngNum))
 				err = errors.New("change number of the master node can not be lesser than the change number of the slave node")
 			} else {
-				err = ss.applyChanges(res)
-				if err == nil {
+				if err = ss.applyChanges(res); err == nil {
 					ss.lastReplTime = hlc.UnixNow()
 				}
 			}
