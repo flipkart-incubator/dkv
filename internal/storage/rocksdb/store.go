@@ -7,7 +7,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
 	"github.com/flipkart-incubator/dkv/internal/storage/utils"
-	"github.com/shamaton/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 	"io/ioutil"
 	"os"
 	"path"
@@ -419,7 +419,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
 	}
-	
+
 	return ioutil.ReadAll(tarF)
 }
 
