@@ -89,7 +89,8 @@ func getDiscoveryClient(discoveryServiceAddr string) (*grpc.ClientConn, error) {
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)),
 		grpc.WithReadBufferSize(readBufSize),
 		grpc.WithWriteBufferSize(writeBufSize),
-		grpc.WithAuthority(""))
+		grpc.WithAuthority(""),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 }
 
 func (m *discoveryClient) RegisterRegion(server serverpb.DKVServer) {
@@ -148,6 +149,7 @@ func (m *discoveryClient) pollClusterInfo() error {
 		m.logger.Error("Unable to poll cluster info", zap.Error(err))
 		return err
 	} else {
+		// This can be set to nil if its empty array as protobuf optimises it this way
 		m.clusterInfo = response.GetRegionInfos()
 		return nil
 	}
