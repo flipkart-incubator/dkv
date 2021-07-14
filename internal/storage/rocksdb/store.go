@@ -7,7 +7,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
 	"github.com/flipkart-incubator/dkv/internal/storage/utils"
-	"github.com/mholt/archiver/v3"
 	"github.com/vmihailenco/msgpack/v5"
 	"io/ioutil"
 	"os"
@@ -348,10 +347,9 @@ const (
 	sstPrefix    = "rocksdb-sstfile-"
 	sstDefaultCF = "/default.cf"
 	sstTtlCF     = "/ttl.cf"
-	sstArchive   = "/snap.zip"
 )
 
-func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) (string, error) {
+func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) (*os.File, error) {
 	var fileName string
 	envOpts := gorocksdb.NewDefaultEnvOptions()
 	opts := gorocksdb.NewDefaultOptions()
@@ -364,7 +362,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 
 	if err := sstWrtr.Open(fileName); err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to open sst writer", zap.Error(err))
-		return "", err
+		return nil, err
 	}
 
 	// TODO: Any options need to be set
@@ -381,15 +379,13 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 			sstWrtr.Add(it.Key().Data(), it.Value().Data())
 			it.Next()
 		}
-	} else {
-		return fileName, nil
+
+		if err := sstWrtr.Finish(); err != nil {
+			return nil, err
+		}
 	}
 
-	if err := sstWrtr.Finish(); err != nil {
-		return fileName, err
-	}
-
-	return fileName, nil
+	return os.Open(fileName)
 }
 
 func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
@@ -409,22 +405,22 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate sst file", zap.Error(err))
 		return nil, err
 	}
+	defer normalSSTFile.Close()
 
 	ttlSSTFile, err := rdb.generateSST(snap, rdb.ttlCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate ttl sst file", zap.Error(err))
 		return nil, err
 	}
+	defer ttlSSTFile.Close()
 
-	//TODO: figure out a better option, which doesn't require cpu or space.
-	archiveFile := sstDir + sstArchive
-	err = archiver.Archive([]string{normalSSTFile, ttlSSTFile}, archiveFile)
+	tarF, err := utils.CreateStreamingTar(normalSSTFile, ttlSSTFile)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
 	}
 
-	return ioutil.ReadFile(archiveFile)
+	return ioutil.ReadAll(tarF)
 }
 
 func (rdb *rocksDB) PutSnapshot(snap []byte) error {
@@ -440,15 +436,10 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	}
 	defer os.RemoveAll(sstDir)
 
-	sstArchive := sstDir + sstArchive
-	if err = ioutil.WriteFile(sstArchive, snap, 0644); err != nil {
-		rdb.opts.lgr.Error("PutSnapshot: Failed to download snapshot to temporary file", zap.Error(err))
-		return err
-	}
-
-	err = archiver.Unarchive(sstArchive, sstDir)
+	tarF := bytes.NewReader(snap)
+	err = utils.ExtractTar(tarF, fmt.Sprintf("%s/", sstDir))
 	if err != nil {
-		rdb.opts.lgr.Error("PutSnapshot: Failed to extract sst archive", zap.Error(err))
+		rdb.opts.lgr.Error("PutSnapshot: Failed to extract files from snap", zap.Error(err))
 		return err
 	}
 

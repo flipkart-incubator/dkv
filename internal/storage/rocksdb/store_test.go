@@ -619,6 +619,30 @@ func TestGetPutSnapshot(t *testing.T) {
 	}
 }
 
+func TestGetPutSnapshotTTLOnly(t *testing.T) {
+	numTrxns := 100
+	ttl := time.Now().Add(5 * time.Second)
+	keyPrefix1T, valPrefix1T, newValPrefix1T := "firSnapTTLKey", "firSnapTTLVal", "newFirSnapTTLVal"
+
+	putKeys(t, numTrxns, keyPrefix1T, valPrefix1T, ttl.Unix())
+
+	if snap, err := store.GetSnapshot(); err != nil {
+		t.Fatal(err)
+	} else {
+		putKeys(t, numTrxns, keyPrefix1T, newValPrefix1T, ttl.Unix())
+
+		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
+		putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
+
+		if err := store.PutSnapshot(snap); err != nil {
+			t.Fatal(err)
+		} else {
+			getKeys(t, numTrxns, keyPrefix1T, valPrefix1T)
+			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+		}
+	}
+}
+
 func TestIterationOnExplicitSnapshot(t *testing.T) {
 	numTrxns := 100
 	keyPrefix1, valPrefix1 := "firKey", "firVal"
