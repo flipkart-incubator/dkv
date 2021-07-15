@@ -109,14 +109,22 @@ LICENSE file.
   <properties>
     <maven.assembly.version>2.5.5</maven.assembly.version>
     <maven.dependency.version>2.10</maven.dependency.version>
+    <site.ycsb.version>0.17.0</site.ycsb.version>
 
     <!-- datastore binding versions, lex sorted -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
+   <dependencies>
+    <dependency>
+        <groupId>site.ycsb</groupId>
+        <artifactId>core</artifactId>
+        <version>${site.ycsb.version}</version>
+    </dependency>
+  </dependencies>
+
   <modules>
     <!-- our internals -->
-    <module>core</module>
     <module>binding-parent</module>
     <module>distribution</module>
     <!-- all the datastore bindings, lex sorted please -->
