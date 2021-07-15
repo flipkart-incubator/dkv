@@ -3,6 +3,7 @@ package utils
 import (
 	"archive/tar"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -37,6 +38,9 @@ type StreamingTar struct {
 
 // CreateStreamingTar returns a tar io.Reader while streaming directly from the source files.
 func CreateStreamingTar(sources ...*os.File) (*StreamingTar, error) {
+	if len(sources) == 0 {
+		return nil, errors.New("no source files")
+	}
 	tarFile := StreamingTar{
 		sourceFiles:     sources,
 		readDataIndex:   0,
