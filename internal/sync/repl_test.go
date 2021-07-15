@@ -52,7 +52,7 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save( /*db.RaftEntry{},*/ reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if res, err := kvs.Get(key); err != nil {
@@ -70,7 +70,7 @@ func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save( /*db.RaftEntry{},*/ reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if _, err := kvs.Get(key); err.Error() != "Given key not found" {

@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"io/ioutil"
-
 	"github.com/golang/protobuf/proto"
+	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
@@ -25,7 +24,7 @@ func NewDKVReplStore(kvs storage.KVStore) db.Store {
 	return &dkvReplStore{kvs}
 }
 
-func (dr *dkvReplStore) Save( /*_ db.RaftEntry,*/ req []byte) ([]byte, error) {
+func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) ([]byte, error) {
 	intReq := new(raftpb.InternalRaftRequest)
 	if err := proto.Unmarshal(req, intReq); err != nil {
 		return nil, err
@@ -108,15 +107,14 @@ func (dr *dkvReplStore) Close() error {
 }
 
 // TODO: implement this correctly
-//func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
-//	return db.RaftEntry{}, errors.New("not implemented")
-//}
-
-func (dr *dkvReplStore) Backup( /*_ db.SnapshotState*/ ) ([]byte, error) {
-	b, _ := dr.kvs.GetSnapshot()
-	return ioutil.ReadAll(b)
+func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
+	return db.RaftEntry{}, errors.New("not implemented")
 }
 
-func (dr *dkvReplStore) Restore(b []byte) error {
-	return dr.kvs.PutSnapshot(ioutil.NopCloser(bytes.NewReader(b)))
+func (dr *dkvReplStore) Backup(_ db.SnapshotState) (io.ReadCloser, error) {
+	return dr.kvs.GetSnapshot()
+}
+
+func (dr *dkvReplStore) Restore(data io.ReadCloser) error {
+	return dr.kvs.PutSnapshot(data)
 }
