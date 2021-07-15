@@ -9,6 +9,13 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
+// KVEntry represents a single key-value pair entry
+type KVEntry struct {
+	Key      []byte
+	Value    []byte
+	ExpireTS uint64
+}
+
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various
 // DKV operations.
@@ -108,13 +115,13 @@ const timeFormatTempPath = "20060102150405"
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFile(dir string, prefix string) (string, error) {
+func CreateTempFile(dir string, prefix string) (*os.File, error) {
 	tempFilePrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
 	tempFile, err := ioutil.TempFile(dir, string(tempFilePrefix))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return tempFile.Name(), nil
+	return tempFile, nil
 }
 
 // CreateTempFolder creates a temporary folder with the given prefix.

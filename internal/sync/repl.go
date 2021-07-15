@@ -56,8 +56,11 @@ func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 }
 
 func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
-	err := dr.kvs.Put(putReq.Key, putReq.Value)
-	return nil, err
+	if putReq.ExpireTS > 0 {
+		return nil, dr.kvs.PutTTL(putReq.Key, putReq.Value, putReq.ExpireTS)
+	} else {
+		return nil, dr.kvs.Put(putReq.Key, putReq.Value)
+	}
 }
 
 func (dr *dkvReplStore) cas(casReq *serverpb.CompareAndSetRequest) ([]byte, error) {
