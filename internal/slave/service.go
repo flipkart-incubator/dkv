@@ -36,7 +36,10 @@ type ReplicationConfig struct {
 	// Applicable when replication requests are erroring out due to an issue with master / slave
 	MaxActiveReplElapsed uint64
 	// Listener address of the master node
-	replMasterAddr string
+	ReplMasterAddr string
+	// Temporary flag to disable automatic master discovery until https://github.com/flipkart-incubator/dkv/issues/82 is fixed
+	// The above issue causes replication issues during master switch due to inconsistent change numbers
+	DisableAutoMasterDisc bool
 }
 
 type slaveService struct {
@@ -244,17 +247,20 @@ func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empt
 	} else {
 		ss.regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	}
-	ss.regionInfo.MasterHost = &ss.replConfig.replMasterAddr
+	ss.regionInfo.MasterHost = &ss.replConfig.ReplMasterAddr
 	ss.lg.Debug("Current Info", zap.String("Status", ss.regionInfo.Status.String()),
 		zap.Uint64("Repl Lag", ss.replLag), zap.Uint64("Last Repl time", ss.lastReplTime))
 	return ss.regionInfo, nil
 }
 
 func (ss *slaveService) replaceMasterIfInactive() error {
+	if (ss.replConfig.DisableAutoMasterDisc) {
+		return nil;
+	}
 	if regions, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
 		currentMasterIdx := len(regions)
 		for i, region := range regions {
-			if region.NodeAddress == ss.replConfig.replMasterAddr {
+			if region.NodeAddress == ss.replConfig.ReplMasterAddr {
 				currentMasterIdx = i
 				break
 			}
@@ -282,7 +288,7 @@ func (ss *slaveService) reconnectMaster() error {
 	if ss.replCli != nil {
 		ss.replCli.Close()
 		ss.replCli = nil
-		ss.replConfig.replMasterAddr = ""
+		ss.replConfig.ReplMasterAddr = ""
 	}
 	return ss.findAndConnectToMaster()
 }
@@ -293,7 +299,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 		if replCli, err := ctl.NewInSecureDKVClient(master, ""); err == nil {
 			// concurrency issues ?
 			ss.replCli = replCli
-			ss.replConfig.replMasterAddr = master
+			ss.replConfig.ReplMasterAddr = master
 		} else {
 			ss.lg.Warn("Unable to create a replication client", zap.Error(err))
 			return err
@@ -310,6 +316,9 @@ func (ss *slaveService) findAndConnectToMaster() error {
 // followed by followers outside DC, followed by master outside DC
 // TODO - rather than randomly selecting a master from applicable followers, load balance to distribute better
 func (ss *slaveService) findNewMaster() (string, error) {
+	if (ss.replConfig.DisableAutoMasterDisc) {
+		return ss.replConfig.ReplMasterAddr, nil
+	}
 	// Get all active regions
 	if vBuckets, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
 		// Filter regions applicable to become master for this slave

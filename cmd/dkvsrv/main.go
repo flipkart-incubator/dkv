@@ -54,6 +54,12 @@ var (
 	isDiscoverySrv bool
 	discoveryConf  string
 
+	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
+	// The above issue causes replication issues during master switch due to inconsistent change numbers
+	// Thus enabling hardcoded masters to not degrade current behaviour
+	replMasterAddr	string
+	disableAutoMasterDisc	bool
+
 	// Logging vars
 	dbAccessLog    string
 	verboseLogging bool
@@ -82,6 +88,8 @@ func init() {
 	flag.StringVar(&dcID, "dc-id", "default", "DC / Availability zone identifier")
 	flag.StringVar(&database, "database", "default", "Database identifier")
 	flag.StringVar(&vBucket, "vBucket", "default", "vBucket identifier")
+	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
+	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", false, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -178,6 +186,8 @@ func main() {
 			ReplPollInterval:     replPollInterval,
 			MaxActiveReplLag:     uint64(maxNumChanges * 10),
 			MaxActiveReplElapsed: uint64(replPollInterval.Seconds()) * 10,
+			DisableAutoMasterDisc: disableAutoMasterDisc,
+			ReplMasterAddr: replMasterAddr,
 		}
 
 		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient)
@@ -207,6 +217,12 @@ func validateFlags() {
 	if dbEngineIni != "" {
 		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
 			log.Panicf("given storage configuration file: %s does not exist", dbEngineIni)
+		}
+	}
+
+	if disableAutoMasterDisc == true {
+		if replMasterAddr == "" || strings.IndexRune(replMasterAddr, ':') < 0 {
+			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
 		}
 	}
 }
