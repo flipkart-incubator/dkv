@@ -345,13 +345,14 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 
 	dataDir := path.Join(dbFolder, "data")
 	slg.Infof("Using %s as data directory", dataDir)
+
+	sstDir := path.Join(dbFolder, "sst")
+	if err := os.MkdirAll(sstDir, 0777); err != nil {
+		slg.Fatalf("Unable to create sst folder at %s. Error: %v.", dbFolder, err)
+	}
+
 	switch dbEngine {
 	case "rocksdb":
-		sstDir := path.Join(dbFolder, "sst")
-		if err := os.MkdirAll(sstDir, 0777); err != nil {
-			slg.Fatalf("Unable to create sst folder at %s. Error: %v.", dbFolder, err)
-		}
-
 		rocksDb, err := rocksdb.OpenDB(dataDir,
 			rocksdb.WithSSTDir(sstDir),
 			rocksdb.WithSyncWrites(),
@@ -367,6 +368,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		var badgerDb badger.DB
 		var err error
 		bdbOpts := []badger.DBOption{
+			badger.WithSSTDir(sstDir),
 			badger.WithSyncWrites(),
 			badger.WithCacheSize(blockCacheSize),
 			badger.WithBadgerConfig(dbEngineIni),

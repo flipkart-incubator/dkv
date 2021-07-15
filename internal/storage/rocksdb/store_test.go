@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shamaton/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -386,12 +386,12 @@ func TestIteratorPrefixScan(t *testing.T) {
 
 	actCount := 0
 	for it.HasNext() {
-		key, val := it.Next()
+		entry := it.Next()
 		actCount++
-		if strings.HasPrefix(string(key), string(prefix)) {
-			t.Logf("Key: %s Value: %s\n", key, val)
+		if strings.HasPrefix(string(entry.Key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", entry.Key, entry.Value)
 		} else {
-			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			t.Errorf("Expected key %s to have prefix %s", entry.Key, prefix)
 		}
 	}
 
@@ -428,12 +428,12 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 
 	actCount := 0
 	for it.HasNext() {
-		key, val := it.Next()
+		entry := it.Next()
 		actCount++
-		if strings.HasPrefix(string(key), string(prefix)) {
-			t.Logf("Key: %s Value: %s\n", key, val)
+		if strings.HasPrefix(string(entry.Key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", entry.Key, entry.Value)
 		} else {
-			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			t.Errorf("Expected key %s to have prefix %s", entry.Key, prefix)
 		}
 	}
 
@@ -466,12 +466,12 @@ func TestIteratorFromStartKey(t *testing.T) {
 
 	actCount := 0
 	for it.HasNext() {
-		key, val := it.Next()
+		entry := it.Next()
 		actCount++
-		if strings.HasPrefix(string(key), string(prefix)) {
-			t.Logf("Key: %s Value: %s\n", key, val)
+		if strings.HasPrefix(string(entry.Key), string(prefix)) {
+			t.Logf("Key: %s Value: %s\n", entry.Key, entry.Value)
 		} else {
-			t.Errorf("Expected key %s to have prefix %s", key, prefix)
+			t.Errorf("Expected key %s to have prefix %s", entry.Key, prefix)
 		}
 	}
 
@@ -621,13 +621,19 @@ func TestBackupAndRestore(t *testing.T) {
 
 func TestGetPutSnapshot(t *testing.T) {
 	numTrxns := 100
+	ttl := time.Now().Add(5 * time.Second)
 	keyPrefix1, valPrefix1, newValPrefix1 := "firSnapKey", "firSnapVal", "newFirSnapVal"
+	keyPrefix1T, valPrefix1T, newValPrefix1T := "firSnapTTLKey", "firSnapTTLVal", "newFirSnapTTLVal"
+
 	putKeys(t, numTrxns, keyPrefix1, valPrefix1, 0)
+	putKeys(t, numTrxns, keyPrefix1T, valPrefix1T, ttl.Unix())
 
 	if snap, err := store.GetSnapshot(); err != nil {
 		t.Fatal(err)
 	} else {
 		putKeys(t, numTrxns, keyPrefix1, newValPrefix1, 0)
+		putKeys(t, numTrxns, keyPrefix1T, newValPrefix1T, ttl.Unix())
+
 		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
 		putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 
@@ -635,6 +641,31 @@ func TestGetPutSnapshot(t *testing.T) {
 			t.Fatal(err)
 		} else {
 			getKeys(t, numTrxns, keyPrefix1, valPrefix1)
+			getKeys(t, numTrxns, keyPrefix1T, valPrefix1T)
+			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+		}
+	}
+}
+
+func TestGetPutSnapshotTTLOnly(t *testing.T) {
+	numTrxns := 100
+	ttl := time.Now().Add(5 * time.Second)
+	keyPrefix1T, valPrefix1T, newValPrefix1T := "firSnapTTLKey", "firSnapTTLVal", "newFirSnapTTLVal"
+
+	putKeys(t, numTrxns, keyPrefix1T, valPrefix1T, ttl.Unix())
+
+	if snap, err := store.GetSnapshot(); err != nil {
+		t.Fatal(err)
+	} else {
+		putKeys(t, numTrxns, keyPrefix1T, newValPrefix1T, ttl.Unix())
+
+		keyPrefix2, valPrefix2 := "secSnapKey", "secSnapVal"
+		putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
+
+		if err := store.PutSnapshot(snap); err != nil {
+			t.Fatal(err)
+		} else {
+			getKeys(t, numTrxns, keyPrefix1T, valPrefix1T)
 			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
 		}
 	}
@@ -1204,6 +1235,8 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 		key, expectedValue := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
 		if readResults, err := store.Get([]byte(key)); err != nil {
 			t.Fatalf("Unable to GET. Key: %s, Error: %v", key, err)
+		} else if len(readResults) == 0 {
+			t.Errorf("GET failed. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, "nil")
 		} else if string(readResults[0].Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, readResults[0].Value)
 		}
