@@ -108,7 +108,7 @@ func (m *discoveryClient) tick() {
 	for {
 		select {
 		case <-m.statusUpdateTicker.C:
-			m.propagateStatus()
+			m.PropagateStatus()
 		case <-m.pollClusterInfoTicker.C:
 			m.pollClusterInfo()
 		case <-m.stopChannel:
@@ -117,7 +117,7 @@ func (m *discoveryClient) tick() {
 	}
 }
 
-func (m *discoveryClient) propagateStatus() {
+func (m *discoveryClient) PropagateStatus() {
 	for _, server := range m.regions {
 		regionInfo, _ := server.GetStatus(nil, nil)
 		request := serverpb.UpdateStatusRequest{
@@ -137,7 +137,7 @@ func (m *discoveryClient) Close() error {
 	m.logger.Info("Closing the discovery client")
 	m.stopChannel <- struct{}{}
 	m.statusUpdateTicker.Stop()
-	m.propagateStatus()
+	m.PropagateStatus()
 	return m.conn.Close()
 }
 

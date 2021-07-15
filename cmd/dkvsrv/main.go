@@ -57,8 +57,8 @@ var (
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
 	// Thus enabling hardcoded masters to not degrade current behaviour
-	replMasterAddr	string
-	disableAutoMasterDisc	bool
+	replMasterAddr        string
+	disableAutoMasterDisc bool
 
 	// Logging vars
 	dbAccessLog    string
@@ -182,12 +182,12 @@ func main() {
 		// TODO - construct replConfig from region level config described in LLD
 		maxNumChanges := uint32(10000)
 		replConfig := &slave.ReplicationConfig{
-			MaxNumChngs:          maxNumChanges,
-			ReplPollInterval:     replPollInterval,
-			MaxActiveReplLag:     uint64(maxNumChanges * 10),
-			MaxActiveReplElapsed: uint64(replPollInterval.Seconds()) * 10,
+			MaxNumChngs:           maxNumChanges,
+			ReplPollInterval:      replPollInterval,
+			MaxActiveReplLag:      uint64(maxNumChanges * 10),
+			MaxActiveReplElapsed:  uint64(replPollInterval.Seconds()) * 10,
 			DisableAutoMasterDisc: disableAutoMasterDisc,
-			ReplMasterAddr: replMasterAddr,
+			ReplMasterAddr:        replMasterAddr,
 		}
 
 		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient)

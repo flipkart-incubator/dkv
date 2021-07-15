@@ -254,8 +254,8 @@ func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empt
 }
 
 func (ss *slaveService) replaceMasterIfInactive() error {
-	if (ss.replConfig.DisableAutoMasterDisc) {
-		return nil;
+	if ss.replConfig.DisableAutoMasterDisc {
+		return nil
 	}
 	if regions, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
 		currentMasterIdx := len(regions)
@@ -316,7 +316,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 // followed by followers outside DC, followed by master outside DC
 // TODO - rather than randomly selecting a master from applicable followers, load balance to distribute better
 func (ss *slaveService) findNewMaster() (string, error) {
-	if (ss.replConfig.DisableAutoMasterDisc) {
+	if ss.replConfig.DisableAutoMasterDisc {
 		return ss.replConfig.ReplMasterAddr, nil
 	}
 	// Get all active regions

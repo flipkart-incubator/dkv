@@ -5,8 +5,8 @@ package name_resolvers
 // Refer examples from https://github.com/grpc/grpc-go/tree/master/examples/features/name_resolving
 
 import (
-    "google.golang.org/grpc/resolver"
-    "strings"
+	"google.golang.org/grpc/resolver"
+	"strings"
 )
 
 // The target endpoint needs to start with this scheme to get parsed as this resolver
@@ -14,44 +14,43 @@ import (
 const scheme = "multi"
 
 type multiAddress struct {
-
 }
 
 func (m multiAddress) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-    addresses := parseTarget(target.Endpoint)
-    r := &multiAddressResolver{
-        target: target,
-        cc:     cc,
-        addresses: addresses,
-    }
-    r.start()
-    return r, nil
+	addresses := parseTarget(target.Endpoint)
+	r := &multiAddressResolver{
+		target:    target,
+		cc:        cc,
+		addresses: addresses,
+	}
+	r.start()
+	return r, nil
 }
 
 func (m multiAddress) Scheme() string {
-    return scheme
+	return scheme
 }
 
 func parseTarget(endpoints string) []string {
-    return strings.Split(endpoints, ",")
+	return strings.Split(endpoints, ",")
 }
 
-func Initialise()  {
-    resolver.Register(&multiAddress{})
+func Initialise() {
+	resolver.Register(&multiAddress{})
 }
 
 type multiAddressResolver struct {
-    target     resolver.Target
-    cc         resolver.ClientConn
-    addresses  []string
+	target    resolver.Target
+	cc        resolver.ClientConn
+	addresses []string
 }
 
 func (r *multiAddressResolver) start() {
-    addrs := make([]resolver.Address, len(r.addresses))
-    for i, s := range r.addresses {
-        addrs[i] = resolver.Address{Addr: s}
-    }
-    r.cc.UpdateState(resolver.State{Addresses: addrs})
+	addrs := make([]resolver.Address, len(r.addresses))
+	for i, s := range r.addresses {
+		addrs[i] = resolver.Address{Addr: s}
+	}
+	r.cc.UpdateState(resolver.State{Addresses: addrs})
 }
 func (*multiAddressResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (*multiAddressResolver) Close()                                  {}

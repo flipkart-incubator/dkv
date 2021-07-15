@@ -72,7 +72,7 @@ func TestDiscoveryClient(t *testing.T) {
 	defer dkvSvc3.Close()
 	dClient.RegisterRegion(dkvSvc3)
 
-	dClient.propagateStatus()
+	dClient.PropagateStatus()
 
 	regionInfos, err := dClient.GetClusterStatus("db1", "vbucket1")
 	if err != nil {

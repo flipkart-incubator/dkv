@@ -7,7 +7,7 @@ import (
 // StatusPropagator is the interface to propagate status updates of all regions in the node to the discovery system
 type StatusPropagator interface {
 	// propagate status updates of all regions in the node to the discovery system
-	propagateStatus()
+	PropagateStatus()
 	// register regions part of current node
 	RegisterRegion(server serverpb.DKVServer)
 	// Sends one last status update before closing
