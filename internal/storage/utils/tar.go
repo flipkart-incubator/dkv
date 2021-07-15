@@ -78,6 +78,13 @@ func (r *StreamingTar) readHeader(p []byte) (n int, err error) {
 	}
 }
 
+func (r *StreamingTar) Close() error {
+	for _, f := range r.sourceFiles {
+		f.Close()
+	}
+	return nil
+}
+
 func (r *StreamingTar) Read(p []byte) (n int, err error) {
 
 	if r.sourceIndex == -1 {
@@ -155,35 +162,36 @@ func CreateInMemoryTar(sources ...*os.File) ([]byte, error) {
 
 }
 
-func ExtractTar(tarF io.Reader, target string) error {
+func ExtractTar(tarF io.Reader, target string) (int, error) {
 	tarReader := tar.NewReader(tarF)
-
+	numFiles := 0
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			return numFiles, err
 		}
 
 		path := filepath.Join(target, header.Name)
 		info := header.FileInfo()
 		if info.IsDir() {
 			if err = os.MkdirAll(path, info.Mode()); err != nil {
-				return err
+				return numFiles, err
 			}
 			continue
 		}
 
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
 		if err != nil {
-			return err
+			return numFiles, err
 		}
 		_, err = io.Copy(file, tarReader)
 		if err != nil {
-			return err
+			return numFiles, err
 		}
+		numFiles++
 		_ = file.Close()
 	}
-	return nil
+	return numFiles, nil
 }

@@ -34,11 +34,11 @@ type KVStore interface {
 	Delete(key []byte) error
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
-	GetSnapshot() ([]byte, error)
+	GetSnapshot() (io.ReadCloser, error)
 	// PutSnapshot ingests the given keyspace representation wholly
 	// into the current state. Any existing state will be discarded
 	// or replaced with the given state.
-	PutSnapshot([]byte) error
+	PutSnapshot(io.ReadCloser) error
 	// Iterate iterates through the entire keyspace in no particular
 	// order. IterationOptions can be used to control where to begin
 	// iteration as well as what keys are iterated by their prefix.
