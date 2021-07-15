@@ -89,13 +89,18 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 	iterReq := &serverpb.IterateRequest{KeyPrefix: createKeyToGet(request)}
 	kvStrm, err := d.dkvCli.Iterate(ctx, iterReq)
 	if err != nil {
+		d.logger.Error("Unable to get cluster info", zap.Error(err))
 		return nil, err
 	}
 	var clusterInfo []storage.KVEntry
 	for {
 		itRes, err := kvStrm.Recv()
-		if err == io.EOF || itRes == nil {
+		if err == io.EOF {
 			break
+		} else if (err != nil) {
+			// Better to return error rather than partial results as incomplete results could cause client misbehaviour
+			d.logger.Error("Partial failure in getting cluster info", zap.Error(err))
+			return nil, err
 		} else {
 			clusterInfo = append(clusterInfo, storage.KVEntry{
 				Key:   itRes.Key,
