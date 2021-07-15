@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	testDir     = "/tmp/tar_test"
+	testDir = "/tmp/tar_test"
 )
 
 func init() {
@@ -48,7 +48,7 @@ func createTmpFiles(t *testing.T, count int, size int) []*os.File {
 		}
 
 		minSize := int(float32(size) * 0.7)
-		randomSize := rand.Intn(size - minSize + 1) + minSize
+		randomSize := rand.Intn(size-minSize+1) + minSize
 		token := make([]byte, randomSize)
 		rand.Read(token)
 		f.Write(token)
