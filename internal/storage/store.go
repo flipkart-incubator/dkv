@@ -9,6 +9,12 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
+type KVEntry struct {
+	Key      []byte
+	Value    []byte
+	ExpireTS uint64
+}
+
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various
 // DKV operations.
