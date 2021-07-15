@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
-	"github.com/shamaton/msgpack"
+	"github.com/vmihailenco/msgpack/v5"
 	"io/ioutil"
 	"os"
 	"path"
