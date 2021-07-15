@@ -32,20 +32,18 @@ const (
 	ConnectTimeout = 10 * time.Second
 )
 
-// NewInSecureDKVClient creates an insecure GRPC client against the
-// given DKV service address. Optionally the authority param can be
-// used to send a :authority psuedo-header for routing purposes.
-func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
+// NewDKVClient creates a GRPC client against the
+// given DKV service address and dial options. Optionally the authority param can be
+//// used to send a :authority psuedo-header for routing purposes
+func NewDKVClient(svcAddr string, authority string, opts ...grpc.DialOption) (*DKVClient, error) {
 	var dkvClnt *DKVClient
 	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
+	optsCopy := opts
+	optsCopy = append(optsCopy, grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize),
+		grpc.WithWriteBufferSize(WriteBufSize), grpc.WithAuthority(authority),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)))
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, svcAddr,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		grpc.WithMaxMsgSize(MaxMsgSize),
-		grpc.WithReadBufferSize(ReadBufSize),
-		grpc.WithWriteBufferSize(WriteBufSize),
-		grpc.WithAuthority(authority))
+	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)

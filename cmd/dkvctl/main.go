@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	utils "github.com/flipkart-incubator/dkv/internal"
 	"os"
 	"sort"
 	"strings"
@@ -194,11 +195,17 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-var dkvAddr, dkvAuthority string
+var (
+	dkvAddr      string
+	caCertPath   string
+	dkvAuthority string
+)
 
 func init() {
 	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
+	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
+
 	for _, c := range cmds {
 		if c.argDesc == "" {
 			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
@@ -211,12 +218,18 @@ func init() {
 
 func usage() {
 	fmt.Printf("Usage of %s:\n", os.Args[0])
-	for _, flagName := range []string{"dkvAddr", "authority"} {
-		dkvFlag := flag.Lookup(flagName)
-		fmt.Printf("  -%s %s (default: %s)\n", dkvFlag.Name, dkvFlag.Usage, dkvFlag.DefValue)
-	}
+	printUsage([]string{"dkvAddr", "authority", "caCertPath"})
 	for _, cmd := range cmds {
 		cmd.usage()
+	}
+}
+
+func printUsage(flags []string) {
+	for _, flagName := range flags {
+		dkvFlag := flag.Lookup(flagName)
+		if dkvFlag != nil {
+			fmt.Printf("  -%s %s (default: %s)\n", dkvFlag.Name, dkvFlag.Usage, dkvFlag.DefValue)
+		}
 	}
 }
 
@@ -236,7 +249,8 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority)
+	client, err := utils.NewDKVClient(utils.DKVConfig{
+		SrvrAddr: dkvAddr, CaCertPath: caCertPath}, dkvAuthority)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
