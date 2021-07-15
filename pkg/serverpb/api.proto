@@ -16,6 +16,9 @@ service DKV {
   // MultiGet gets the values associated with given keys from the key value store.
   rpc MultiGet (MultiGetRequest) returns (MultiGetResponse);
 
+  // MultiPut puts the given keys into the key value store.
+  rpc MultiPut (MultiPutRequest) returns (PutResponse);
+
   // Iterate iterates through the entire keyspace in no particular order and
   // returns the results as a stream of key value pairs.
   rpc Iterate (IterateRequest) returns (stream IterateResponse);
@@ -57,6 +60,11 @@ message PutRequest {
   bytes value = 2;
   // expireTS is the epoch seconds value, in int64 to associate with the key in the key value store.
   uint64 expireTS = 3;
+}
+
+
+message MultiPutRequest {
+  repeated PutRequest putRequest = 1;
 }
 
 message PutResponse {
