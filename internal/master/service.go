@@ -206,8 +206,8 @@ func (ss *standaloneService) GetReplicas(ctx context.Context, req *serverpb.GetR
 
 	var replicas []*serverpb.Replica
 	for iter.HasNext() {
-		key, val := iter.Next()
-		replicaKey, replicaVal := string(key), string(val)
+		entry := iter.Next()
+		replicaKey, replicaVal := string(entry.Key), string(entry.Value)
 		replicaAddr := strings.TrimPrefix(replicaKey, dkvMetaReplicaPrefix)
 
 		// checking for valid replicas and not the removed ones whose values are empty
@@ -272,8 +272,8 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 	defer ss.rwl.RUnlock()
 
 	iteration := storage.NewIteration(ss.store, iterReq)
-	err := iteration.ForEach(func(k, v []byte) error {
-		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: k, Value: v}
+	err := iteration.ForEach(func(e *storage.KVEntry) error {
+		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: e.Key, Value: e.Value}
 		return dkvIterSrvr.Send(itRes)
 	})
 	if err != nil {

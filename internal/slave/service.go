@@ -118,8 +118,8 @@ func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.Mult
 
 func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
 	iteration := storage.NewIteration(ss.store, iterReq)
-	err := iteration.ForEach(func(k, v []byte) error {
-		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: k, Value: v}
+	err := iteration.ForEach(func(e *storage.KVEntry) error {
+		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: e.Key, Value: e.Value}
 		return dkvIterSrvr.Send(itRes)
 	})
 	if err != nil {

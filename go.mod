@@ -17,6 +17,7 @@ require (
 	github.com/google/gops v0.3.18 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/kpango/fastime v1.0.16
+	github.com/matttproud/golang_protobuf_extensions v1.0.1
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect

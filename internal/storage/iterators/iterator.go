@@ -18,7 +18,7 @@ func (ci *concatenatedIterator) HasNext() bool {
 	return valid
 }
 
-func (ci *concatenatedIterator) Next() ([]byte, []byte) {
+func (ci *concatenatedIterator) Next() *storage.KVEntry {
 	return ci.iterators[ci.currentIter].Next()
 }
 
