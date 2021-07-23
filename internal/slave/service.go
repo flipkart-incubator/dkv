@@ -175,7 +175,9 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
 
 	if ss.replCli == nil {
-		return errors.New("Can not replicate as replication client not yet established")
+		if err := ss.findAndConnectToMaster(); err != nil {
+			return errors.New("Can not replicate as replication client not yet established")
+		}
 	}
 
 	res, err := ss.replCli.GetChanges(ss.fromChngNum, chngsPerBatch)
