@@ -481,7 +481,10 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 }
 
 func registerDiscoveryServer(dkvService master.DKVService, grpcSrvr *grpc.Server) error {
-	iniConfig, _ := ini.Load(discoveryConf)
+	iniConfig, err := ini.Load(discoveryConf)
+	if err != nil {
+		return fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConf, err)
+	}
 	if discoveryServerSection, err := iniConfig.GetSection(discoveryServerConfig); err == nil {
 		discoverySrvConfig, err := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
 		if err != nil {

@@ -80,7 +80,6 @@ func NewDiscoveryClient(config *DiscoveryClientConfig, logger *zap.Logger) (Clie
 
 func getDiscoveryClient(discoveryServiceAddr string) (*grpc.ClientConn, error) {
 	// TODO - check if authority is required
-	// TODO - create dkvctl with pool of server addresses so that if one fails, it can connect to the other
 	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 	return grpc.DialContext(ctx, discoveryServiceAddr,
