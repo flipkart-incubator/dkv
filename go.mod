@@ -20,10 +20,10 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
-	github.com/shamaton/msgpack v1.2.1
 	github.com/shirou/gopsutil v2.20.4+incompatible // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/smira/go-statsd v1.3.1
+	github.com/vmihailenco/msgpack/v5 v5.3.4
 	go.uber.org/zap v1.14.1
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c // indirect
