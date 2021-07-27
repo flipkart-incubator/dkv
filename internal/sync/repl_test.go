@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"io"
+	"io/ioutil"
+	"sync"
+	"testing"
+
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"
-	"sync"
-	"testing"
 )
 
 func TestDKVReplStoreSave(t *testing.T) {
@@ -49,7 +52,7 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if res, err := kvs.Get(key); err != nil {
@@ -67,7 +70,7 @@ func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if _, err := kvs.Get(key); err.Error() != "Given key not found" {
@@ -216,13 +219,17 @@ func (ms *memStore) Close() error {
 	return nil
 }
 
-func (ms *memStore) GetSnapshot() ([]byte, error) {
-	return gobEncode(ms.store)
+func (ms *memStore) GetSnapshot() (io.ReadCloser, error) {
+	snap, err := gobEncode(ms.store)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.NopCloser(bytes.NewBuffer(snap)), nil
 }
 
-func (ms *memStore) PutSnapshot(snap []byte) error {
+func (ms *memStore) PutSnapshot(snap io.ReadCloser) error {
 	data := make(map[string]memStoreObject)
-	err := gob.NewDecoder(bytes.NewBuffer(snap)).Decode(data)
+	err := gob.NewDecoder(snap).Decode(data)
 	ms.store = data
 	return err
 }

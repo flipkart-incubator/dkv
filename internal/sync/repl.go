@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"github.com/golang/protobuf/proto"
+	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
@@ -23,7 +24,7 @@ func NewDKVReplStore(kvs storage.KVStore) db.Store {
 	return &dkvReplStore{kvs}
 }
 
-func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
+func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) ([]byte, error) {
 	intReq := new(raftpb.InternalRaftRequest)
 	if err := proto.Unmarshal(req, intReq); err != nil {
 		return nil, err
@@ -105,10 +106,15 @@ func (dr *dkvReplStore) Close() error {
 	return dr.kvs.Close()
 }
 
-func (dr *dkvReplStore) Backup() ([]byte, error) {
+// TODO: implement this correctly
+func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
+	return db.RaftEntry{}, errors.New("not implemented")
+}
+
+func (dr *dkvReplStore) Backup(_ db.SnapshotState) (io.ReadCloser, error) {
 	return dr.kvs.GetSnapshot()
 }
 
-func (dr *dkvReplStore) Restore(data []byte) error {
+func (dr *dkvReplStore) Restore(data io.ReadCloser) error {
 	return dr.kvs.PutSnapshot(data)
 }

@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
-	"github.com/flipkart-incubator/dkv/internal/storage/utils"
-	"github.com/vmihailenco/msgpack/v5"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
+	"github.com/flipkart-incubator/dkv/internal/storage/utils"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -388,7 +389,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 	return os.Open(fileName)
 }
 
-func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
+func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
@@ -405,14 +406,12 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate sst file", zap.Error(err))
 		return nil, err
 	}
-	defer normalSSTFile.Close()
 
 	ttlSSTFile, err := rdb.generateSST(snap, rdb.ttlCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to generate ttl sst file", zap.Error(err))
 		return nil, err
 	}
-	defer ttlSSTFile.Close()
 
 	tarF, err := utils.CreateStreamingTar(normalSSTFile, ttlSSTFile)
 	if err != nil {
@@ -420,14 +419,15 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	return ioutil.ReadAll(tarF)
+	return tarF, nil
 }
 
-func (rdb *rocksDB) PutSnapshot(snap []byte) error {
-	if snap == nil || len(snap) == 0 {
+func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
+	if snap == nil {
 		return nil
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
+	defer snap.Close()
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
@@ -436,8 +436,7 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	}
 	defer os.RemoveAll(sstDir)
 
-	tarF := bytes.NewReader(snap)
-	err = utils.ExtractTar(tarF, fmt.Sprintf("%s/", sstDir))
+	_, err = utils.ExtractTar(snap, fmt.Sprintf("%s/", sstDir))
 	if err != nil {
 		rdb.opts.lgr.Error("PutSnapshot: Failed to extract files from snap", zap.Error(err))
 		return err
