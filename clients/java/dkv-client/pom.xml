@@ -51,6 +51,11 @@
             <artifactId>metrics-jmx</artifactId>
             <version>4.1.9</version>
         </dependency>
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -125,17 +130,6 @@
                             <workingDirectory>${project.basedir}/../../../</workingDirectory>
                         </configuration>
                     </execution>
-                   <!-- <execution>
-                        <id>nexus_proto</id>
-                        <phase>initialize</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>${project.basedir}/src/main/resources/prepare.sh</executable>
-                            <workingDirectory>${project.basedir}</workingDirectory>
-                        </configuration>
-                    </execution>-->
                 </executions>
             </plugin>
             <plugin>
