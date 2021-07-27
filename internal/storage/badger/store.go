@@ -7,15 +7,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 
 	"github.com/dgraph-io/badger/v2"
 	badger_pb "github.com/dgraph-io/badger/v2/pb"
@@ -286,7 +286,7 @@ const (
 	badgerSSTPrefix = "badger-snapshot-"
 )
 
-func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
+func (bdb *badgerDB) GetSnapshot() (io.ReadCloser, error) {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
 
 	sstFile, err := storage.CreateTempFile(bdb.opts.sstDirectory, badgerSSTPrefix)
@@ -316,20 +316,19 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 	w.Flush()
 	sstFile.Close()
 
-	return ioutil.ReadFile(sstFile.Name())
+	return os.Open(sstFile.Name())
 }
 
-func (bdb *badgerDB) PutSnapshot(snap []byte) error {
+func (bdb *badgerDB) PutSnapshot(snap io.ReadCloser) error {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.put.latency.ms", time.Now())
 
-	in := bytes.NewReader(snap)
 	wb := bdb.db.NewWriteBatch()
 	defer wb.Cancel()
 
 	entry := &serverpb.PutRequest{}
 	for {
 		entry.Reset()
-		if _, err := pbutil.ReadDelimited(in, entry); err != nil {
+		if _, err := pbutil.ReadDelimited(snap, entry); err != nil {
 			if err == io.EOF {
 				break
 			}

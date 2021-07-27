@@ -258,7 +258,7 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 			if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
 				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
 			} else if string(actualValue.Value) != expectedValue {
-				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
+				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue.Value)
 			}
 		}
 		regionInfo, _ := dkvSvc.GetStatus(nil, nil)

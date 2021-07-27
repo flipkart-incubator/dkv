@@ -11,7 +11,7 @@ require (
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7
-	github.com/flipkart-incubator/nexus v0.0.0-20210614094508-f3227c358082
+	github.com/flipkart-incubator/nexus v0.0.0-20210724094430-c2257fe5cd26
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2 // indirect
@@ -30,7 +30,7 @@ require (
 	golang.org/x/sys v0.0.0-20210217105451-b926d437f341 // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
-	google.golang.org/grpc v1.31.1
+	google.golang.org/grpc v1.33.2
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.62.0
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
