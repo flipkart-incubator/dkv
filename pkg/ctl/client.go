@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	"errors"
+	"github.com/flipkart-incubator/nexus/models"
 	"io"
 	"time"
 
@@ -189,7 +190,7 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 
 // ListNodes retrieves the current members of the Nexus cluster
 // along with identifying the leader.
-func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
+func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})

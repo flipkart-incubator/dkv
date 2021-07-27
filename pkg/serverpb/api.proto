@@ -1,7 +1,9 @@
 syntax = "proto3";
 import "google/protobuf/empty.proto";
+import "models/internal.proto";
+
 package dkv.serverpb;
-option go_package = "serverpb";
+option go_package = "github.com/flipkart-incubator/dkv/pkg/serverpb";
 
 service DKV {
   // Put puts the given key into the key value store.
@@ -246,7 +248,7 @@ message ListNodesResponse {
   uint64 leader = 2;
   // Nodes represents the members of the cluster identified by
   // their respective identifier and the Nexus URL.
-  map<uint64, string> nodes = 3;
+  map<uint64, models.NodeInfo> nodes = 3;
 }
 
 message AddNodeRequest {
