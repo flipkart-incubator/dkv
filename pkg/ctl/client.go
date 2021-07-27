@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	"errors"
+	"github.com/flipkart-incubator/nexus/models"
 	"io"
 	"time"
 
@@ -189,14 +190,17 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 
 // ListNodes retrieves the current members of the Nexus cluster
 // along with identifying the leader.
-func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
+func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})
-	if err := errorFromStatus(res.Status, err); err != nil {
-		return 0, nil, err
+	if res != nil {
+		if err = errorFromStatus(res.Status, err); err != nil {
+			return 0, nil, err
+		}
+		return res.Leader, res.Nodes, nil
 	}
-	return res.Leader, res.Nodes, nil
+	return 0, nil, err
 }
 
 // KVPair is convenience wrapper that captures a key and its value.
