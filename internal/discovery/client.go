@@ -7,6 +7,7 @@ This class contains the behaviour of propagating a nodes status updates to disco
 import (
 	"context"
 	"fmt"
+	_ "github.com/Jille/grpc-multi-resolver"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"

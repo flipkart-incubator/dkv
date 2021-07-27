@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"github.com/flipkart-incubator/dkv/internal/utils/name_resolvers"
 	"gopkg.in/ini.v1"
 	"log"
 	"net"
@@ -121,7 +120,6 @@ func main() {
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
 	srvrRole.printFlags()
-	name_resolvers.Initialise()
 
 	// Create the region info which is passed to DKVServer
 	regionInfo := &serverpb.RegionInfo{
