@@ -6,7 +6,7 @@
     <packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
     <properties>
-        <proto-file-path>../../../pkg/serverpb</proto-file-path>
+        <proto-file-path>../../../pkg/serverpb/</proto-file-path>
     </properties>
     <name>dkv-client</name>
     <dependencies>
@@ -76,7 +76,9 @@
                     <pluginId>grpc-java</pluginId>
                     <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.29.0:exe:${os.detected.classifier}</pluginArtifact>
                     <protoSourceRoot>${proto-file-path}</protoSourceRoot>
-                    <additionalProtoPathElements>${project.basedir}/src/main/resources/nexus-proto/</additionalProtoPathElements>
+                    <excludes>
+                        <exclude>admin.proto</exclude>
+                    </excludes>
                 </configuration>
                 <executions>
                     <execution>
@@ -123,7 +125,7 @@
                             <workingDirectory>${project.basedir}/../../../</workingDirectory>
                         </configuration>
                     </execution>
-                    <execution>
+                   <!-- <execution>
                         <id>nexus_proto</id>
                         <phase>initialize</phase>
                         <goals>
@@ -133,7 +135,7 @@
                             <executable>${project.basedir}/src/main/resources/prepare.sh</executable>
                             <workingDirectory>${project.basedir}</workingDirectory>
                         </configuration>
-                    </execution>
+                    </execution>-->
                 </executions>
             </plugin>
             <plugin>
