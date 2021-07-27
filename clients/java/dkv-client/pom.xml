@@ -76,6 +76,7 @@
                     <pluginId>grpc-java</pluginId>
                     <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.29.0:exe:${os.detected.classifier}</pluginArtifact>
                     <protoSourceRoot>${proto-file-path}</protoSourceRoot>
+                    <additionalProtoPathElements>${project.basedir}/src/main/resources/nexus-proto/</additionalProtoPathElements>
                 </configuration>
                 <executions>
                     <execution>
@@ -120,6 +121,17 @@
                         <configuration>
                             <executable>${project.basedir}/src/test/resources/stop_dkv.sh</executable>
                             <workingDirectory>${project.basedir}/../../../</workingDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>nexus_proto</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${project.basedir}/src/main/resources/prepare.sh</executable>
+                            <workingDirectory>${project.basedir}</workingDirectory>
                         </configuration>
                     </execution>
                 </executions>
