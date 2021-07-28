@@ -8,7 +8,7 @@ This section describes how to run YCSB on DKV.
 
 #### 3. Set Up YCSB
 
-    -  Download the [latest release of YCSB](https://github.com/brianfrankcooper/YCSB/releases/latest):
+-  Download the [latest release of YCSB](https://github.com/brianfrankcooper/YCSB/releases/latest):
 
     ```sh
     curl -O --location https://github.com/brianfrankcooper/YCSB/releases/download/0.17.0/ycsb-0.17.0.tar.gz
@@ -16,7 +16,7 @@ This section describes how to run YCSB on DKV.
     cd ycsb-0.17.0
     ```
 
-    - Prepare binding to benchmark DKV.
+- Prepare binding to benchmark DKV.
 
     ```bash
     cd <dkv_root>/extras/YCSB
