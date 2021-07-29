@@ -97,7 +97,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 		itRes, err := kvStrm.Recv()
 		if err == io.EOF {
 			break
-		} else if (err != nil) {
+		} else if err != nil {
 			// Better to return error rather than partial results as incomplete results could cause client misbehaviour
 			d.logger.Error("Partial failure in getting cluster info", zap.Error(err))
 			return nil, err

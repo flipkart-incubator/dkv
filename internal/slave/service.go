@@ -45,11 +45,11 @@ type ReplicationConfig struct {
 
 type replInfo struct {
 	// can be nil only initially when trying to find a master to replicate from
-	replCli      *ctl.DKVClient
-	replCliLock	 *sync.RWMutex
+	replCli     *ctl.DKVClient
+	replCliLock *sync.RWMutex
 	// replActive can be used to avoid setting replCli to nil during master reelection
 	// which would otherwise require additional locks to prevent crashes due to intermediate null switches
-	replActive	 bool
+	replActive   bool
 	replTckr     *time.Ticker
 	replStop     chan struct{}
 	replLag      uint64
@@ -59,14 +59,14 @@ type replInfo struct {
 }
 
 type slaveService struct {
-	store        storage.KVStore
-	ca           storage.ChangeApplier
-	lg           *zap.Logger
-	statsCli     stats.Client
-	regionInfo   *serverpb.RegionInfo
-	clusterInfo  discovery.ClusterInfoGetter
-	isClosed     bool
-	replInfo	 *replInfo
+	store       storage.KVStore
+	ca          storage.ChangeApplier
+	lg          *zap.Logger
+	statsCli    stats.Client
+	regionInfo  *serverpb.RegionInfo
+	clusterInfo discovery.ClusterInfoGetter
+	isClosed    bool
+	replInfo    *replInfo
 }
 
 // NewService creates a slave DKVService that periodically polls

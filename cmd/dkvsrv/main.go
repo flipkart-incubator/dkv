@@ -53,7 +53,7 @@ var (
 	statsdAddr   string
 
 	// Service discovery related params
-	discoveryConf  string
+	discoveryConf string
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
@@ -98,10 +98,10 @@ func init() {
 type dkvSrvrRole string
 
 const (
-	noRole     dkvSrvrRole = "none"
-	masterRole             = "master"
-	slaveRole              = "slave"
-	discoveryRole			= "discovery"
+	noRole        dkvSrvrRole = "none"
+	masterRole                = "master"
+	slaveRole                 = "slave"
+	discoveryRole             = "discovery"
 )
 
 const defBlockCacheSize = 3 << 30
