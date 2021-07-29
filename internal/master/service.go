@@ -466,11 +466,10 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 	if ds.isClosed {
 		regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	} else {
-		// Currently there is no way for this instance of DKVServer to know correctly if its the leader for its vBucket
-		// Neither does it know if its the local dc follower, or is a follower with a lot of lag
+		// Currently there is no way for this instance of DKVServer to know if its the local dc follower, or is a follower with a lot of lag
 		// Even the member list api ListMembers() is just an in memory lookup rather than actually looking at the current raft member state
 		// If the current node is itself disconnected, it will provide stale / incorrect member list
-		// For now, we will return status based on listMembers() and identify master based on IP address alone
+		// For now, we will return status based on listMembers() and identify based on stale data
 		// As of now, there is no hard requirement to identify true leader via service discovery thus using listmembers() is fine
 		// TODO - Provide correct status wrt master / local dc follower / follower with lot of lag
 		leaderId, _ := ds.raftRepl.ListMembers()

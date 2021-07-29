@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -42,21 +43,30 @@ type ReplicationConfig struct {
 	DisableAutoMasterDisc bool
 }
 
+type replInfo struct {
+	// can be nil only initially when trying to find a master to replicate from
+	replCli      *ctl.DKVClient
+	replCliLock	 *sync.RWMutex
+	// replActive can be used to avoid setting replCli to nil during master reelection
+	// which would otherwise require additional locks to prevent crashes due to intermediate null switches
+	replActive	 bool
+	replTckr     *time.Ticker
+	replStop     chan struct{}
+	replLag      uint64
+	lastReplTime uint64
+	replConfig   *ReplicationConfig
+	fromChngNum  uint64
+}
+
 type slaveService struct {
 	store        storage.KVStore
 	ca           storage.ChangeApplier
 	lg           *zap.Logger
 	statsCli     stats.Client
-	replCli      *ctl.DKVClient // can be nil when trying to find a master to replicate from
-	replTckr     *time.Ticker
 	regionInfo   *serverpb.RegionInfo
-	replStop     chan struct{}
-	replLag      uint64
-	fromChngNum  uint64
-	lastReplTime uint64
-	replConfig   *ReplicationConfig
 	clusterInfo  discovery.ClusterInfoGetter
 	isClosed     bool
+	replInfo	 *replInfo
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -73,8 +83,10 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
 	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
+	rwl := &sync.RWMutex{}
+	ri := &replInfo{replConfig: replConf, replCliLock: rwl}
 	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,
-		regionInfo: info, replConfig: replConf, clusterInfo: clusterInfo}
+		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
@@ -131,10 +143,10 @@ func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr se
 
 func (ss *slaveService) Close() error {
 	ss.lg.Info("Closing the slave service")
-	ss.replStop <- struct{}{}
-	ss.replTckr.Stop()
-	if ss.replCli != nil {
-		ss.replCli.Close()
+	ss.replInfo.replStop <- struct{}{}
+	ss.replInfo.replTckr.Stop()
+	if ss.replInfo.replCli != nil {
+		ss.replInfo.replCli.Close()
 	}
 	ss.store.Close()
 	ss.isClosed = true
@@ -142,12 +154,12 @@ func (ss *slaveService) Close() error {
 }
 
 func (ss *slaveService) startReplication() {
-	ss.replTckr = time.NewTicker(ss.replConfig.ReplPollInterval)
+	ss.replInfo.replTckr = time.NewTicker(ss.replInfo.replConfig.ReplPollInterval)
 	latestChngNum, _ := ss.ca.GetLatestAppliedChangeNumber()
-	ss.fromChngNum = 1 + latestChngNum
-	ss.replStop = make(chan struct{})
+	ss.replInfo.fromChngNum = 1 + latestChngNum
+	ss.replInfo.replStop = make(chan struct{})
 	slg := ss.lg.Sugar()
-	slg.Infof("Replicating changes from change number: %d and polling interval: %s", ss.fromChngNum, ss.replConfig.ReplPollInterval.String())
+	slg.Infof("Replicating changes from change number: %d and polling interval: %s", ss.replInfo.fromChngNum, ss.replInfo.replConfig.ReplPollInterval.String())
 	slg.Sync()
 	go ss.pollAndApplyChanges()
 }
@@ -155,16 +167,16 @@ func (ss *slaveService) startReplication() {
 func (ss *slaveService) pollAndApplyChanges() {
 	for {
 		select {
-		case <-ss.replTckr.C:
-			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replLag))
-			ss.statsCli.Gauge("replication.lag", int64(ss.replLag))
-			if err := ss.applyChangesFromMaster(ss.replConfig.MaxNumChngs); err != nil {
+		case <-ss.replInfo.replTckr.C:
+			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
+			ss.statsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
+			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
 				ss.lg.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
 					ss.lg.Error("Unable to replace master", zap.Error(err))
 				}
 			}
-		case <-ss.replStop:
+		case <-ss.replInfo.replStop:
 			ss.lg.Info("Stopping the change poller")
 			break
 		}
@@ -172,26 +184,29 @@ func (ss *slaveService) pollAndApplyChanges() {
 }
 
 func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
-	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
+	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
 
-	if ss.replCli == nil {
+	if ss.replInfo.replCli == nil || !ss.replInfo.replActive {
 		if err := ss.findAndConnectToMaster(); err != nil {
-			return errors.New("Can not replicate as replication client not yet established")
+			return errors.New("Can not replicate as unable to connect to an active master")
 		}
 	}
 
-	res, err := ss.replCli.GetChanges(ss.fromChngNum, chngsPerBatch)
+	ss.replInfo.replCliLock.RLock()
+	defer ss.replInfo.replCliLock.RUnlock()
+
+	res, err := ss.replInfo.replCli.GetChanges(ss.replInfo.fromChngNum, chngsPerBatch)
 	if err == nil {
 		if res.Status.Code != 0 {
 			// this is an error from DKV master's end
 			err = errors.New(res.Status.Message)
 		} else {
-			if res.MasterChangeNumber < (ss.fromChngNum - 1) {
-				ss.lg.Error("change number of the master node can not be lesser than the change number of the slave node", zap.Uint64("MasterChangeNum", res.MasterChangeNumber), zap.Uint64("FromChangeNum", ss.fromChngNum))
+			if res.MasterChangeNumber < (ss.replInfo.fromChngNum - 1) {
+				ss.lg.Error("change number of the master node can not be lesser than the change number of the slave node", zap.Uint64("MasterChangeNum", res.MasterChangeNumber), zap.Uint64("FromChangeNum", ss.replInfo.fromChngNum))
 				err = errors.New("change number of the master node can not be lesser than the change number of the slave node")
 			} else {
 				if err = ss.applyChanges(res); err == nil {
-					ss.lastReplTime = hlc.UnixNow()
+					ss.replInfo.lastReplTime = hlc.UnixNow()
 				}
 			}
 		}
@@ -222,9 +237,9 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
-		ss.fromChngNum = actChngNum + 1
-		ss.lg.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.fromChngNum))
-		ss.replLag = chngsRes.MasterChangeNumber - actChngNum
+		ss.replInfo.fromChngNum = actChngNum + 1
+		ss.lg.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
+		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
 	} else {
 		ss.lg.Info("Not received any changes from master")
 	}
@@ -240,38 +255,38 @@ func newEmptyStatus() *serverpb.Status {
 }
 
 func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
-	if ss.replLag > ss.replConfig.MaxActiveReplLag {
+	if ss.replInfo.replLag > ss.replInfo.replConfig.MaxActiveReplLag {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
-	} else if ss.lastReplTime == 0 || hlc.GetTimeAgo(ss.lastReplTime) > ss.replConfig.MaxActiveReplElapsed {
+	} else if ss.replInfo.lastReplTime == 0 || hlc.GetTimeAgo(ss.replInfo.lastReplTime) > ss.replInfo.replConfig.MaxActiveReplElapsed {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	} else if ss.isClosed {
 		ss.regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	} else {
 		ss.regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	}
-	ss.regionInfo.MasterHost = &ss.replConfig.ReplMasterAddr
+	ss.regionInfo.MasterHost = &ss.replInfo.replConfig.ReplMasterAddr
 	ss.lg.Debug("Current Info", zap.String("Status", ss.regionInfo.Status.String()),
-		zap.Uint64("Repl Lag", ss.replLag), zap.Uint64("Last Repl time", ss.lastReplTime))
+		zap.Uint64("Repl Lag", ss.replInfo.replLag), zap.Uint64("Last Repl time", ss.replInfo.lastReplTime))
 	return ss.regionInfo, nil
 }
 
 func (ss *slaveService) replaceMasterIfInactive() error {
-	if ss.replConfig.DisableAutoMasterDisc {
+	if ss.replInfo.replConfig.DisableAutoMasterDisc {
 		return nil
 	}
 	if regions, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
-		currentMasterIdx := len(regions)
-		for i, region := range regions {
-			if region.NodeAddress == ss.replConfig.ReplMasterAddr {
-				currentMasterIdx = i
+		var currentMaster *serverpb.RegionInfo = nil
+		for _, region := range regions {
+			if region.NodeAddress == ss.replInfo.replConfig.ReplMasterAddr {
+				currentMaster = region
 				break
 			}
 		}
 
-		if currentMasterIdx == len(regions) {
+		if currentMaster == nil {
 			// Current Master not found in cluster. implies current master is inactive
 			return ss.reconnectMaster()
-		} else if !isVBucketApplicableToBeMaster(regions[currentMasterIdx]) {
+		} else if !isVBucketApplicableToBeMaster(currentMaster) {
 			return ss.reconnectMaster()
 		} else {
 			// current master is active. No action required as replication error could be temporary
@@ -284,24 +299,28 @@ func (ss *slaveService) replaceMasterIfInactive() error {
 }
 
 func (ss *slaveService) reconnectMaster() error {
-	// Close any existing client connection
 	// This is so that replication doesn't happen from inactive master
 	// which could otherwise result in slave marking itself active if no errors in replication
-	if ss.replCli != nil {
-		ss.replCli.Close()
-		ss.replCli = nil
-		ss.replConfig.ReplMasterAddr = ""
+	if ss.replInfo.replCli != nil {
+		ss.replInfo.replConfig.ReplMasterAddr = ""
+		ss.replInfo.replActive = false
 	}
 	return ss.findAndConnectToMaster()
 }
 
 func (ss *slaveService) findAndConnectToMaster() error {
+	ss.replInfo.replCliLock.Lock()
+	defer ss.replInfo.replCliLock.Unlock()
+
 	if master, err := ss.findNewMaster(); err == nil {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
-		if replCli, err := ctl.NewInSecureDKVClient(master, ""); err == nil {
-			// concurrency issues ?
-			ss.replCli = replCli
-			ss.replConfig.ReplMasterAddr = master
+		if replCli, err := ctl.NewInSecureDKVClient(*master, ""); err == nil {
+			if ss.replInfo.replCli != nil {
+				ss.replInfo.replCli.Close()
+			}
+			ss.replInfo.replCli = replCli
+			ss.replInfo.replConfig.ReplMasterAddr = *master
+			ss.replInfo.replActive = true
 		} else {
 			ss.lg.Warn("Unable to create a replication client", zap.Error(err))
 			return err
@@ -317,9 +336,9 @@ func (ss *slaveService) findAndConnectToMaster() error {
 // Prefers followers within the local DC first, followed by master within local DC
 // followed by followers outside DC, followed by master outside DC
 // TODO - rather than randomly selecting a master from applicable followers, load balance to distribute better
-func (ss *slaveService) findNewMaster() (string, error) {
-	if ss.replConfig.DisableAutoMasterDisc {
-		return ss.replConfig.ReplMasterAddr, nil
+func (ss *slaveService) findNewMaster() (*string, error) {
+	if ss.replInfo.replConfig.DisableAutoMasterDisc {
+		return &ss.replInfo.replConfig.ReplMasterAddr, nil
 	}
 	// Get all active regions
 	if vBuckets, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
@@ -331,7 +350,7 @@ func (ss *slaveService) findNewMaster() (string, error) {
 			}
 		}
 		if len(filteredVBuckets) == 0 {
-			return "", fmt.Errorf("No active master found for database %s and vBucket %s",
+			return nil, fmt.Errorf("No active master found for database %s and vBucket %s",
 				ss.regionInfo.Database, ss.regionInfo.VBucket)
 		} else {
 			vBuckets = filteredVBuckets
@@ -361,9 +380,9 @@ func (ss *slaveService) findNewMaster() (string, error) {
 
 		// Randomly select 1 region
 		idx := rand.Intn(len(vBuckets))
-		return vBuckets[idx].NodeAddress, nil
+		return &vBuckets[idx].NodeAddress, nil
 	} else {
-		return "", err
+		return nil, err
 	}
 }
 

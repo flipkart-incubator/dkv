@@ -50,7 +50,6 @@ var (
 	statsdAddr   string
 
 	// Service discovery related params
-	isDiscoverySrv bool
 	discoveryConf  string
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
@@ -76,8 +75,7 @@ func init() {
 	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
 	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
-	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave")
-	flag.BoolVar(&isDiscoverySrv, "use-as-discovery-srv", false, "Use this node as discovery server")
+	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave|discovery")
 	flag.StringVar(&discoveryConf, "discovery-service-config", "", "A .ini file for configuring discovery service parameters")
 	flag.StringVar(&statsdAddr, "statsd-addr", "", "StatsD service address in host:port format")
 	flag.DurationVar(&replPollInterval, "repl-poll-interval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
@@ -88,7 +86,7 @@ func init() {
 	flag.StringVar(&database, "database", "default", "Database identifier")
 	flag.StringVar(&vBucket, "vBucket", "default", "vBucket identifier")
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
-	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", false, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
+	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -98,6 +96,7 @@ const (
 	noRole     dkvSrvrRole = "none"
 	masterRole             = "master"
 	slaveRole              = "slave"
+	discoveryRole			= "discovery"
 )
 
 const defBlockCacheSize = 3 << 30
@@ -109,6 +108,7 @@ const (
 
 func main() {
 	flag.Parse()
+	printFlagsWithoutPrefix()
 	validateFlags()
 	setupDKVLogger()
 	setupAccessLogger()
@@ -133,7 +133,7 @@ func main() {
 	}
 
 	var discoveryClient discovery.Client
-	if srvrRole != noRole && !isDiscoverySrv {
+	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
 		discoveryClient, err = newDiscoveryClient()
 		if err != nil {
@@ -150,7 +150,7 @@ func main() {
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
-	case masterRole:
+	case masterRole, discoveryRole:
 		if cp == nil {
 			log.Panicf("Storage engine %s is not supported for DKV master role.", dbEngine)
 		}
@@ -167,7 +167,7 @@ func main() {
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 
 		// Discovery servers can be only configured if node started as master.
-		if isDiscoverySrv {
+		if srvrRole == discoveryRole {
 			err := registerDiscoveryServer(dkvSvc, grpcSrvr)
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
@@ -193,7 +193,7 @@ func main() {
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		discoveryClient.RegisterRegion(dkvSvc)
 	default:
-		panic("Invalid 'dbRole'. Allowed values are none|master|slave.")
+		panic("Invalid 'dbRole'. Allowed values are none|master|slave|discovery.")
 	}
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
@@ -218,7 +218,7 @@ func validateFlags() {
 		}
 	}
 
-	if disableAutoMasterDisc == true {
+	if dbRole == "slave" && disableAutoMasterDisc {
 		if replMasterAddr == "" || strings.IndexRune(replMasterAddr, ':') < 0 {
 			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
 		}
@@ -365,7 +365,7 @@ func (role dkvSrvrRole) printFlags() {
 	switch role {
 	case noRole:
 		printFlagsWithPrefix("db")
-	case masterRole:
+	case masterRole, discoveryRole:
 		if haveFlagsWithPrefix("nexus") {
 			printFlagsWithPrefix("db", "nexus")
 		} else {
