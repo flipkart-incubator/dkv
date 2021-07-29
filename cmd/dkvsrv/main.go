@@ -1,10 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -36,6 +43,7 @@ var (
 	dbEngineIni      string
 	dbFolder         string
 	dbListenAddr     string
+	httpServerAddr   string
 	dbRole           string
 	statsdAddr       string
 	replMasterAddr   string
@@ -57,6 +65,7 @@ func init() {
 	flag.BoolVar(&disklessMode, "diskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
 	flag.StringVar(&dbFolder, "db-folder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
+	flag.StringVar(&httpServerAddr,"http-server-addr","0.0.0.0:8181","Address on which the http service binds")
 	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave")
@@ -86,6 +95,7 @@ func main() {
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
+	go setupHttpServer()
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
@@ -231,10 +241,11 @@ func setupDKVLogger() {
 
 func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	grpcSrvr := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
-		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
+		grpc.ChainStreamInterceptor(grpc_prometheus.StreamServerInterceptor,grpc_zap.StreamServerInterceptor(accessLogger)),
+		grpc.ChainUnaryInterceptor(grpc_prometheus.UnaryServerInterceptor,grpc_zap.UnaryServerInterceptor(accessLogger)),
 	)
 	reflection.Register(grpcSrvr)
+	grpc_prometheus.Register(grpcSrvr)
 	return grpcSrvr, newListener()
 }
 
@@ -410,5 +421,51 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	} else {
 		nexusRepl.Start()
 		return nexusRepl
+	}
+}
+
+func setupHttpServer() {
+	router := mux.NewRouter()
+	router.Handle("/metrics/prometheus", promhttp.Handler())
+	router.HandleFunc("/metrics/json", jsonMetricHandler)
+	router.HandleFunc("/metrics/stream",statsStreamHandler)
+	prometheus.Unregister(prometheus.NewGoCollector())
+	http.Handle("/", router)
+	http.ListenAndServe(httpServerAddr, nil)
+}
+
+func jsonMetricHandler(w http.ResponseWriter, r *http.Request){
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(stats.GetMetrics())
+}
+
+func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
+	if f, ok := w.(http.Flusher); !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	} else {
+		// Set the headers related to event streaming.
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		defer func() {
+			ioutil.ReadAll(r.Body)
+			r.Body.Close()
+		}()
+
+		// Listen to the closing of the http connection via the CloseNotifier
+		notify := w.(http.CloseNotifier).CloseNotify()
+		for ;; {
+			select {
+			case <-notify :
+				return
+			default:
+				statJson, _ := json.Marshal(stats.GetMetrics())
+				fmt.Fprintf(w, "data: %s\n\n", statJson)
+				f.Flush()
+				time.Sleep(time.Second)
+			}
+		}
 	}
 }

@@ -220,7 +220,7 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 		optimTrxnDB:    optimTrxnDB,
 		opts:           opts,
 		globalMutation: 0,
-		stat:           storage.NewStat("rocksdb"),
+		stat:           storage.NewStat(),
 	}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	//go rocksdb.Compaction()

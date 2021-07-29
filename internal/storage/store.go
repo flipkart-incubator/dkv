@@ -40,19 +40,18 @@ type Stat struct {
 	ResponseError  *prometheus.CounterVec
 }
 
-func NewStat(subSystem string) *Stat {
+func NewStat() *Stat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  storage,
-		Subsystem:  subSystem,
 		Name:       "latency",
-		Help:       "Latency statistics for " + subSystem + " operations",
+		Help:       "Latency statistics for storage operations",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		MaxAge: 10 * time.Second,
 	}, []string{Ops})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: storage,
-		Subsystem: subSystem,
 		Name:      "error",
-		Help:      "Error count for " + subSystem + " operations",
+		Help:      "Error count for storage operations",
 	}, []string{Ops})
 	prometheus.MustRegister(RequestLatency, ResponseError)
 	return &Stat{RequestLatency, ResponseError}

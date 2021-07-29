@@ -1,7 +1,6 @@
 package stats
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"time"
 
@@ -83,6 +82,3 @@ func (sdc *statsDClient) Close() error {
 	return sdc.cli.Close()
 }
 
-func MeasureLatency(observer prometheus.Observer, startTime time.Time) {
-	observer.Observe(time.Since(startTime).Seconds())
-}

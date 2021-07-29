@@ -182,7 +182,7 @@ func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts, storage.NewStat("badger"), 0}, nil
+	return &badgerDB{db, bdbOpts, storage.NewStat(), 0}, nil
 }
 
 func (bdb *badgerDB) Close() error {
