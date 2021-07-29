@@ -79,8 +79,8 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 
 	// stop the slave poller so as to avoid race with this poller
 	// and the explicit call to applyChangesFromMaster later
-	slaveSvc.(*slaveService).replTckr.Stop()
-	slaveSvc.(*slaveService).replStop <- struct{}{}
+	slaveSvc.(*slaveService).replInfo.replTckr.Stop()
+	slaveSvc.(*slaveService).replInfo.replStop <- struct{}{}
 	sleepInSecs(2)
 	// Reduce the max number of changes for testing
 	//slaveSvc.(*slaveService).maxNumChngs = 100
@@ -137,8 +137,8 @@ func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.Cha
 
 	// stop the slave poller so as to avoid race with this poller
 	// and the explicit call to applyChangesFromMaster later
-	slaveSvc.(*slaveService).replTckr.Stop()
-	slaveSvc.(*slaveService).replStop <- struct{}{}
+	slaveSvc.(*slaveService).replInfo.replTckr.Stop()
+	slaveSvc.(*slaveService).replInfo.replStop <- struct{}{}
 	sleepInSecs(2)
 
 	slaveCli = newDKVClient(slaveSvcPort)
@@ -219,8 +219,8 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	if err := slaveServer.applyChangesFromMaster(2); err != nil {
 		t.Error(err)
 	}
-	if slaveServer.replLag != 16 {
-		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replLag)
+	if slaveServer.replInfo.replLag != 16 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replInfo.replLag)
 	}
 	validateStatus(t, "tooHighReplLag", serverpb.RegionStatus_INACTIVE)
 
@@ -228,8 +228,8 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	if err := slaveServer.applyChangesFromMaster(4); err != nil {
 		t.Error(err)
 	}
-	if slaveServer.replLag != 8 {
-		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replLag)
+	if slaveServer.replInfo.replLag != 8 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replInfo.replLag)
 	}
 	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
 
@@ -241,8 +241,8 @@ func testGetStatus(t *testing.T, masterStore, slaveStore storage.KVStore, cp sto
 	if err := slaveServer.applyChangesFromMaster(10); err != nil {
 		t.Error(err)
 	}
-	if slaveServer.replLag != 0 {
-		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replLag)
+	if slaveServer.replInfo.replLag != 0 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replInfo.replLag)
 	}
 	validateStatus(t, "replCaughtUp", serverpb.RegionStatus_ACTIVE_SLAVE)
 
@@ -373,7 +373,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		panic(err)
 	} else {
 		slaveSvc = ss
-		slaveSvc.(*slaveService).replCli = masterCli
+		slaveSvc.(*slaveService).replInfo.replCli = masterCli
 		slaveGrpcSrvr = grpc.NewServer()
 		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
 		lis := listen(slaveSvcPort)
