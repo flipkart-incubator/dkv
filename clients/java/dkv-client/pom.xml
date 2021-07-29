@@ -6,8 +6,7 @@
     <packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
     <properties>
-        <proto-file-path>../../../pkg/serverpb</proto-file-path>
-        <grpc.version>1.39.0</grpc.version>
+        <proto-file-path>../../../pkg/serverpb/</proto-file-path>
     </properties>
     <name>dkv-client</name>
     <dependencies>
@@ -52,6 +51,11 @@
             <artifactId>metrics-jmx</artifactId>
             <version>4.1.9</version>
         </dependency>
+        <dependency>
+            <groupId>javax.annotation</groupId>
+            <artifactId>javax.annotation-api</artifactId>
+            <version>1.3.2</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -77,6 +81,9 @@
                     <pluginId>grpc-java</pluginId>
                     <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
                     <protoSourceRoot>${proto-file-path}</protoSourceRoot>
+                    <includes>
+                        <include>api.proto</include>
+                    </includes>
                 </configuration>
                 <executions>
                     <execution>

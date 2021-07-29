@@ -1,7 +1,9 @@
 syntax = "proto3";
 import "google/protobuf/empty.proto";
+
 package dkv.serverpb;
-option go_package = "serverpb";
+option go_package = "github.com/flipkart-incubator/dkv/pkg/serverpb";
+
 
 service DKV {
   // Put puts the given key into the key value store.
@@ -138,133 +140,6 @@ message IterateResponse {
   bytes value = 3;
 }
 
-service DKVReplication {
-  // GetChanges retrieves all changes from a given change number.
-  rpc GetChanges (GetChangesRequest) returns (GetChangesResponse);
-  // AddReplica registers a new replica with the current master.
-  rpc AddReplica (Replica) returns (Status);
-  // RemoveReplica deregisters given replica from the current master.
-  rpc RemoveReplica (Replica) returns (Status);
-  // GetReplicas retrieves all the replicas of the current master.
-  rpc GetReplicas (GetReplicasRequest) returns (GetReplicasResponse);
-}
-
-message GetReplicasRequest {
-  // Zone identifier to use for looking up replicas of the current master.
-  string zone = 1;
-}
-
-message GetReplicasResponse {
-  // Replicas are all the replicas of the current master.
-  repeated Replica replicas = 1;
-}
-
-message Replica {
-  // Zone identifier of the replica.
-  string zone = 1;
-  // Hostname of the replica.
-  string hostname = 2;
-  // GRPC port of the replica.
-  uint32 port = 3;
-}
-
-message GetChangesRequest {
-  // FromChangeNumber is the starting change number from which to retrieve changes.
-  uint64 fromChangeNumber = 1;
-  // MaxNumberOfChanges is the maximum number of changes to return from this invocation.
-  uint32 maxNumberOfChanges = 2;
-}
-
-message GetChangesResponse {
-  // Status indicates the result of the GetChanges operation.
-  Status status = 1;
-  // MasterChangeNumber indicates the latest change number on master node.
-  uint64 masterChangeNumber = 2;
-  // NumberOfChanges indicates the number of change records in the response.
-  uint32 numberOfChanges = 3;
-  // Changes is the collection of change records.
-  repeated ChangeRecord changes = 4;
-}
-
-message ChangeRecord {
-  // SerialisedForm is the internal byte array representation of this change record.
-  bytes serialisedForm = 1;
-  // ChangeNumber indicates the change number of this change record.
-  uint64 changeNumber = 2;
-  // NumberOfTrxns indicates the number of transactions associated with this change record.
-  uint32 numberOfTrxns = 3;
-  // Trxns is the collection of transaction records associated with this change record.
-  repeated TrxnRecord trxns = 4;
-}
-
-message TrxnRecord {
-  enum TrxnType {
-    Unknown = 0;
-    Put = 1;
-    Delete = 2;
-  }
-  // Type indicates the type of this transaction - Put, Delete, etc.
-  TrxnType type = 1;
-  // Key is the byte array representation of the key associated with this transaction.
-  bytes key = 2;
-  // Value is the byte array representation of the value associated with this transaction.
-  bytes value = 3;
-  // expireTS is the epoch seconds value, in int64 to associate with the key in the key value store.
-  uint64 expireTS = 4;
-}
-
-service DKVBackupRestore {
-  // Backup backs up the entire keyspace into the given filesystem location.
-  rpc Backup (BackupRequest) returns (Status);
-  // Restore restores the entire keyspace from an existing backup at the
-  // given filesystem location.
-  rpc Restore (RestoreRequest) returns (Status);
-}
-
-message BackupRequest {
-  // BackupPath indicates a filesystem folder or file used for backing up the keyspace.
-  string backupPath = 1;
-}
-
-message RestoreRequest {
-  // RestorePath indicates a filesystem folder or file used for restoring the keyspace.
-  string restorePath = 1;
-}
-
-service DKVCluster {
-  // AddNode adds the given DKV node to the cluster that the
-  // current node is a member of.
-  rpc AddNode (AddNodeRequest) returns (Status);
-  // RemoveNode removes the given DKV node from the cluster that
-  // the current node is a member of.
-  rpc RemoveNode (RemoveNodeRequest) returns (Status);
-  // ListNodes retrieves the current set of DKV nodes from
-  // the Nexus cluster.
-  rpc ListNodes (google.protobuf.Empty) returns (ListNodesResponse);
-}
-
-message ListNodesResponse {
-  // Status indicates the status of the list nodes operation.
-  Status status = 1;
-  // Leader represents the identifier of the leader node.
-  uint64 leader = 2;
-  // Nodes represents the members of the cluster identified by
-  // their respective identifier and the Nexus URL.
-  map<uint64, string> nodes = 3;
-}
-
-message AddNodeRequest {
-  // NodeUrl represents the URL for the Nexus service running on
-  // the node that needs to be added to the cluster. Other Nexus
-  // peers communicate with this node on this service.
-  string nodeUrl = 1;
-}
-
-message RemoveNodeRequest {
-  // NodeUrl represents the URL for the Nexus service running on
-  // the node that needs to be removed from the cluster.
-  string nodeUrl = 1;
-}
 
 // This service is responsible for all interactions with discovery service
 // to get cluster status info

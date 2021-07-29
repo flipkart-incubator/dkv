@@ -7,6 +7,7 @@ import (
 	"gopkg.in/ini.v1"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -29,6 +30,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+
+	_ "net/http/pprof"
 )
 
 var (
@@ -63,6 +66,7 @@ var (
 	verboseLogging bool
 	accessLogger   *zap.Logger
 	dkvLogger      *zap.Logger
+	pprofEnable    bool
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 
@@ -87,6 +91,7 @@ func init() {
 	flag.StringVar(&vBucket, "vBucket", "default", "vBucket identifier")
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
+	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -114,6 +119,13 @@ func main() {
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
+
+	if pprofEnable {
+		go func() {
+			log.Printf("[INFO] Starting pprof on port 6060\n")
+			log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
+		}()
+	}
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()

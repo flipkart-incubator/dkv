@@ -172,25 +172,22 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
-	if leader, nodes, err := client.ListNodes(); err != nil {
+	if leaderId, members, err := client.ListNodes(); err != nil {
 		fmt.Printf("Unable to retrieve the nodes of DKV cluster. Error: %v\n", err)
 	} else {
 		var ids []uint64
-		for id := range nodes {
-			if id != leader {
-				ids = append(ids, id)
-			}
+		for id := range members {
+			ids = append(ids, id)
 		}
 		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-		if leaderURL, present := nodes[leader]; present {
+		if _, present := members[leaderId]; present {
 			fmt.Println("Current DKV cluster members:")
-			fmt.Printf("%x => %s (leader)\n", leader, leaderURL)
 		} else {
-			fmt.Println("WARNING: DKV cluster unhealthy, leader unknown")
-			fmt.Println("Current cluster members:")
+			fmt.Println("WARNING: DKV Cluster unhealthy, leader unknown")
+			fmt.Println("Current DKV cluster members:")
 		}
 		for _, id := range ids {
-			fmt.Printf("%x => %s\n", id, nodes[id])
+			fmt.Printf("%x => %s (%s) \n", id, members[id].NodeUrl, members[id].Status)
 		}
 	}
 }

@@ -42,7 +42,7 @@ endif
 protoc:
 	@echo ">> generating proto code using Proto version $(PROTO_VER)"
 	@$(GO) get -u github.com/golang/protobuf/protoc-gen-go@$(PROTO_VER)
-	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ --go_out=Mpkg/serverpb/api.proto=github.com/flipkart-incubator/dkv/pkg/serverpb,plugins=grpc,paths=source_relative:. $$proto_dir/*.proto || exit 1; done
+	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=M.,plugins=grpc,paths=source_relative:. $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
 format:
