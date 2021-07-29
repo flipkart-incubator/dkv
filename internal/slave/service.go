@@ -3,6 +3,7 @@ package slave
 import (
 	"context"
 	"errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"strings"
 	"time"
@@ -25,12 +26,28 @@ type slaveService struct {
 	ca          storage.ChangeApplier
 	lg          *zap.Logger
 	statsCli    stats.Client
+	stat        *stat
 	replCli     *ctl.DKVClient
 	replTckr    *time.Ticker
 	replStop    chan struct{}
 	replLag     uint64
 	fromChngNum uint64
 	maxNumChngs uint32
+}
+
+type stat struct {
+	replicationLag prometheus.Gauge
+}
+
+func newStat() *stat {
+	prometheus.NewGoCollector()
+	return &stat{
+		replicationLag: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "slave",
+			Name:      "replication_lag",
+			Help:      "replication lag of the slave",
+		}),
+	}
 }
 
 // TODO: check if this needs to be exposed as a flag
@@ -130,6 +147,7 @@ func (ss *slaveService) pollAndApplyChanges() {
 		case <-ss.replTckr.C:
 			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replLag))
 			ss.statsCli.Gauge("replication.lag", int64(ss.replLag))
+			ss.stat.replicationLag.Set(float64(ss.replLag))
 			if err := ss.applyChangesFromMaster(ss.maxNumChngs); err != nil {
 				ss.lg.Fatal("Unable to retrieve changes from master", zap.Error(err))
 			}

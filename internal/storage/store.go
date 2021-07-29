@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,47 @@ type KVEntry struct {
 	Key      []byte
 	Value    []byte
 	ExpireTS uint64
+}
+
+type storeOp string
+
+const (
+	storage       = "storage"
+	Ops           = "ops"
+	Put           = "put"
+	PutTTL        = "pTtl"
+	Get           = "get"
+	MultiGet      = "mget"
+	Delete        = "del"
+	GetSnapShot   = "getSnapShot"
+	PutSnapShot   = "putSnapShot"
+	Iterate       = "iter"
+	CompareAndSet = "cas"
+	LoadChange    = "loadChange"
+	SaveChange    = "saveChange"
+)
+
+type Stat struct {
+	RequestLatency *prometheus.SummaryVec
+	ResponseError  *prometheus.CounterVec
+}
+
+func NewStat(subSystem string) *Stat {
+	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace:  storage,
+		Subsystem:  subSystem,
+		Name:       "latency",
+		Help:       "Latency statistics for " + subSystem + " operations",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+	}, []string{Ops})
+	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: storage,
+		Subsystem: subSystem,
+		Name:      "error",
+		Help:      "Error count for " + subSystem + " operations",
+	}, []string{Ops})
+	prometheus.MustRegister(RequestLatency, ResponseError)
+	return &Stat{RequestLatency, ResponseError}
 }
 
 // A KVStore represents the key value store that provides
