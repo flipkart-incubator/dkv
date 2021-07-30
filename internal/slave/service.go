@@ -44,7 +44,7 @@ type ReplicationConfig struct {
 
 type replInfo struct {
 	// can be nil only initially when trying to find a master to replicate from
-	replCli     *ctl.DKVClient
+	replCli *ctl.DKVClient
 	// replActive can be used to avoid setting replCli to nil during master reelection
 	// which would otherwise require additional locks to prevent crashes due to intermediate null switches
 	replActive   bool
