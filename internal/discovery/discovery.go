@@ -9,7 +9,7 @@ type StatusPropagator interface {
 	// propagate status updates of all regions in the node to the discovery system
 	PropagateStatus()
 	// register regions part of current node
-	RegisterRegion(server serverpb.DKVServer)
+	RegisterRegion(server serverpb.DKVDiscoveryNodeServer)
 	// Sends one last status update before closing
 	// This should ideally be called after closing all regions so that status update is correct
 	Close() error

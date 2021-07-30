@@ -143,6 +143,12 @@ service DKVDiscovery {
   rpc GetClusterInfo (GetClusterInfoRequest) returns (GetClusterInfoResponse);
 }
 
+// This hosts the grpc methods that each dkv node must implement for the cluster functionality.
+service DKVDiscoveryNode {
+  // Get status of region
+  rpc GetStatus (google.protobuf.Empty) returns (RegionInfo);
+}
+
 message UpdateStatusRequest {
   RegionInfo regionInfo = 1;
   // Time at which the status was sent from the respective node
@@ -161,4 +167,43 @@ message GetClusterInfoRequest {
 
 message GetClusterInfoResponse {
   repeated RegionInfo regionInfos = 1;
+}
+
+message RegionInfo {
+  // Identifier of datacenter / availability zone
+  // Slaves will prefer to select master within same dcId ,
+  // Local DC followers will be created for every unique dcId
+  string dcID = 1;
+  // Address to communicate with this node
+  // Should be equal to listen-addr used for the node whose status is being updated
+  string nodeAddress = 2;
+  // Database identifier
+  string database = 3;
+  // Shard / vBucket identifier
+  string vBucket = 4;
+  // Status of the region
+  RegionStatus status = 5;
+  // Master host of the region whose status is being updated
+  // Applicable only for slaves. Used to load balance among various possible masters
+  optional string masterHost = 6;
+  // Nexus cluster url of the region
+  // Will be used by new followers to discover the raft cluster
+  optional string nexusClusterUrl = 7;
+}
+
+enum RegionStatus {
+  // A node in this status isn't supposed to be serving any requests - both for clients and servers (slaves)
+  // When committed entry of master - node > X, node being brought up / down, node is partitioned from cluster, etc
+  // Applicable for both slaves and members of raft quorum.
+  INACTIVE = 0;
+  // Master of the raft quorum - 1 node within the shard
+  LEADER = 1;
+  // Member of the raft quorum which is elected to serve sequentially consistent reads within the DC
+  // 1 node within a shard in a DC
+  PRIMARY_FOLLOWER = 2;
+  // All other members of the raft quorum which are not master / primary follower.
+  // Serving eventually consistent reads
+  SECONDARY_FOLLOWER = 3;
+  // Slave with committed entry within some bound of its master and able to serve read requests
+  ACTIVE_SLAVE = 4;
 }

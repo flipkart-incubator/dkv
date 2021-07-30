@@ -27,6 +27,7 @@ import (
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
+	serverpb.DKVDiscoveryNodeServer
 	serverpb.DKVReplicationServer
 	serverpb.DKVBackupRestoreServer
 }

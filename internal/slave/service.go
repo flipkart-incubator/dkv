@@ -24,6 +24,7 @@ import (
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
+	serverpb.DKVDiscoveryNodeServer
 }
 
 type ReplicationConfig struct {
