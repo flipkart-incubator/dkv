@@ -10,7 +10,6 @@ import (
 	"io"
 	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -46,7 +45,6 @@ type ReplicationConfig struct {
 type replInfo struct {
 	// can be nil only initially when trying to find a master to replicate from
 	replCli     *ctl.DKVClient
-	replCliLock *sync.RWMutex
 	// replActive can be used to avoid setting replCli to nil during master reelection
 	// which would otherwise require additional locks to prevent crashes due to intermediate null switches
 	replActive   bool
@@ -83,8 +81,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
 	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
-	rwl := &sync.RWMutex{}
-	ri := &replInfo{replConfig: replConf, replCliLock: rwl}
+	ri := &replInfo{replConfig: replConf}
 	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,
 		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
 	ss.findAndConnectToMaster()
@@ -187,13 +184,8 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
 
 	if ss.replInfo.replCli == nil || !ss.replInfo.replActive {
-		if err := ss.findAndConnectToMaster(); err != nil {
-			return errors.New("Can not replicate as unable to connect to an active master")
-		}
+		return errors.New("Can not replicate as unable to connect to an active master")
 	}
-
-	ss.replInfo.replCliLock.RLock()
-	defer ss.replInfo.replCliLock.RUnlock()
 
 	res, err := ss.replInfo.replCli.GetChanges(ss.replInfo.fromChngNum, chngsPerBatch)
 	if err == nil {
@@ -301,17 +293,12 @@ func (ss *slaveService) replaceMasterIfInactive() error {
 func (ss *slaveService) reconnectMaster() error {
 	// This is so that replication doesn't happen from inactive master
 	// which could otherwise result in slave marking itself active if no errors in replication
-	if ss.replInfo.replCli != nil {
-		ss.replInfo.replConfig.ReplMasterAddr = ""
-		ss.replInfo.replActive = false
-	}
+	ss.replInfo.replConfig.ReplMasterAddr = ""
+	ss.replInfo.replActive = false
 	return ss.findAndConnectToMaster()
 }
 
 func (ss *slaveService) findAndConnectToMaster() error {
-	ss.replInfo.replCliLock.Lock()
-	defer ss.replInfo.replCliLock.Unlock()
-
 	if master, err := ss.findNewMaster(); err == nil {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
 		if replCli, err := ctl.NewInSecureDKVClient(*master, ""); err == nil {
