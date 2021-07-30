@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"io"
-	"math/rand"
-	"strings"
-	"time"
-
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"io"
+	"math/rand"
+	"strings"
+	"time"
 )
 
 // A DKVService represents a service for serving key value data.
@@ -339,7 +338,7 @@ func (ss *slaveService) findNewMaster() (*string, error) {
 			}
 		}
 		if len(filteredVBuckets) == 0 {
-			return nil, fmt.Errorf("No active master found for database %s and vBucket %s",
+			return nil, fmt.Errorf("no active master found for database %s and vBucket %s",
 				ss.regionInfo.Database, ss.regionInfo.VBucket)
 		} else {
 			vBuckets = filteredVBuckets

@@ -531,7 +531,7 @@ func newDiscoveryClient() (discovery.Client, error) {
 		}
 		return client, nil
 	} else {
-		return nil, fmt.Errorf("Can't load discovery client configuration from section %s in file %s, error: %v",
+		return nil, fmt.Errorf("can't load discovery client configuration from section %s in file %s, error: %v",
 			discoveryClientConfig, discoveryConf, err)
 	}
 
