@@ -1,9 +1,7 @@
 syntax = "proto3";
-import "google/protobuf/empty.proto";
 
 package dkv.serverpb;
 option go_package = "github.com/flipkart-incubator/dkv/pkg/serverpb";
-
 
 service DKV {
   // Put puts the given key into the key value store.
@@ -17,10 +15,6 @@ service DKV {
 
   // MultiGet gets the values associated with given keys from the key value store.
   rpc MultiGet (MultiGetRequest) returns (MultiGetResponse);
-
-  // Get status of region
-  // TODO - remove this from gRPC interface and create an internal server/resource interface
-  rpc GetStatus (google.protobuf.Empty) returns (regionInfo);
 
   // Iterate iterates through the entire keyspace in no particular order and
   // returns the results as a stream of key value pairs.
@@ -138,73 +132,4 @@ message IterateResponse {
   bytes key = 2;
   // Value of the current iteration.
   bytes value = 3;
-}
-
-
-// This service is responsible for all interactions with discovery service
-// to get cluster status info
-service DKVDiscovery {
-  // Update status of the given database and vBucket
-  rpc UpdateStatus (UpdateStatusRequest) returns (Status);
-  // Retrieve all active nodes in cluster with their status after filtering based on request params
-  rpc GetClusterInfo (GetClusterInfoRequest) returns (GetClusterInfoResponse);
-}
-
-message UpdateStatusRequest {
-  regionInfo regionInfo = 1;
-  // Time at which the status was sent from the respective node
-  uint64 timestamp = 2;
-}
-
-message regionInfo {
-  // Identifier of datacenter / availability zone
-  // Slaves will prefer to select master within same dcId ,
-  // Local DC followers will be created for every unique dcId
-  string dcID = 1;
-  // Address to communicate with this node
-  // Should be equal to listen-addr used for the node whose status is being updated
-  string nodeAddress = 2;
-  // Database identifier
-  string database = 3;
-  // Shard / vBucket identifier
-  string vBucket = 4;
-  // Status of the region
-  regionStatus status = 5;
-  // Master host of the region whose status is being updated
-  // Applicable only for slaves. Used to load balance among various possible masters
-  optional string masterHost = 6;
-  // Nexus cluster url of the region
-  // Will be used by new followers to discover the raft cluster
-  optional string nexusClusterUrl = 7;
-}
-
-enum regionStatus {
-  // A node in this status isn't supposed to be serving any requests - both for clients and servers (slaves)
-  // When committed entry of master - node > X, node being brought up / down, node is partitioned from cluster, etc
-  // Applicable for both slaves and members of raft quorum.
-  INACTIVE = 0;
-  // Master of the raft quorum - 1 node within the shard
-  LEADER = 1;
-  // Member of the raft quorum which is elected to serve sequentially consistent reads within the DC
-  // 1 node within a shard in a DC
-  PRIMARY_FOLLOWER = 2;
-  // All other members of the raft quorum which are not master / primary follower.
-  // Serving eventually consistent reads
-  SECONDARY_FOLLOWER = 3;
-  // Slave with committed entry within some bound of its master and able to serve read requests
-  ACTIVE_SLAVE = 4;
-}
-
-// Get cluster info filtered on request params
-message GetClusterInfoRequest {
-  // Identifier of datacenter / availability zone
-  optional string dcID = 1;
-  // Database identifier
-  optional string database = 2;
-  // Shard / vBucket identifier
-  optional string vBucket = 3;
-}
-
-message GetClusterInfoResponse {
-  repeated regionInfo regionInfos = 1;
 }

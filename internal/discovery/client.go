@@ -43,7 +43,7 @@ func NewDiscoveryClientConfigFromIni(sect *ini.Section) (*DiscoveryClientConfig,
 
 type discoveryClient struct {
 	// All the regions hosted in the current node
-	regions               []serverpb.DKVServer
+	regions               []serverpb.DKVDiscoveryNodeServer
 	dkvClient             serverpb.DKVDiscoveryClient
 	conn                  *grpc.ClientConn
 	logger                *zap.Logger
@@ -73,7 +73,7 @@ func NewDiscoveryClient(config *DiscoveryClientConfig, logger *zap.Logger) (Clie
 	}
 
 	dkvCli := serverpb.NewDKVDiscoveryClient(conn)
-	storePropagator := &discoveryClient{regions: []serverpb.DKVServer{},
+	storePropagator := &discoveryClient{regions: []serverpb.DKVDiscoveryNodeServer{},
 		dkvClient: dkvCli, logger: logger, config: config, conn: conn}
 	storePropagator.init()
 	return storePropagator, nil
@@ -93,7 +93,7 @@ func getDiscoveryClient(discoveryServiceAddr string) (*grpc.ClientConn, error) {
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 }
 
-func (m *discoveryClient) RegisterRegion(server serverpb.DKVServer) {
+func (m *discoveryClient) RegisterRegion(server serverpb.DKVDiscoveryNodeServer) {
 	m.regions = append(m.regions, server)
 }
 
