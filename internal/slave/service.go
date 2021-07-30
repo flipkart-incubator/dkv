@@ -182,11 +182,12 @@ func (ss *slaveService) pollAndApplyChanges() {
 }
 
 func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
-	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
+	defer ss.statsCli.Timing("slave.applyChangesFromMaster.latency.ms", time.Now())
 
 	if ss.replInfo.replCli == nil || !ss.replInfo.replActive {
-		return errors.New("Can not replicate as unable to connect to an active master")
+		return errors.New("can not replicate as unable to connect to an active master")
 	}
+	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
 
 	res, err := ss.replInfo.replCli.GetChanges(ss.replInfo.fromChngNum, chngsPerBatch)
 	if err == nil {
