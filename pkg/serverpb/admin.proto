@@ -133,3 +133,32 @@ message RemoveNodeRequest {
   // the node that needs to be removed from the cluster.
   string nodeUrl = 1;
 }
+
+// This service is responsible for all interactions with discovery service
+// to get cluster status info
+service DKVDiscovery {
+  // Update status of the given database and vBucket
+  rpc UpdateStatus (UpdateStatusRequest) returns (Status);
+  // Retrieve all active nodes in cluster with their status after filtering based on request params
+  rpc GetClusterInfo (GetClusterInfoRequest) returns (GetClusterInfoResponse);
+}
+
+message UpdateStatusRequest {
+  RegionInfo regionInfo = 1;
+  // Time at which the status was sent from the respective node
+  uint64 timestamp = 2;
+}
+
+// Get cluster info filtered on request params
+message GetClusterInfoRequest {
+  // Identifier of datacenter / availability zone
+  optional string dcID = 1;
+  // Database identifier
+  optional string database = 2;
+  // Shard / vBucket identifier
+  optional string vBucket = 3;
+}
+
+message GetClusterInfoResponse {
+  repeated RegionInfo regionInfos = 1;
+}

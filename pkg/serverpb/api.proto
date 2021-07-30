@@ -20,7 +20,7 @@ service DKV {
 
   // Get status of region
   // TODO - remove this from gRPC interface and create an internal server/resource interface
-  rpc GetStatus (google.protobuf.Empty) returns (regionInfo);
+  rpc GetStatus (google.protobuf.Empty) returns (RegionInfo);
 
   // Iterate iterates through the entire keyspace in no particular order and
   // returns the results as a stream of key value pairs.
@@ -141,22 +141,7 @@ message IterateResponse {
 }
 
 
-// This service is responsible for all interactions with discovery service
-// to get cluster status info
-service DKVDiscovery {
-  // Update status of the given database and vBucket
-  rpc UpdateStatus (UpdateStatusRequest) returns (Status);
-  // Retrieve all active nodes in cluster with their status after filtering based on request params
-  rpc GetClusterInfo (GetClusterInfoRequest) returns (GetClusterInfoResponse);
-}
-
-message UpdateStatusRequest {
-  regionInfo regionInfo = 1;
-  // Time at which the status was sent from the respective node
-  uint64 timestamp = 2;
-}
-
-message regionInfo {
+message RegionInfo {
   // Identifier of datacenter / availability zone
   // Slaves will prefer to select master within same dcId ,
   // Local DC followers will be created for every unique dcId
@@ -169,7 +154,7 @@ message regionInfo {
   // Shard / vBucket identifier
   string vBucket = 4;
   // Status of the region
-  regionStatus status = 5;
+  RegionStatus status = 5;
   // Master host of the region whose status is being updated
   // Applicable only for slaves. Used to load balance among various possible masters
   optional string masterHost = 6;
@@ -178,7 +163,7 @@ message regionInfo {
   optional string nexusClusterUrl = 7;
 }
 
-enum regionStatus {
+enum RegionStatus {
   // A node in this status isn't supposed to be serving any requests - both for clients and servers (slaves)
   // When committed entry of master - node > X, node being brought up / down, node is partitioned from cluster, etc
   // Applicable for both slaves and members of raft quorum.
@@ -195,16 +180,3 @@ enum regionStatus {
   ACTIVE_SLAVE = 4;
 }
 
-// Get cluster info filtered on request params
-message GetClusterInfoRequest {
-  // Identifier of datacenter / availability zone
-  optional string dcID = 1;
-  // Database identifier
-  optional string database = 2;
-  // Shard / vBucket identifier
-  optional string vBucket = 3;
-}
-
-message GetClusterInfoResponse {
-  repeated regionInfo regionInfos = 1;
-}
