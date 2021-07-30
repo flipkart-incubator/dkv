@@ -39,7 +39,6 @@ func NewDiscoverConfigFromIni(sect *ini.Section) (*DiscoveryConfig, error) {
 }
 
 type discoverService struct {
-	// TODO - dkvServer should point to interface of master (currently distributedService)
 	dkvCli serverpb.DKVClient
 	logger *zap.Logger
 	config *DiscoveryConfig
