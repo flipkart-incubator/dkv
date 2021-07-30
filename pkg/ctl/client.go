@@ -3,6 +3,7 @@ package ctl
 import (
 	"context"
 	"errors"
+	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/nexus/models"
 	"io"
 	"time"
@@ -22,6 +23,7 @@ type DKVClient struct {
 	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
 	dkvClusCli serverpb.DKVClusterClient
+	dkvDisCli  serverpb.DKVDiscoveryClient
 }
 
 // TODO: Should these be paramterised ?
@@ -52,7 +54,8 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
 		dkvClusCli := serverpb.NewDKVClusterClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli}
+		dkvDisCli := serverpb.NewDKVDiscoveryClient(conn)
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli}
 	}
 	return dkvClnt, err
 }
@@ -201,6 +204,30 @@ func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, erro
 		return res.Leader, res.Nodes, nil
 	}
 	return 0, nil, err
+}
+
+func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	_, err := dkvClnt.dkvDisCli.UpdateStatus(ctx, &serverpb.UpdateStatusRequest{
+		RegionInfo: &info,
+		Timestamp:  hlc.UnixNow(),
+	})
+	return err
+}
+
+func (dkvClnt *DKVClient) GetClusterInfo(dcId string, database string, vBucket string) ([]*serverpb.RegionInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	clusterInfo, err := dkvClnt.dkvDisCli.GetClusterInfo(ctx, &serverpb.GetClusterInfoRequest{
+		DcID:     &dcId,
+		Database: &database,
+		VBucket:  &vBucket,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return clusterInfo.GetRegionInfos(), nil
 }
 
 // KVPair is convenience wrapper that captures a key and its value.

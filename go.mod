@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
+	github.com/Jille/grpc-multi-resolver v1.0.0
 	github.com/coreos/etcd v3.3.19+incompatible // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dgraph-io/badger/v2 v2.2007.2
@@ -26,7 +27,7 @@ require (
 	go.uber.org/zap v1.14.1
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c // indirect
-	golang.org/x/sys v0.0.0-20201005065044-765f4ea38db3 // indirect
+	golang.org/x/sys v0.0.0-20210217105451-b926d437f341 // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
 	google.golang.org/grpc v1.33.2

@@ -580,7 +580,8 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 		if err != nil {
 			return appldChngNum, err
 		}
-		appldChngNum = chng.ChangeNumber
+		// at changeNum 3 with NumTxn = 2. Applied should be 4. Ie. 3 + 2 -1
+		appldChngNum = chng.ChangeNumber + uint64(chng.NumberOfTrxns) - 1
 	}
 	return appldChngNum, nil
 }

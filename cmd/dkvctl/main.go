@@ -31,6 +31,7 @@ var cmds = []*cmd{
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
 	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
+	{"getClusterInfo", "<dcId> <database> <vBucket>", "Gets the latest cluster info", (*cmd).getStatus, "", true},
 }
 
 func (c *cmd) usage() {
@@ -187,6 +188,34 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 		}
 		for _, id := range ids {
 			fmt.Printf("%x => %s (%s) \n", id, members[id].NodeUrl, members[id].Status)
+		}
+	}
+}
+
+func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
+	dcId := ""
+	database := ""
+	vBucket := ""
+	if len(args) > 0 {
+		dcId = args[0]
+	}
+	if len(args) > 1 {
+		database = args[1]
+	}
+	if len(args) > 2 {
+		vBucket = args[2]
+	}
+	vBuckets, err := client.GetClusterInfo(dcId, database, vBucket)
+	if err != nil {
+		fmt.Printf("Unable to get Status: Error: %v\n", err)
+	} else {
+		if len(vBuckets) == 0 {
+			fmt.Println("Found no nodes with the provided filters")
+		} else {
+			fmt.Println("Current DKV cluster nodes:")
+			for _, bucket := range vBuckets {
+				fmt.Println(bucket.String())
+			}
 		}
 	}
 }

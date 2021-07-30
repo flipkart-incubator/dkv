@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
+	serverpb.DKVDiscoveryNodeServer
 	serverpb.DKVReplicationServer
 	serverpb.DKVBackupRestoreServer
 }
@@ -35,16 +37,22 @@ type standaloneService struct {
 	cp    storage.ChangePropagator
 	br    storage.Backupable
 
-	rwl      *sync.RWMutex
-	lg       *zap.Logger
-	statsCli stats.Client
+	rwl        *sync.RWMutex
+	lg         *zap.Logger
+	statsCli   stats.Client
+	regionInfo *serverpb.RegionInfo
+}
+
+func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
+	return ss.regionInfo, nil
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
 	rwl := &sync.RWMutex{}
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli}
+	regionInfo.Status = serverpb.RegionStatus_LEADER
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -298,13 +306,14 @@ type distributedService struct {
 	raftRepl nexus_api.RaftReplicator
 	lg       *zap.Logger
 	statsCli stats.Client
+	isClosed bool
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli), raftRepl, lgr, statsCli}
+	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -442,10 +451,41 @@ func (ds *distributedService) ListNodes(ctx context.Context, _ *empty.Empty) (*s
 }
 
 func (ds *distributedService) Close() error {
+	ds.lg.Info("Closing the master service")
 	// Do not invoke DKVService::Close here since `raftRepl` already
 	// closes the underlying storage connection.
+	// TODO - fix the above as ideally it should call DKVService::Close if there are more aspects to DKVService to close other than storage
 	ds.raftRepl.Stop()
+
+	ds.isClosed = true
 	return nil
+}
+
+func (ds *distributedService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
+	regionInfo := ds.DKVService.(*standaloneService).regionInfo
+
+	if ds.isClosed {
+		regionInfo.Status = serverpb.RegionStatus_INACTIVE
+	} else {
+		// Currently there is no way for this instance of DKVServer to know if its the local dc follower, or is a follower with a lot of lag
+		// Even the member list api ListMembers() is just an in memory lookup rather than actually looking at the current raft member state
+		// If the current node is itself disconnected, it will provide stale / incorrect member list
+		// For now, we will return status based on listMembers() and identify based on stale data
+		// As of now, there is no hard requirement to identify true leader via service discovery thus using listmembers() is fine
+		// TODO - Provide correct status wrt master / local dc follower / follower with lot of lag
+		leaderId, _ := ds.raftRepl.ListMembers()
+		selfId := ds.raftRepl.Id()
+
+		if leaderId == selfId {
+			regionInfo.Status = serverpb.RegionStatus_LEADER
+		} else {
+			// Leader is unknown. Could be when raft quorum is incomplete or leader election is in progress
+			// TODO - Provide correct status wrt local dc follower / follower with lot of lag
+			regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
+		}
+	}
+	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
+	return regionInfo, nil
 }
 
 func newErrorStatus(err error) *serverpb.Status {

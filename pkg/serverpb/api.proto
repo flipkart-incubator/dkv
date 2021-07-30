@@ -133,5 +133,3 @@ message IterateResponse {
   // Value of the current iteration.
   bytes value = 3;
 }
-
-

@@ -324,7 +324,7 @@ func TestSaveChanges(t *testing.T) {
 		chngs[i] = store.toChangeRecord(wb, chngNum)
 		chngNum++
 	}
-	expChngNum := chngNum - 1
+	expChngNum := chngNum
 
 	if actChngNum, err := store.SaveChanges(chngs); err != nil {
 		t.Fatal(err)
