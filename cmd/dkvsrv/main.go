@@ -113,12 +113,12 @@ const (
 
 func main() {
 	flag.Parse()
-	printFlagsWithoutPrefix()
 	validateFlags()
 	setupDKVLogger()
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
+	printFlagsWithoutPrefix()
 
 	if pprofEnable {
 		go func() {
@@ -131,7 +131,7 @@ func main() {
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
-	srvrRole.printFlags()
+	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
 	regionInfo := &serverpb.RegionInfo{
@@ -180,7 +180,7 @@ func main() {
 
 		// Discovery servers can be only configured if node started as master.
 		if srvrRole == discoveryRole {
-			err := registerDiscoveryServer(dkvSvc, grpcSrvr)
+			err := registerDiscoveryServer(grpcSrvr, dkvSvc)
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
 			}
@@ -492,7 +492,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	}
 }
 
-func registerDiscoveryServer(dkvService master.DKVService, grpcSrvr *grpc.Server) error {
+func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
 	iniConfig, err := ini.Load(discoveryConf)
 	if err != nil {
 		return fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConf, err)
