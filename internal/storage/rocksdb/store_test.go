@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"math"
 	"os"
 	"os/exec"
@@ -415,6 +416,28 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 	}
 
 }
+
+
+func TestTTLIteratorWithoutPrefix(t *testing.T)  {
+	numTrxns := 3
+	keyPrefix4, valPrefix4 := "TTLStartKeyDD", "ccStartVal"
+	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2*time.Second).Unix())
+	itOpts, err := storage.NewIteratorOptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := store.Iterate(itOpts)
+	defer it.Close()
+	for it.HasNext() {
+		entry := it.Next()
+		if hlc.InThePast(entry.ExpireTS) {
+			t.Errorf("Got Expired Key: %s Value: %s\n", entry.Key, entry.Value)
+		} else {
+			t.Logf("Key: %s Value: %s Expiry %v\n", entry.Key, entry.Value, entry.ExpireTS)
+		}
+	}
+}
+
 
 func TestIteratorFromStartKey(t *testing.T) {
 	numTrxns := 3
