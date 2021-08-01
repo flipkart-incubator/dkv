@@ -112,32 +112,6 @@ const (
 	discoveryClientConfig = "clientConfig"
 )
 
-func nodeAddress() (*url.URL, error) {
-	ip, port, err := net.SplitHostPort(dbListenAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	if ip == "0.0.0.0" {
-		//get interface ip.
-		addrs, err := net.InterfaceAddrs()
-		if err != nil {
-			return nil, err
-		}
-		for _, address := range addrs {
-			// check the address type and if it is not a loopback the display it
-			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-				if ipnet.IP.To4() != nil {
-					ip = ipnet.IP.String()
-				}
-			}
-		}
-	}
-
-	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port )}
-	return &ep, nil
-}
-
 func main() {
 	flag.Parse()
 	validateFlags()
@@ -566,4 +540,30 @@ func newDiscoveryClient() (discovery.Client, error) {
 			discoveryClientConfig, discoveryConf, err)
 	}
 
+}
+
+func nodeAddress() (*url.URL, error) {
+	ip, port, err := net.SplitHostPort(dbListenAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	if ip == "0.0.0.0" {
+		//get interface ip.
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, address := range addrs {
+			// check the address type and if it is not a loopback the display it
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					ip = ipnet.IP.String()
+				}
+			}
+		}
+	}
+
+	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port )}
+	return &ep, nil
 }
