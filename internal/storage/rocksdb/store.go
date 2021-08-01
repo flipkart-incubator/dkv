@@ -626,7 +626,16 @@ func (rdbIter *iter) HasNext() bool {
 		}
 		return false
 	}
-	return rdbIter.rdbIter.Valid()
+
+	//do ttl validity for without prefix scan also.
+	if rdbIter.rdbIter.Valid() {
+		if rdbIter.verifyTTLValidity() {
+			return true
+		}
+		rdbIter.rdbIter.Next()
+		return rdbIter.HasNext()
+	}
+	return false
 }
 
 func (rdbIter *iter) Next() *storage.KVEntry {
