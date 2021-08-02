@@ -3,11 +3,6 @@ package slave
 import (
 	"context"
 	"errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"io"
-	"strings"
-	"time"
-
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
@@ -15,6 +10,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
@@ -60,23 +56,22 @@ type replInfo struct {
 	replConfig   *ReplicationConfig
 	fromChngNum  uint64
 }
+
 type slaveService struct {
 	store       storage.KVStore
 	ca          storage.ChangeApplier
 	lg          *zap.Logger
 	statsCli    stats.Client
 	stat        *stat
-	replCli     *ctl.DKVClient
-	replTckr    *time.Ticker
-	replStop    chan struct{}
-	replLag     uint64
-	fromChngNum uint64
-	maxNumChngs uint32
+	regionInfo  *serverpb.RegionInfo
+	clusterInfo discovery.ClusterInfoGetter
+	isClosed    bool
+	replInfo    *replInfo
 }
-
 type stat struct {
 	ReplicationLag prometheus.Gauge
 }
+
 
 func newStat() *stat {
 	repliacationLag := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -90,18 +85,6 @@ func newStat() *stat {
 	}
 }
 
-// TODO: check if this needs to be exposed as a flag
-const maxNumChangesRepl = 10000
-type slaveService struct {
-	store       storage.KVStore
-	ca          storage.ChangeApplier
-	lg          *zap.Logger
-	statsCli    stats.Client
-	regionInfo  *serverpb.RegionInfo
-	clusterInfo discovery.ClusterInfoGetter
-	isClosed    bool
-	replInfo    *replInfo
-}
 
 // NewService creates a slave DKVService that periodically polls
 // for changes from master node and replicates them onto its local
@@ -118,7 +101,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
 	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,
+	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,stat: newStat(),
 		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
@@ -203,7 +186,7 @@ func (ss *slaveService) pollAndApplyChanges() {
 		case <-ss.replInfo.replTckr.C:
 			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
 			ss.statsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
-			ss.stat.ReplicationLag.Set(float64(ss.replLag))
+			ss.stat.ReplicationLag.Set(float64(ss.replInfo.replLag))
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
 				ss.lg.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {

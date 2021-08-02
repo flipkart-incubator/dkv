@@ -7,7 +7,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"gopkg.in/ini.v1"
 	"github.com/gorilla/mux"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"io/ioutil"
@@ -323,11 +322,10 @@ func setupDKVLogger() {
 
 func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	grpcSrvr := grpc.NewServer(
-		grpc.ChainStreamInterceptor(grpc_prometheus.StreamServerInterceptor,grpc_zap.StreamServerInterceptor(accessLogger)),
-		grpc.ChainUnaryInterceptor(grpc_prometheus.UnaryServerInterceptor,grpc_zap.UnaryServerInterceptor(accessLogger)),
+		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
+		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
 	)
 	reflection.Register(grpcSrvr)
-	grpc_prometheus.Register(grpcSrvr)
 	return grpcSrvr, newListener()
 }
 
