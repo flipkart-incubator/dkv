@@ -139,6 +139,46 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     @Override
+    public void put(KV.Strings... items) {
+        Api.MultiPutRequest.Builder multiPutReqBuilder = Api.MultiPutRequest.newBuilder();
+        for (KV.Strings kv : items){
+            Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
+            Api.PutRequest putReq = putReqBuilder
+                    .setKey(copyFromUtf8(kv.getKey()))
+                    .setValue(copyFromUtf8(kv.getValue()))
+                    .setExpireTS(kv.getExpiryTS())
+                    .build();
+            multiPutReqBuilder.addPutRequest(putReq);
+        }
+        Api.MultiPutRequest multiPutReq = multiPutReqBuilder.build();
+        Api.PutResponse response = blockingStub.multiPut(multiPutReq);
+        Api.Status status = response.getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "MultiPut", new Object[]{items});
+        }
+    }
+
+    @Override
+    public void put(KV.Bytes... items) {
+        Api.MultiPutRequest.Builder multiPutReqBuilder = Api.MultiPutRequest.newBuilder();
+        for (KV.Bytes kv : items){
+            Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
+            Api.PutRequest putReq = putReqBuilder
+                    .setKey(copyFrom(kv.getKey()))
+                    .setValue(copyFrom(kv.getValue()))
+                    .setExpireTS(kv.getExpiryTS())
+                    .build();
+            multiPutReqBuilder.addPutRequest(putReq);
+        }
+        Api.MultiPutRequest multiPutReq = multiPutReqBuilder.build();
+        Api.PutResponse response = blockingStub.multiPut(multiPutReq);
+        Api.Status status = response.getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "MultiPut", new Object[]{items});
+        }
+    }
+
+    @Override
     public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
         ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
         return cas(copyFrom(key), expectByteStr, copyFrom(update));
@@ -308,6 +348,20 @@ public class SimpleDKVClient implements DKVClient {
             throw new DKVException(status, "Put", new Object[]{keyByteStr.toByteArray(), valByteStr.toByteArray()});
         }
     }
+
+    private void puts(ByteString keyByteStr, ByteString valByteStr, long expiryTS) {
+        Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
+        Api.PutRequest putReq = putReqBuilder
+                .setKey(keyByteStr)
+                .setValue(valByteStr)
+                .setExpireTS(expiryTS)
+                .build();
+        Api.Status status = blockingStub.put(putReq).getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "Put", new Object[]{keyByteStr.toByteArray(), valByteStr.toByteArray()});
+        }
+    }
+
 
     private ByteString get(Api.ReadConsistency consistency, ByteString keyByteStr) {
         Api.GetRequest.Builder getReqBuilder = Api.GetRequest.newBuilder();

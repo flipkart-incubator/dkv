@@ -347,6 +347,21 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 	return res, err
 }
 
+func (ds *distributedService) MultiPut(ctx context.Context, multiPutReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{MultiPut: multiPutReq})
+	res := &serverpb.PutResponse{Status: newEmptyStatus()}
+	if err != nil {
+		ds.lg.Error("Unable to PUT over Nexus", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	} else {
+		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
+			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			res.Status = newErrorStatus(err)
+		}
+	}
+	return res, err
+}
+
 func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
 	reqBts, _ := proto.Marshal(&raftpb.InternalRaftRequest{Cas: casReq})
 	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
