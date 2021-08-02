@@ -603,7 +603,8 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 		if err != nil {
 			return appldChngNum, err
 		}
-		appldChngNum = chng.ChangeNumber
+		// at changeNum 3 with NumTxn = 2. Applied should be 4. Ie. 3 + 2 -1
+		appldChngNum = chng.ChangeNumber + uint64(chng.NumberOfTrxns) - 1
 	}
 	return appldChngNum, nil
 }
@@ -648,7 +649,16 @@ func (rdbIter *iter) HasNext() bool {
 		}
 		return false
 	}
-	return rdbIter.rdbIter.Valid()
+
+	//do ttl validity for without prefix scan also.
+	if rdbIter.rdbIter.Valid() {
+		if rdbIter.verifyTTLValidity() {
+			return true
+		}
+		rdbIter.rdbIter.Next()
+		return rdbIter.HasNext()
+	}
+	return false
 }
 
 func (rdbIter *iter) Next() *storage.KVEntry {
