@@ -36,17 +36,18 @@ type slaveService struct {
 }
 
 type stat struct {
-	replicationLag prometheus.Gauge
+	ReplicationLag prometheus.Gauge
 }
 
 func newStat() *stat {
-	prometheus.NewGoCollector()
+	repliacationLag := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "slave",
+		Name:      "replication_lag",
+		Help:      "replication lag of the slave",
+	})
+	prometheus.MustRegister(repliacationLag)
 	return &stat{
-		replicationLag: prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: "slave",
-			Name:      "replication_lag",
-			Help:      "replication lag of the slave",
-		}),
+		ReplicationLag: repliacationLag,
 	}
 }
 
@@ -67,7 +68,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DK
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, replCli *ctl.DKVClient, pollInterval time.Duration,
 	lgr *zap.Logger, statsCli stats.Client) *slaveService {
-	ss := &slaveService{store: store, ca: ca, replCli: replCli, lg: lgr, statsCli: statsCli}
+	ss := &slaveService{store: store, ca: ca, replCli: replCli, lg: lgr, statsCli: statsCli,stat: newStat()}
 	ss.startReplication(pollInterval)
 	return ss
 }
@@ -147,7 +148,7 @@ func (ss *slaveService) pollAndApplyChanges() {
 		case <-ss.replTckr.C:
 			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replLag))
 			ss.statsCli.Gauge("replication.lag", int64(ss.replLag))
-			ss.stat.replicationLag.Set(float64(ss.replLag))
+			ss.stat.ReplicationLag.Set(float64(ss.replLag))
 			if err := ss.applyChangesFromMaster(ss.maxNumChngs); err != nil {
 				ss.lg.Fatal("Unable to retrieve changes from master", zap.Error(err))
 			}
