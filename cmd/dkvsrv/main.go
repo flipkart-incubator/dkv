@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/ini.v1"
 	"io/ioutil"
@@ -54,10 +53,10 @@ var (
 	vBucket          string
 
 	// Node level configuration common for all regions in the node
-	dbFolder     string
-	dbListenAddr string
-	statsdAddr   string
-	httpServerAddr   string
+	dbFolder       string
+	dbListenAddr   string
+	statsdAddr     string
+	httpServerAddr string
 
 	// Service discovery related params
 	discoveryConf string
@@ -77,14 +76,15 @@ var (
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 
-	statsCli stats.Client
+	statsCli       stats.Client
+	statsPublisher *stats.StatPublisher
 )
 
 func init() {
 	flag.BoolVar(&disklessMode, "diskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
 	flag.StringVar(&dbFolder, "db-folder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
-	flag.StringVar(&httpServerAddr,"http-server-addr","0.0.0.0:8181","Address on which the http service binds")
+	flag.StringVar(&httpServerAddr, "http-server-addr", "0.0.0.0:8181", "Address on which the http service binds")
 	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave|discovery")
@@ -142,7 +142,7 @@ func main() {
 	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
-	nodeAddr , err := nodeAddress()
+	nodeAddr, err := nodeAddress()
 	if err != nil {
 		log.Panicf("Failed to detect IP Address %v.", err)
 	}
@@ -424,6 +424,8 @@ func setupStats() {
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
+	statsPublisher = stats.NewStatPublisher()
+	go statsPublisher.Run()
 }
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
@@ -571,7 +573,7 @@ func nodeAddress() (*url.URL, error) {
 		}
 	}
 
-	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port )}
+	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port)}
 	return &ep, nil
 }
 
@@ -579,15 +581,15 @@ func setupHttpServer() {
 	router := mux.NewRouter()
 	router.Handle("/metrics/prometheus", promhttp.Handler())
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
-	router.HandleFunc("/metrics/stream",statsStreamHandler)
-	prometheus.Unregister(prometheus.NewGoCollector())
+	router.HandleFunc("/metrics/stream", statsStreamHandler)
 	http.Handle("/", router)
 	http.ListenAndServe(httpServerAddr, nil)
 }
 
-func jsonMetricHandler(w http.ResponseWriter, r *http.Request){
+func jsonMetricHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats.GetMetrics())
+	metrics, _ := stats.GetMetrics()
+	json.NewEncoder(w).Encode(metrics)
 }
 
 func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
@@ -600,22 +602,23 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
+		statChannel := make(chan stats.DKVMetrics, 5)
+		channelId := statsPublisher.Register(statChannel)
 		defer func() {
 			ioutil.ReadAll(r.Body)
 			r.Body.Close()
 		}()
-
 		// Listen to the closing of the http connection via the CloseNotifier
 		notify := w.(http.CloseNotifier).CloseNotify()
-		for ;; {
+		for {
 			select {
-			case <-notify :
-				return
-			default:
-				statJson, _ := json.Marshal(stats.GetMetrics())
+			case stat := <-statChannel:
+				statJson, _ := json.Marshal(stat)
 				fmt.Fprintf(w, "data: %s\n\n", statJson)
 				f.Flush()
-				time.Sleep(time.Second)
+			case <-notify:
+				statsPublisher.DeRegister(channelId)
+				return
 			}
 		}
 	}

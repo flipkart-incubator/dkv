@@ -1,7 +1,6 @@
 package stats
 
 import (
-	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"time"
 )
@@ -10,11 +9,11 @@ func MeasureLatency(observer prometheus.Observer, startTime time.Time) {
 	observer.Observe(time.Since(startTime).Seconds())
 }
 
-func GetMetrics() *DKVMetrics {
+func GetMetrics() (*DKVMetrics, error) {
 	dkvMetrics := newDKVMetric()
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
-		fmt.Println("yo...yo...yo...")
+		return dkvMetrics, err
 	}
 	for _, mf := range mfs {
 		switch mf.GetName() {
@@ -39,5 +38,5 @@ func GetMetrics() *DKVMetrics {
 			}
 		}
 	}
-	return dkvMetrics
+	return dkvMetrics, nil
 }

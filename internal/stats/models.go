@@ -1,6 +1,9 @@
 package stats
 
-import dto "github.com/prometheus/client_model/go"
+import (
+	dto "github.com/prometheus/client_model/go"
+	"time"
+)
 
 const (
 	Ops           = "ops"
@@ -18,17 +21,14 @@ const (
 )
 
 type DKVMetrics struct {
+	TimeStamp            int64                  `json:"ts"`
 	StoreLatency         map[string]*Percentile `json:"storage_latency"`
 	NexusLatency         map[string]*Percentile `json:"nexus_latency"`
 	DKVLatency           map[string]*Percentile `json:"dkv_latency"`
 	StorageOpsCount      map[string]uint64      `json:"storage_ops_count"`
 	StorageOpsErrorCount map[string]float64     `json:"storage_ops_error_count"`
 	NexusOpsCount        map[string]uint64      `json:"nexus_ops_count"`
-	DKVReqCount			map[string]uint64      `json:"dkv_req_count"`
-}
-
-func (dm *DKVMetrics) Merge(metrics *DKVMetrics) {
-
+	DKVReqCount          map[string]uint64      `json:"dkv_req_count"`
 }
 
 type Percentile struct {
@@ -39,13 +39,14 @@ type Percentile struct {
 
 func newDKVMetric() *DKVMetrics {
 	return &DKVMetrics{
+		TimeStamp:            time.Now().Unix(),
 		StoreLatency:         make(map[string]*Percentile),
 		NexusLatency:         make(map[string]*Percentile),
-		DKVLatency: make(map[string]*Percentile),
+		DKVLatency:           make(map[string]*Percentile),
 		StorageOpsCount:      make(map[string]uint64),
 		StorageOpsErrorCount: make(map[string]float64),
 		NexusOpsCount:        make(map[string]uint64),
-		DKVReqCount: make(map[string]uint64),
+		DKVReqCount:          make(map[string]uint64),
 	}
 }
 func newPercentile(quantile []*dto.Quantile) *Percentile {
