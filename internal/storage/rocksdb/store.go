@@ -256,7 +256,7 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 	if expireTS > 0 {
 		// TODO: PutTTL has duplicate measurement of latency
 		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
-		defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.PutTTL), time.Now())
+		defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.PutTTL), time.Now())
 
 		dF := ttlDataFormat{
 			ExpiryTS: expireTS,
@@ -265,7 +265,7 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 		msgPack, err := msgpack.Marshal(dF)
 		if err != nil {
 			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-			rdb.stat.ResponseError.WithLabelValues(storage.PutTTL).Inc()
+			rdb.stat.ResponseError.WithLabelValues(stats.PutTTL).Inc()
 			return err
 		}
 		wb := gorocksdb.NewWriteBatch()
@@ -274,7 +274,7 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 		err = rdb.db.Write(rdb.opts.writeOpts, wb)
 		if err != nil {
 			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-			rdb.stat.ResponseError.WithLabelValues(storage.PutTTL).Inc()
+			rdb.stat.ResponseError.WithLabelValues(stats.PutTTL).Inc()
 		}
 		return err
 	}
@@ -283,7 +283,7 @@ func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 
 func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.Put), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Put), time.Now())
 
 	wb := gorocksdb.NewWriteBatch()
 	wb.DeleteCF(rdb.ttlCF, key)
@@ -291,14 +291,14 @@ func (rdb *rocksDB) Put(key []byte, value []byte) error {
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
-		rdb.stat.ResponseError.WithLabelValues(storage.Put).Inc()
+		rdb.stat.ResponseError.WithLabelValues(stats.Put).Inc()
 	}
 	return err
 }
 
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.Delete), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Delete), time.Now())
 
 	wb := gorocksdb.NewWriteBatch()
 	wb.DeleteCF(rdb.ttlCF, key)
@@ -306,7 +306,7 @@ func (rdb *rocksDB) Delete(key []byte) error {
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
-		rdb.stat.ResponseError.WithLabelValues(storage.Delete).Inc()
+		rdb.stat.ResponseError.WithLabelValues(stats.Delete).Inc()
 	}
 	return err
 }
@@ -323,7 +323,7 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 
 func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.cas.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.CompareAndSet), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
 
 	ro := rdb.opts.readOpts
 	wo := rdb.opts.writeOpts
@@ -350,7 +350,7 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	err = txn.Put(key, update)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.cas.set.errors", 1)
-		rdb.stat.ResponseError.WithLabelValues(storage.CompareAndSet).Inc()
+		rdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	}
 	err = txn.Commit()
@@ -407,7 +407,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.GetSnapShot), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.GetSnapShot), time.Now())
 
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
@@ -445,7 +445,7 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		return nil
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.PutSnapShot), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.PutSnapShot), time.Now())
 	defer snap.Close()
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
@@ -569,7 +569,7 @@ func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.load.changes.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.LoadChange), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.LoadChange), time.Now())
 
 	chngIter, err := rdb.db.GetUpdatesSince(fromChangeNumber)
 	if err != nil {
@@ -593,7 +593,7 @@ func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.save.changes.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.SaveChange), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.SaveChange), time.Now())
 
 	appldChngNum := uint64(0)
 	for _, chng := range changes {
@@ -763,12 +763,12 @@ func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.Get), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Get), time.Now())
 
 	values, err := rdb.db.MultiGetCFMultiCF(ro, []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
-		rdb.stat.ResponseError.WithLabelValues(storage.Get).Inc()
+		rdb.stat.ResponseError.WithLabelValues(stats.Get).Inc()
 		return nil, err
 	}
 	value1, value2 := values[0], values[1]
@@ -811,7 +811,7 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
-	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(storage.MultiGet), time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.MultiGet), time.Now())
 
 	kl := len(keys)
 	reqCFs := make([]*gorocksdb.ColumnFamilyHandle, kl<<1)
@@ -823,7 +823,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	values, err := rdb.db.MultiGetCFMultiCF(ro, reqCFs, append(keys, keys...))
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
-		rdb.stat.ResponseError.WithLabelValues(storage.MultiGet).Inc()
+		rdb.stat.ResponseError.WithLabelValues(stats.MultiGet).Inc()
 		return nil, err
 	}
 

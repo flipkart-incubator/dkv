@@ -1,13 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"gopkg.in/ini.v1"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/ini.v1"
 	"io/ioutil"
 	"log"
 	"net"

@@ -192,7 +192,7 @@ func (bdb *badgerDB) Close() error {
 
 func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 	defer bdb.opts.statsCli.Timing("badger.putTTL.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.PutTTL), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.PutTTL), time.Now())
 
 	err := bdb.db.Update(func(txn *badger.Txn) error {
 		kv := badger.NewEntry(key, value)
@@ -203,21 +203,21 @@ func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
 	})
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.putTTL.errors", 1)
-		bdb.stat.ResponseError.WithLabelValues(storage.PutTTL).Inc()
+		bdb.stat.ResponseError.WithLabelValues(stats.PutTTL).Inc()
 	}
 	return err
 }
 
 func (bdb *badgerDB) Put(key []byte, value []byte) error {
 	defer bdb.opts.statsCli.Timing("badger.put.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.Put), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.Put), time.Now())
 
 	err := bdb.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.put.errors", 1)
-		bdb.stat.ResponseError.WithLabelValues(storage.Put).Inc()
+		bdb.stat.ResponseError.WithLabelValues(stats.Put).Inc()
 
 	}
 	return err
@@ -225,21 +225,21 @@ func (bdb *badgerDB) Put(key []byte, value []byte) error {
 
 func (bdb *badgerDB) Delete(key []byte) error {
 	defer bdb.opts.statsCli.Timing("badger.delete.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.Delete), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.Delete), time.Now())
 
 	err := bdb.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete(key)
 	})
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.delete.errors", 1)
-		bdb.stat.ResponseError.WithLabelValues(storage.Delete).Inc()
+		bdb.stat.ResponseError.WithLabelValues(stats.Delete).Inc()
 	}
 	return err
 }
 
 func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.Get), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.Get), time.Now())
 
 	var results []*serverpb.KVPair
 	err := bdb.db.View(func(txn *badger.Txn) error {
@@ -259,14 +259,14 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	})
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.get.errors", 1)
-		bdb.stat.ResponseError.WithLabelValues(storage.Get).Inc()
+		bdb.stat.ResponseError.WithLabelValues(stats.Get).Inc()
 	}
 	return results, err
 }
 
 func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	defer bdb.opts.statsCli.Timing("badger.cas.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.CompareAndSet), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
 
 	casTrxn := bdb.db.NewTransaction(true)
 	defer casTrxn.Discard()
@@ -279,7 +279,7 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 		}
 	case err != nil:
 		bdb.opts.statsCli.Incr("badger.cas.get.errors", 1)
-		bdb.stat.ResponseError.WithLabelValues(storage.CompareAndSet).Inc()
+		bdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	default:
 		existVal, _ := exist.ValueCopy(nil)
@@ -290,7 +290,7 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	err = casTrxn.Set(key, update)
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.cas.set.errors", 1)
-		bdb.stat.ResponseError.WithLabelValues(storage.CompareAndSet).Inc()
+		bdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	}
 	err = casTrxn.Commit()
@@ -306,7 +306,7 @@ const (
 
 func (bdb *badgerDB) GetSnapshot() (io.ReadCloser, error) {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.GetSnapShot), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.GetSnapShot), time.Now())
 
 	sstFile, err := storage.CreateTempFile(bdb.opts.sstDirectory, badgerSSTPrefix)
 	if err != nil {
@@ -340,7 +340,7 @@ func (bdb *badgerDB) GetSnapshot() (io.ReadCloser, error) {
 
 func (bdb *badgerDB) PutSnapshot(snap io.ReadCloser) error {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.put.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.PutSnapShot), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.PutSnapShot), time.Now())
 
 	wb := bdb.db.NewWriteBatch()
 	defer wb.Cancel()
@@ -499,7 +499,7 @@ func (bdb *badgerDB) GetLatestAppliedChangeNumber() (uint64, error) {
 
 func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer bdb.opts.statsCli.Timing("badger.save.changes.latency.ms", time.Now())
-	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(storage.SaveChange), time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.SaveChange), time.Now())
 
 	var appldChngNum uint64
 	var lastErr error

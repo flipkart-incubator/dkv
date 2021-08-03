@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"io/ioutil"
@@ -17,23 +18,6 @@ type KVEntry struct {
 	ExpireTS uint64
 }
 
-type storeOp string
-
-const (
-	storage       = "storage"
-	Ops           = "ops"
-	Put           = "put"
-	PutTTL        = "pTtl"
-	Get           = "get"
-	MultiGet      = "mget"
-	Delete        = "del"
-	GetSnapShot   = "getSnapShot"
-	PutSnapShot   = "putSnapShot"
-	Iterate       = "iter"
-	CompareAndSet = "cas"
-	LoadChange    = "loadChange"
-	SaveChange    = "saveChange"
-)
 
 type Stat struct {
 	RequestLatency *prometheus.SummaryVec
@@ -42,17 +26,17 @@ type Stat struct {
 
 func NewStat() *Stat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace:  storage,
+		Namespace:  "storage",
 		Name:       "latency",
 		Help:       "Latency statistics for storage operations",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
 		MaxAge: 10 * time.Second,
-	}, []string{Ops})
+	}, []string{stats.Ops})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: storage,
+		Namespace: "storage",
 		Name:      "error",
 		Help:      "Error count for storage operations",
-	}, []string{Ops})
+	}, []string{stats.Ops})
 	prometheus.MustRegister(RequestLatency, ResponseError)
 	return &Stat{RequestLatency, ResponseError}
 }
