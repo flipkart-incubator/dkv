@@ -18,7 +18,6 @@ type KVEntry struct {
 	ExpireTS uint64
 }
 
-
 type Stat struct {
 	RequestLatency *prometheus.SummaryVec
 	ResponseError  *prometheus.CounterVec
@@ -30,7 +29,7 @@ func NewStat() *Stat {
 		Name:       "latency",
 		Help:       "Latency statistics for storage operations",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge: 10 * time.Second,
+		MaxAge:     10 * time.Second,
 	}, []string{stats.Ops})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "storage",

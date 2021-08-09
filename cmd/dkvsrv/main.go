@@ -78,6 +78,8 @@ var (
 
 	statsCli       stats.Client
 	statsPublisher *stats.StatPublisher
+
+	discoveryClient discovery.Client
 )
 
 func init() {
@@ -149,6 +151,7 @@ func main() {
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            dcID,
 		NodeAddress:     nodeAddr.Host,
+		HttpAddress:     httpServerAddr,
 		Database:        database,
 		VBucket:         vBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -156,8 +159,7 @@ func main() {
 		NexusClusterUrl: nil,
 	}
 
-	var discoveryClient discovery.Client
-	if srvrRole != noRole && srvrRole != discoveryRole {
+	if srvrRole != noRole {
 		var err error
 		discoveryClient, err = newDiscoveryClient()
 		if err != nil {
@@ -582,6 +584,8 @@ func setupHttpServer() {
 	router.Handle("/metrics/prometheus", promhttp.Handler())
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
+	// Should be enabled only for discovery server ?
+	router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
 	http.Handle("/", router)
 	http.ListenAndServe(httpServerAddr, nil)
 }
@@ -622,4 +626,12 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// request can also send database and vBucket which can be applied to filter metrics.
+	regions, _ := discoveryClient.GetClusterStatus("", "")
+	// Group regions based on DC / database / vBucket and aggregate metrics accordingly
+	json.NewEncoder(w).Encode(regions)
 }

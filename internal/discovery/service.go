@@ -120,6 +120,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 			continue
 		}
 		// Filter inactive regions and regions whose status was updated long time back and hence considered inactive
+		// This simplifies logic on consumers of this API (envoy, slaves) which don't need to filter by status
 		if hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < d.config.HeartbeatTimeout && statusUpdate.GetRegionInfo().GetStatus() != serverpb.RegionStatus_INACTIVE {
 			regionsInfo = append(regionsInfo, statusUpdate.GetRegionInfo())
 		}

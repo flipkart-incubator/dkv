@@ -417,8 +417,7 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 
 }
 
-
-func TestTTLIteratorWithoutPrefix(t *testing.T)  {
+func TestTTLIteratorWithoutPrefix(t *testing.T) {
 	numTrxns := 3
 	keyPrefix4, valPrefix4 := "TTLStartKeyDD", "ccStartVal"
 	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2*time.Second).Unix())
@@ -437,7 +436,6 @@ func TestTTLIteratorWithoutPrefix(t *testing.T)  {
 		}
 	}
 }
-
 
 func TestIteratorFromStartKey(t *testing.T) {
 	numTrxns := 3

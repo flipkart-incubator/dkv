@@ -72,7 +72,6 @@ type stat struct {
 	ReplicationLag prometheus.Gauge
 }
 
-
 func newStat() *stat {
 	repliacationLag := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "slave",
@@ -84,7 +83,6 @@ func newStat() *stat {
 		ReplicationLag: repliacationLag,
 	}
 }
-
 
 // NewService creates a slave DKVService that periodically polls
 // for changes from master node and replicates them onto its local
@@ -101,7 +99,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
 	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,stat: newStat(),
+	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli, stat: newStat(),
 		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
 	ss.findAndConnectToMaster()
 	ss.startReplication()

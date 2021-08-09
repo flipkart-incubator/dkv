@@ -45,7 +45,7 @@ func newDKVServiceStat() *dkvServiceStat {
 		Name:       "latency",
 		Help:       "Latency statistics for dkv service",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge: 10 * time.Second,
+		MaxAge:     10 * time.Second,
 	}, []string{"Ops"})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dkv",
@@ -64,7 +64,7 @@ type standaloneService struct {
 	rwl        *sync.RWMutex
 	lg         *zap.Logger
 	statsCli   stats.Client
-	stat	   *dkvServiceStat
+	stat       *dkvServiceStat
 	regionInfo *serverpb.RegionInfo
 }
 
@@ -77,11 +77,11 @@ func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Emp
 func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli, newDKVServiceStat(),regionInfo}
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, newDKVServiceStat(), regionInfo}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Put),time.Now())
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Put), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 	if err := ss.store.PutTTL(putReq.Key, putReq.Value, putReq.ExpireTS); err != nil {
@@ -92,7 +92,7 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 }
 
 func (ss *standaloneService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
-	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Delete),time.Now())
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Delete), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 
@@ -104,7 +104,7 @@ func (ss *standaloneService) Delete(ctx context.Context, delReq *serverpb.Delete
 }
 
 func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Get+getReadConsistencySuffix(getReq.ReadConsistency)),time.Now())
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Get+getReadConsistencySuffix(getReq.ReadConsistency)), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 	readResults, err := ss.store.Get(getReq.Key)
@@ -123,7 +123,7 @@ func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetReques
 }
 
 func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.MultiGet+getReadConsistencySuffix(multiGetReq.ReadConsistency)),time.Now())
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.MultiGet+getReadConsistencySuffix(multiGetReq.ReadConsistency)), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 
@@ -139,7 +139,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 }
 
 func (ss *standaloneService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
-	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.CompareAndSet),time.Now())
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.CompareAndSet), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 
@@ -298,7 +298,7 @@ func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.R
 }
 
 func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
-	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Iterate),time.Now())
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.Iterate), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 
@@ -344,11 +344,11 @@ type distributedService struct {
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
 	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli,newDKVServiceStat(), false}
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, newDKVServiceStat(), false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
-	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Put),time.Now())
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Put), time.Now())
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Put: putReq})
 	res := &serverpb.PutResponse{Status: newEmptyStatus()}
 	if err != nil {
@@ -364,7 +364,7 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 }
 
 func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverpb.CompareAndSetRequest) (*serverpb.CompareAndSetResponse, error) {
-	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.CompareAndSet),time.Now())
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.CompareAndSet), time.Now())
 	reqBts, _ := proto.Marshal(&raftpb.InternalRaftRequest{Cas: casReq})
 	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
 	casRes, err := ds.raftRepl.Save(ctx, reqBts)
@@ -379,7 +379,7 @@ func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverp
 }
 
 func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
-	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Delete),time.Now())
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Delete), time.Now())
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Delete: delReq})
 	res := &serverpb.DeleteResponse{Status: newEmptyStatus()}
 	if err != nil {
@@ -395,7 +395,7 @@ func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.Delet
 }
 
 func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
-	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Get+getReadConsistencySuffix(getReq.GetReadConsistency())),time.Now())
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Get+getReadConsistencySuffix(getReq.GetReadConsistency())), time.Now())
 	switch getReq.ReadConsistency {
 	case serverpb.ReadConsistency_SEQUENTIAL:
 		return ds.DKVService.Get(ctx, getReq)
@@ -425,7 +425,7 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 }
 
 func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
-	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.MultiGet+getReadConsistencySuffix(multiGetReq.GetReadConsistency())),time.Now())
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.MultiGet+getReadConsistencySuffix(multiGetReq.GetReadConsistency())), time.Now())
 	switch multiGetReq.ReadConsistency {
 	case serverpb.ReadConsistency_SEQUENTIAL:
 		return ds.DKVService.MultiGet(ctx, multiGetReq)
@@ -456,7 +456,7 @@ func gobDecodeAsKVPairs(val []byte) ([]*serverpb.KVPair, error) {
 }
 
 func (ds *distributedService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
-	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Iterate),time.Now())
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.Iterate), time.Now())
 	return ds.DKVService.Iterate(iterReq, dkvIterSrvr)
 }
 

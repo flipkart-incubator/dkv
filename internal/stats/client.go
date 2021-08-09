@@ -81,4 +81,3 @@ func (sdc *statsDClient) Timing(name string, startTime time.Time) {
 func (sdc *statsDClient) Close() error {
 	return sdc.cli.Close()
 }
-
