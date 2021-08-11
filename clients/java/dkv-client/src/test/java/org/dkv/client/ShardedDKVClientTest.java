@@ -9,9 +9,7 @@ import org.junit.Test;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static dkv.serverpb.Api.ReadConsistency.LINEARIZABLE;
 import static dkv.serverpb.Api.ReadConsistency.SEQUENTIAL;
@@ -104,8 +102,19 @@ public class ShardedDKVClientTest {
             dkvClient.put(items);
         }
 
-        KV.Strings[] vals = dkvClient.multiGet(SEQUENTIAL, keys);
-        assertValues(keyF, keys, vals);
+        //should not throw any error. But we can't use this for test.
+        dkvClient.multiGet(SEQUENTIAL, keys);
+
+        //lets do a LINEARIZABLE read.
+        List<KV.Strings> results = new ArrayList<>();
+        for (List<String> part: dkvShardListMap.values()) {
+            String[] items = new String[part.size()];
+            part.toArray(items);
+            KV.Strings[] result = dkvClient.multiGet(LINEARIZABLE, items);
+            results.addAll(Arrays.asList(result));
+        }
+
+        assertValues(keyF, keys, results.stream().toArray(KV.Strings[]::new));
     }
 
     private void assertValues(String keyPref, String[] keys, KV.Strings[] vals) {
