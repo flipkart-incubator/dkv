@@ -6,11 +6,12 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
+
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -378,8 +379,6 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 			} else {
 				if kvs != nil && len(kvs) == 1 {
 					res.Value = kvs[0].Value
-				} else {
-					loadError = fmt.Errorf("unable to compute value for given key from %v", kvs)
 				}
 			}
 		}
