@@ -349,20 +349,6 @@ public class SimpleDKVClient implements DKVClient {
         }
     }
 
-    private void puts(ByteString keyByteStr, ByteString valByteStr, long expiryTS) {
-        Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
-        Api.PutRequest putReq = putReqBuilder
-                .setKey(keyByteStr)
-                .setValue(valByteStr)
-                .setExpireTS(expiryTS)
-                .build();
-        Api.Status status = blockingStub.put(putReq).getStatus();
-        if (status.getCode() != 0) {
-            throw new DKVException(status, "Put", new Object[]{keyByteStr.toByteArray(), valByteStr.toByteArray()});
-        }
-    }
-
-
     private ByteString get(Api.ReadConsistency consistency, ByteString keyByteStr) {
         Api.GetRequest.Builder getReqBuilder = Api.GetRequest.newBuilder();
         Api.GetRequest getReq = getReqBuilder
