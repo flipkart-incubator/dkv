@@ -9,13 +9,6 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-// KVEntry represents a single key-value pair entry
-type KVEntry struct {
-	Key      []byte
-	Value    []byte
-	ExpireTS uint64
-}
-
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various
 // DKV operations.
@@ -23,11 +16,11 @@ type KVStore interface {
 	io.Closer
 	// Put stores the association between the given key and value and
 	// optionally sets the expireTS of the key to the provided epoch in seconds
-	Put(pairs ...*KVEntry) error
+	Put(pairs ...*serverpb.KVPair) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
-	Get(keys ...[]byte) ([]*KVEntry, error)
+	Get(keys ...[]byte) ([]*serverpb.KVPair, error)
 	// Delete deletes the given key.
 	Delete(key []byte) error
 	// GetSnapshot retrieves the entire keyspace representation

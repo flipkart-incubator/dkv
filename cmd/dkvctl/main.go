@@ -282,10 +282,10 @@ func main() {
 
 	var validCmd bool
 	for _, c := range cmds {
-		if !isFlagPassed(c.name){
+		if !isFlagPassed(c.name) {
 			continue
 		}
-		if  c.value != "" || c.emptyValue {
+		if c.value != "" || c.emptyValue {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)
 			c.fn(c, client, args...)
@@ -297,4 +297,3 @@ func main() {
 		usage()
 	}
 }
-

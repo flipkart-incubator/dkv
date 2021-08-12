@@ -189,7 +189,7 @@ func (bdb *badgerDB) Close() error {
 	return nil
 }
 
-func (bdb *badgerDB) Put(pairs ...*storage.KVEntry) error {
+func (bdb *badgerDB) Put(pairs ...*serverpb.KVPair) error {
 	metricsPrefix := "badger.put.multi"
 	if len(pairs) == 1 {
 		metricsPrefix = "badger.put.single"
@@ -229,16 +229,16 @@ func (bdb *badgerDB) Delete(key []byte) error {
 	return err
 }
 
-func (bdb *badgerDB) Get(keys ...[]byte) ([]*storage.KVEntry, error) {
+func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
-	var results []*storage.KVEntry
+	var results []*serverpb.KVPair
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
 			item, err := txn.Get(key)
 			switch err {
 			case nil:
 				value, _ := item.ValueCopy(nil)
-				results = append(results, &storage.KVEntry{Key: key, Value: value})
+				results = append(results, &serverpb.KVPair{Key: key, Value: value})
 			case badger.ErrKeyNotFound:
 				continue
 			default:
@@ -579,7 +579,7 @@ func (bdbIter *iter) HasNext() bool {
 	return bdbIter.it.Valid()
 }
 
-func (bdbIter *iter) Next() *storage.KVEntry {
+func (bdbIter *iter) Next() *serverpb.KVPair {
 	defer bdbIter.it.Next()
 	item := bdbIter.it.Item()
 	key := item.KeyCopy(nil)
@@ -587,7 +587,7 @@ func (bdbIter *iter) Next() *storage.KVEntry {
 	if err != nil {
 		bdbIter.iterErr = err
 	}
-	return &storage.KVEntry{Key: key, Value: val, ExpireTS: item.ExpiresAt()}
+	return &serverpb.KVPair{Key: key, Value: val, ExpireTS: item.ExpiresAt()}
 }
 
 func (bdbIter *iter) Err() error {

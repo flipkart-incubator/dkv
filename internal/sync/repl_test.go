@@ -148,7 +148,7 @@ func newMemStore() *memStore {
 	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
 }
 
-func (ms *memStore) Put(pairs ...*storage.KVEntry) error {
+func (ms *memStore) Put(pairs ...*serverpb.KVPair) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
@@ -172,8 +172,8 @@ func (ms *memStore) Delete(key []byte) error {
 	return nil
 }
 
-func (ms *memStore) Get(keys ...[]byte) ([]*storage.KVEntry, error) {
-	rss := make([]*storage.KVEntry, len(keys))
+func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
+	rss := make([]*serverpb.KVPair, len(keys))
 	for i, key := range keys {
 		storeKey := string(key)
 		if val, present := ms.store[storeKey]; present {
@@ -181,7 +181,7 @@ func (ms *memStore) Get(keys ...[]byte) ([]*storage.KVEntry, error) {
 			if val.expiryTS == 0 || val.expiryTS > hlc.UnixNow() {
 				v = val.data
 			}
-			rss[i] = &storage.KVEntry{Key: key, Value: v}
+			rss[i] = &serverpb.KVPair{Key: key, Value: v}
 		} else {
 			return nil, errors.New("Given key not found")
 		}

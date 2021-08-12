@@ -59,7 +59,7 @@ func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
-	if err := ss.store.Put(&storage.KVEntry{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS}); err != nil {
+	if err := ss.store.Put(&serverpb.KVPair{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS}); err != nil {
 		ss.lg.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
@@ -69,9 +69,9 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 func (ss *standaloneService) MultiPut(ctx context.Context, putReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
-	puts := make([]*storage.KVEntry, len(putReq.PutRequest))
+	puts := make([]*serverpb.KVPair, len(putReq.PutRequest))
 	for i, request := range putReq.PutRequest {
-		puts[i] = &storage.KVEntry{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
+		puts[i] = &serverpb.KVPair{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
 	}
 
 	if err := ss.store.Put(puts...); err != nil {
@@ -121,10 +121,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 		ss.lg.Error("Unable to MultiGET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
-		res.KeyValues = make([]*serverpb.KVPair, len(readResults))
-		for i, result := range readResults {
-			res.KeyValues[i] = &serverpb.KVPair{Key: result.Key,Value: result.Value}
-		}
+		res.KeyValues = readResults
 	}
 	return res, err
 }
@@ -188,7 +185,7 @@ func (ss *standaloneService) AddReplica(ctx context.Context, replica *serverpb.R
 
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
-	if err := ss.store.Put(&storage.KVEntry{Key: []byte(replicaKey), Value: []byte(replicaValue)}); err != nil {
+	if err := ss.store.Put(&serverpb.KVPair{Key: []byte(replicaKey), Value: []byte(replicaValue)}); err != nil {
 		ss.lg.Error("Unable to add replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
@@ -290,7 +287,7 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 	defer ss.rwl.RUnlock()
 
 	iteration := storage.NewIteration(ss.store, iterReq)
-	err := iteration.ForEach(func(e *storage.KVEntry) error {
+	err := iteration.ForEach(func(e *serverpb.KVPair) error {
 		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: e.Key, Value: e.Value}
 		return dkvIterSrvr.Send(itRes)
 	})
