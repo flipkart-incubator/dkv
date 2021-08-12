@@ -1,7 +1,7 @@
 package iterators
 
 import (
-	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"testing"
 )
 
