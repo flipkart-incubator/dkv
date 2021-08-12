@@ -4,7 +4,7 @@
     <groupId>org.dkv.client</groupId>
     <artifactId>dkv-client</artifactId>
     <packaging>jar</packaging>
-    <version>1.5-SNAPSHOT</version>
+    <version>1.0.6-SNAPSHOT</version>
     <properties>
         <proto-file-path>../../../pkg/serverpb/</proto-file-path>
         <grpc.version>1.39.0</grpc.version>
