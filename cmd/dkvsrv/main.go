@@ -135,7 +135,7 @@ func main() {
 	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
-	nodeAddr , err := nodeAddress()
+	nodeAddr, err := nodeAddress()
 	if err != nil {
 		log.Panicf("Failed to detect IP Address %v.", err)
 	}
@@ -564,6 +564,6 @@ func nodeAddress() (*url.URL, error) {
 		}
 	}
 
-	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port )}
+	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port)}
 	return &ep, nil
 }

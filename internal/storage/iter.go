@@ -76,7 +76,7 @@ func IterationStartKey(start []byte) IterationOption {
 type Iterator interface {
 	io.Closer
 	HasNext() bool
-	Next() *KVEntry
+	Next() *serverpb.KVPair
 	Err() error
 }
 
@@ -84,7 +84,7 @@ type Iterator interface {
 // that allows for a given handler to be invoked exactly
 // once for every key value pair iterated.
 type Iteration interface {
-	ForEach(func(*KVEntry) error) error
+	ForEach(func(*serverpb.KVPair) error) error
 }
 
 type iteration struct {
@@ -92,7 +92,7 @@ type iteration struct {
 	opts *iterOpts
 }
 
-func (iter *iteration) ForEach(hndlr func(*KVEntry) error) error {
+func (iter *iteration) ForEach(hndlr func(*serverpb.KVPair) error) error {
 	if err := iter.opts.validate(); err != nil {
 		return err
 	}

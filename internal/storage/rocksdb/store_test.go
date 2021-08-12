@@ -78,7 +78,7 @@ func TestPutAndGet(t *testing.T) {
 
 func TestMultiPutAndGet(t *testing.T) {
 	numKeys := 10
-	items := make([]*storage.KVEntry, numKeys+1)
+	items := make([]*serverpb.KVPair, numKeys+1)
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("MPK%d", i), fmt.Sprintf("VALUEXXXX%d", i)
 		items[i] = kvEntry(key, value)
@@ -117,7 +117,7 @@ func TestPutIntAndGet(t *testing.T) {
 		if i%2 == 0 {
 			ttl = 0
 		}
-		if err := store.Put(&storage.KVEntry{[]byte(key), b, uint64(ttl)}); err != nil {
+		if err := store.Put(&serverpb.KVPair{[]byte(key), b, uint64(ttl)}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -167,7 +167,7 @@ func TestCompactionFilterOnExpiredKeys(t *testing.T) {
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("%s_%d", keyPref, i), fmt.Sprintf("V%d", i)
 		expireAt := time.Now().Add(-2 * time.Second).Unix()
-		if err := store.Put(&storage.KVEntry{[]byte(key), []byte(value), uint64(expireAt)}); err != nil {
+		if err := store.Put(&serverpb.KVPair{[]byte(key), []byte(value), uint64(expireAt)}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -191,7 +191,7 @@ func TestPutTTLAndGet(t *testing.T) {
 	for i := 1; i <= numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
 		if err := store.Put(
-			&storage.KVEntry{Key: []byte(key), Value: []byte(value),
+			&serverpb.KVPair{Key: []byte(key), Value: []byte(value),
 				ExpireTS: uint64(time.Now().Add(2 * time.Second).Unix())}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
@@ -200,7 +200,7 @@ func TestPutTTLAndGet(t *testing.T) {
 	for i := 11; i <= 10+numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
 		if err := store.Put(
-			&storage.KVEntry{Key: []byte(key), Value: []byte(value),
+			&serverpb.KVPair{Key: []byte(key), Value: []byte(value),
 				ExpireTS: uint64(time.Now().Add(-2 * time.Second).Unix())}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
@@ -242,7 +242,7 @@ func TestPutEmptyValue(t *testing.T) {
 	}
 
 	// update nil value for same key
-	if err := store.Put(&storage.KVEntry{Key: []byte(key), Value: nil}); err != nil {
+	if err := store.Put(&serverpb.KVPair{Key: []byte(key), Value: nil}); err != nil {
 		t.Fatalf("Unable to PUT empty value. Key: %s", key)
 	}
 
@@ -445,8 +445,7 @@ func TestIteratorFromStartKeyWithTTL(t *testing.T) {
 
 }
 
-
-func TestTTLIteratorWithoutPrefix(t *testing.T)  {
+func TestTTLIteratorWithoutPrefix(t *testing.T) {
 	numTrxns := 3
 	keyPrefix4, valPrefix4 := "TTLStartKeyDD", "ccStartVal"
 	putKeys(t, numTrxns, keyPrefix4, valPrefix4, time.Now().Add(-2*time.Second).Unix())
@@ -465,7 +464,6 @@ func TestTTLIteratorWithoutPrefix(t *testing.T)  {
 		}
 	}
 }
-
 
 func TestIteratorFromStartKey(t *testing.T) {
 	numTrxns := 3
@@ -577,7 +575,7 @@ func TestMultiGet(t *testing.T) {
 		if i&1 == 1 {
 			ttl = time.Now().Add(2 * time.Second).Unix()
 		}
-		err := store.Put(&storage.KVEntry{[]byte(key), []byte(value), uint64(ttl)})
+		err := store.Put(&serverpb.KVPair{[]byte(key), []byte(value), uint64(ttl)})
 		if err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		} else {
@@ -846,7 +844,7 @@ func TestAtomicIncrDecr(t *testing.T) {
 		numThrs        = 10
 		casKey, casVal = []byte("ctrKey"), []byte{0}
 	)
-	store.Put(&storage.KVEntry{Key: casKey, Value: casVal})
+	store.Put(&serverpb.KVPair{Key: casKey, Value: casVal})
 
 	// even threads increment, odd threads decrement
 	// a given key
@@ -1094,7 +1092,7 @@ func BenchmarkMergeOperators(b *testing.B) {
 
 func BenchmarkCompareAndSet(b *testing.B) {
 	ctrKey := []byte("num")
-	err := store.Put(&storage.KVEntry{Key: ctrKey, Value: []byte{0}})
+	err := store.Put(&serverpb.KVPair{Key: ctrKey, Value: []byte{0}})
 	if err != nil {
 		b.Errorf("Unable to PUT. Error: %v", err)
 	}
@@ -1270,7 +1268,7 @@ func putKeys(t testing.TB, numKeys int, keyPrefix, valPrefix string, ttl int64) 
 	data := make(map[string]string, numKeys)
 	for i := 1; i <= numKeys; i++ {
 		k, v := fmt.Sprintf("%s_%d", keyPrefix, i), fmt.Sprintf("%s_%d", valPrefix, i)
-		if err := store.Put(&storage.KVEntry{Key: []byte(k), Value: []byte(v), ExpireTS: uint64(ttl)}); err != nil {
+		if err := store.Put(&serverpb.KVPair{Key: []byte(k), Value: []byte(v), ExpireTS: uint64(ttl)}); err != nil {
 			t.Fatal(err)
 		} else {
 			if readResults, err := store.Get([]byte(k)); err != nil {
@@ -1306,6 +1304,6 @@ func openRocksDB() (*rocksDB, error) {
 	return db.(*rocksDB), err
 }
 
-func kvEntry(key, value string) *storage.KVEntry {
-	return &storage.KVEntry{Key: []byte(key), Value: []byte(value)}
+func kvEntry(key, value string) *serverpb.KVPair {
+	return &serverpb.KVPair{Key: []byte(key), Value: []byte(value)}
 }

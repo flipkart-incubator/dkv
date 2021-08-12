@@ -69,7 +69,7 @@ func TestPutAndGet(t *testing.T) {
 
 func TestMultiPutAndGet(t *testing.T) {
 	numKeys := 10
-	items := make([]*storage.KVEntry, numKeys+1)
+	items := make([]*serverpb.KVPair, numKeys+1)
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("MPK%d", i), fmt.Sprintf("VALUEXXXX%d", i)
 		items[i] = kvEntry(key, value)
@@ -115,7 +115,7 @@ func TestPutEmptyValue(t *testing.T) {
 	}
 
 	// update nil value for same key
-	if err := store.Put(&storage.KVEntry{Key: []byte(key)}); err != nil {
+	if err := store.Put(&serverpb.KVPair{Key: []byte(key)}); err != nil {
 		t.Fatalf("Unable to PUT empty value. Key: %s", key)
 	}
 
@@ -221,7 +221,7 @@ func TestAtomicIncrDecr(t *testing.T) {
 		numThrs        = 10
 		casKey, casVal = []byte("ctrKey"), []byte{0}
 	)
-	store.Put(&storage.KVEntry{Key: casKey, Value: casVal})
+	store.Put(&serverpb.KVPair{Key: casKey, Value: casVal})
 
 	// even threads increment, odd threads decrement
 	// a given key
@@ -450,7 +450,7 @@ func TestPutTTLAndGet(t *testing.T) {
 	numIteration := 10
 	for i := 1; i <= numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
-		if err := store.Put(&storage.KVEntry{Key: []byte(key), Value: []byte(value),
+		if err := store.Put(&serverpb.KVPair{Key: []byte(key), Value: []byte(value),
 			ExpireTS: uint64(time.Now().Add(2 * time.Second).Unix())}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
@@ -458,7 +458,7 @@ func TestPutTTLAndGet(t *testing.T) {
 
 	for i := 11; i <= 10+numIteration; i++ {
 		key, value := fmt.Sprintf("KTTL%d", i), fmt.Sprintf("V%d", i)
-		if err := store.Put(&storage.KVEntry{Key: []byte(key), Value: []byte(value),
+		if err := store.Put(&serverpb.KVPair{Key: []byte(key), Value: []byte(value),
 			ExpireTS: uint64(time.Now().Add(-2 * time.Second).Unix())}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
@@ -720,7 +720,7 @@ func BenchmarkGetMissingKey(b *testing.B) {
 
 func BenchmarkCompareAndSet(b *testing.B) {
 	ctrKey := []byte("num")
-	err := store.Put(&storage.KVEntry{Key: ctrKey, Value: []byte{0}})
+	err := store.Put(&serverpb.KVPair{Key: ctrKey, Value: []byte{0}})
 	if err != nil {
 		b.Errorf("Unable to PUT. Error: %v", err)
 	}
@@ -915,6 +915,6 @@ func openBadgerDB() (*badgerDB, error) {
 	return kvs.(*badgerDB), err
 }
 
-func kvEntry(key, value string) *storage.KVEntry {
-	return &storage.KVEntry{Key: []byte(key), Value: []byte(value)}
+func kvEntry(key, value string) *serverpb.KVPair {
+	return &serverpb.KVPair{Key: []byte(key), Value: []byte(value)}
 }

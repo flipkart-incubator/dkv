@@ -124,17 +124,14 @@ func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.Mult
 	if err != nil {
 		res.Status = newErrorStatus(err)
 	} else {
-		res.KeyValues = make([]*serverpb.KVPair, len(readResults))
-		for i, result := range readResults {
-			res.KeyValues[i] = &serverpb.KVPair{Key: result.Key,Value: result.Value}
-		}
+		res.KeyValues = readResults
 	}
 	return res, err
 }
 
 func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
 	iteration := storage.NewIteration(ss.store, iterReq)
-	err := iteration.ForEach(func(e *storage.KVEntry) error {
+	err := iteration.ForEach(func(e *serverpb.KVPair) error {
 		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: e.Key, Value: e.Value}
 		return dkvIterSrvr.Send(itRes)
 	})

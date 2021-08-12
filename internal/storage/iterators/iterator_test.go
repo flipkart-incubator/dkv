@@ -15,10 +15,10 @@ func (si *simpleIterator) HasNext() bool {
 	return si.currentPos < len(si.data)
 }
 
-func (si *simpleIterator) Next() *storage.KVEntry {
+func (si *simpleIterator) Next() *serverpb.KVPair {
 	d := si.data[si.currentPos]
 	si.currentPos++
-	return &storage.KVEntry{Key: []byte(d), Value: []byte(d)}
+	return &serverpb.KVPair{Key: []byte(d), Value: []byte(d)}
 }
 
 func (si *simpleIterator) Err() error {
