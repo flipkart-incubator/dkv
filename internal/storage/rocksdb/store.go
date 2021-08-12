@@ -4,15 +4,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
-	"github.com/shamaton/msgpack"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
+	"github.com/flipkart-incubator/dkv/internal/storage/utils"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -248,38 +250,38 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
-	if expireTS > 0 {
-		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
-		dF := ttlDataFormat{
-			ExpiryTS: expireTS,
-			Data:     value,
-		}
-		msgPack, err := msgpack.Marshal(dF)
-		if err != nil {
-			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-			return err
-		}
-		wb := gorocksdb.NewWriteBatch()
-		wb.Delete(key)
-		wb.PutCF(rdb.ttlCF, key, msgPack)
-		err = rdb.db.Write(rdb.opts.writeOpts, wb)
-		if err != nil {
-			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-		}
-		return err
+func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
+	metricsPrefix := "rocksdb.put.multi"
+	if len(pairs) == 1 {
+		metricsPrefix = "rocksdb.put.single"
 	}
-	return rdb.Put(key, value)
-}
 
-func (rdb *rocksDB) Put(key []byte, value []byte) error {
-	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
+	defer rdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
 	wb := gorocksdb.NewWriteBatch()
-	wb.DeleteCF(rdb.ttlCF, key)
-	wb.Put(key, value)
+	for _, kv := range pairs {
+		if kv == nil {
+			continue //skip nil entries
+		}
+		if kv.ExpireTS > 0 {
+			dF := ttlDataFormat{
+				ExpiryTS: kv.ExpireTS,
+				Data:     kv.Value,
+			}
+			msgPack, err := msgpack.Marshal(dF)
+			if err != nil {
+				rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
+				return err
+			}
+			wb.DeleteCF(rdb.normalCF, kv.Key)
+			wb.PutCF(rdb.ttlCF, kv.Key, msgPack)
+		} else {
+			wb.DeleteCF(rdb.ttlCF, kv.Key)
+			wb.PutCF(rdb.normalCF, kv.Key, kv.Value)
+		}
+	}
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
-		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
+		rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
 	}
 	return err
 }
@@ -342,25 +344,25 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
-const tempFilePrefix = "rocksdb-sstfile-"
+const (
+	sstPrefix    = "rocksdb-sstfile-"
+	sstDefaultCF = "/default.cf"
+	sstTtlCF     = "/ttl.cf"
+)
 
-func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
-	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
-	snap := rdb.db.NewSnapshot()
-	defer rdb.db.ReleaseSnapshot(snap)
-
+func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) (*os.File, error) {
+	var fileName string
 	envOpts := gorocksdb.NewDefaultEnvOptions()
 	opts := gorocksdb.NewDefaultOptions()
 	sstWrtr := gorocksdb.NewSSTFileWriter(envOpts, opts)
 	defer sstWrtr.Destroy()
 
-	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
-	if err != nil {
-		return nil, err
+	if fileName = sstDir + sstDefaultCF; cf == rdb.ttlCF {
+		fileName = sstDir + sstTtlCF
 	}
 
-	defer os.Remove(sstFile)
-	if err = sstWrtr.Open(sstFile); err != nil {
+	if err := sstWrtr.Open(fileName); err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to open sst writer", zap.Error(err))
 		return nil, err
 	}
 
@@ -369,7 +371,7 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 	defer readOpts.Destroy()
 	readOpts.SetSnapshot(snap)
 
-	it := rdb.db.NewIterator(readOpts)
+	it := rdb.db.NewIteratorCF(readOpts, cf)
 	defer it.Close()
 	it.SeekToFirst()
 
@@ -378,31 +380,65 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 			sstWrtr.Add(it.Key().Data(), it.Value().Data())
 			it.Next()
 		}
-	} else {
-		return nil, nil
+
+		if err := sstWrtr.Finish(); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = sstWrtr.Finish(); err != nil {
+	return os.Open(fileName)
+}
+
+func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
+	snap := rdb.db.NewSnapshot()
+	defer rdb.db.ReleaseSnapshot(snap)
+
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
+		return nil, err
+	}
+	defer os.RemoveAll(sstDir)
+
+	normalSSTFile, err := rdb.generateSST(snap, rdb.normalCF, sstDir)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to generate sst file", zap.Error(err))
 		return nil, err
 	}
 
-	return ioutil.ReadFile(sstFile)
+	ttlSSTFile, err := rdb.generateSST(snap, rdb.ttlCF, sstDir)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to generate ttl sst file", zap.Error(err))
+		return nil, err
+	}
+
+	tarF, err := utils.CreateStreamingTar(normalSSTFile, ttlSSTFile)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
+		return nil, err
+	}
+
+	return tarF, nil
 }
 
-func (rdb *rocksDB) PutSnapshot(snap []byte) error {
-	if snap == nil || len(snap) == 0 {
+func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
+	if snap == nil {
 		return nil
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
+	defer snap.Close()
 
-	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return err
 	}
+	defer os.RemoveAll(sstDir)
 
-	defer os.Remove(sstFile)
-	err = ioutil.WriteFile(sstFile, snap, 0644)
+	_, err = utils.ExtractTar(snap, fmt.Sprintf("%s/", sstDir))
 	if err != nil {
+		rdb.opts.lgr.Error("PutSnapshot: Failed to extract files from snap", zap.Error(err))
 		return err
 	}
 
@@ -410,8 +446,29 @@ func (rdb *rocksDB) PutSnapshot(snap []byte) error {
 	ingestOpts := gorocksdb.NewDefaultIngestExternalFileOptions()
 	defer ingestOpts.Destroy()
 
-	err = rdb.db.IngestExternalFile([]string{sstFile}, ingestOpts)
-	return err
+	for _, cf := range []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF} {
+
+		var fileName string
+		if fileName = sstDir + sstDefaultCF; cf == rdb.ttlCF {
+			fileName = sstDir + sstTtlCF
+		}
+
+		sfi, err := os.Stat(fileName)
+		if err != nil {
+			return err
+		}
+		if sfi.Size() > 0 {
+			err = rdb.db.IngestExternalFileCF(cf, []string{fileName}, ingestOpts)
+			if err != nil {
+				rdb.opts.lgr.Error("PutSnapshot: Failed to ingest sst file", zap.Error(err))
+				return err
+			}
+		} else {
+			rdb.opts.lgr.Warn("PutSnapshot: Skipped to ingest sst file as size is 0", zap.String("file", fileName))
+		}
+	}
+
+	return nil
 }
 
 func (rdb *rocksDB) BackupTo(folder string) error {
@@ -523,7 +580,8 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 		if err != nil {
 			return appldChngNum, err
 		}
-		appldChngNum = chng.ChangeNumber
+		// at changeNum 3 with NumTxn = 2. Applied should be 4. Ie. 3 + 2 -1
+		appldChngNum = chng.ChangeNumber + uint64(chng.NumberOfTrxns) - 1
 	}
 	return appldChngNum, nil
 }
@@ -534,8 +592,7 @@ type iter struct {
 	ttlCF    bool
 }
 
-func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions, cf *gorocksdb.ColumnFamilyHandle) *iter {
-	readOpts := rdb.opts.readOpts
+func (rdb *rocksDB) newIterCF(readOpts *gorocksdb.ReadOptions, iterOpts storage.IterationOptions, cf *gorocksdb.ColumnFamilyHandle) *iter {
 	it := rdb.db.NewIteratorCF(readOpts, cf)
 	if sk, present := iterOpts.StartKey(); present {
 		it.Seek(sk)
@@ -569,10 +626,19 @@ func (rdbIter *iter) HasNext() bool {
 		}
 		return false
 	}
-	return rdbIter.rdbIter.Valid()
+
+	//do ttl validity for without prefix scan also.
+	if rdbIter.rdbIter.Valid() {
+		if rdbIter.verifyTTLValidity() {
+			return true
+		}
+		rdbIter.rdbIter.Next()
+		return rdbIter.HasNext()
+	}
+	return false
 }
 
-func (rdbIter *iter) Next() ([]byte, []byte) {
+func (rdbIter *iter) Next() *serverpb.KVPair {
 	defer rdbIter.rdbIter.Next()
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
@@ -581,9 +647,9 @@ func (rdbIter *iter) Next() ([]byte, []byte) {
 		ttlRow, _ = parseTTLMsgPackData(val)
 	}
 	if ttlRow != nil && ttlRow.ExpiryTS > 0 {
-		val = ttlRow.Data
+		return &serverpb.KVPair{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}
-	return key, val
+	return &serverpb.KVPair{Key: key, Value: val}
 }
 
 func (rdbIter *iter) Err() error {
@@ -596,8 +662,9 @@ func (rdbIter *iter) Close() error {
 }
 
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	baseIter := rdb.newIterCF(iterOpts, rdb.normalCF)
-	ttlIter := rdb.newIterCF(iterOpts, rdb.ttlCF)
+	readOpts := rdb.opts.readOpts
+	baseIter := rdb.newIterCF(readOpts, iterOpts, rdb.normalCF)
+	ttlIter := rdb.newIterCF(readOpts, iterOpts, rdb.ttlCF)
 	return iterators.Concat(baseIter, ttlIter)
 }
 
@@ -710,7 +777,7 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 		} else if ttlRow.ExpiryTS > 0 {
 			val = ttlRow.Data
 		}
-		return &serverpb.KVPair{Key: key, Value: val}
+		return &serverpb.KVPair{Key: key, Value: val, ExpireTS: ttlRow.ExpiryTS}
 	}
 
 	return nil

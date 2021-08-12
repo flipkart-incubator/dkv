@@ -14,11 +14,9 @@ import (
 // DKV operations.
 type KVStore interface {
 	io.Closer
-	// Put stores the association between the given key and value
-	Put(key []byte, value []byte) error
-	// PutTTL stores the association between the given key and value
-	// and sets the expireTS of the key to the provided epoch in seconds
-	PutTTL(key []byte, value []byte, expireTS uint64) error
+	// Put stores the association between the given key and value and
+	// optionally sets the expireTS of the key to the provided epoch in seconds
+	Put(pairs ...*serverpb.KVPair) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
@@ -27,11 +25,11 @@ type KVStore interface {
 	Delete(key []byte) error
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
-	GetSnapshot() ([]byte, error)
+	GetSnapshot() (io.ReadCloser, error)
 	// PutSnapshot ingests the given keyspace representation wholly
 	// into the current state. Any existing state will be discarded
 	// or replaced with the given state.
-	PutSnapshot([]byte) error
+	PutSnapshot(io.ReadCloser) error
 	// Iterate iterates through the entire keyspace in no particular
 	// order. IterationOptions can be used to control where to begin
 	// iteration as well as what keys are iterated by their prefix.
@@ -108,13 +106,13 @@ const timeFormatTempPath = "20060102150405"
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFile(dir string, prefix string) (string, error) {
+func CreateTempFile(dir string, prefix string) (*os.File, error) {
 	tempFilePrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
 	tempFile, err := ioutil.TempFile(dir, string(tempFilePrefix))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return tempFile.Name(), nil
+	return tempFile, nil
 }
 
 // CreateTempFolder creates a temporary folder with the given prefix.

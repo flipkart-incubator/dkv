@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"io"
+	"io/ioutil"
+	"sync"
+	"testing"
+
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/flipkart-incubator/nexus/pkg/db"
 	"github.com/gogo/protobuf/proto"
-	"sync"
-	"testing"
 )
 
 func TestDKVReplStoreSave(t *testing.T) {
@@ -49,13 +52,13 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if res, err := kvs.Get(key); err != nil {
 				t.Error(err)
 			} else if string(res[0].Value) != string(val) {
-				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0])
+				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0].Value)
 			}
 		}
 	}
@@ -67,7 +70,7 @@ func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if _, err := kvs.Get(key); err.Error() != "Given key not found" {
@@ -95,7 +98,7 @@ func testGet(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 					t.Error(err)
 				} else {
 					if string(readResults[0].Value) != string(kvsVals[0].Value) {
-						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0], readResults[0].Value)
+						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0].Value, readResults[0].Value)
 					}
 				}
 			}
@@ -122,7 +125,7 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 				} else {
 					for i, readResult := range readResults {
 						if string(readResult.Value) != string(kvsVals[i].Value) {
-							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i], readResult.Value)
+							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i].Value, readResult.Value)
 						}
 					}
 				}
@@ -145,27 +148,18 @@ func newMemStore() *memStore {
 	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
 }
 
-func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS uint64) error {
+func (ms *memStore) Put(pairs ...*serverpb.KVPair) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	storeKey := string(key)
-	if _, present := ms.store[storeKey]; present {
-		return errors.New("Given key already exists")
+	for _, kv := range pairs {
+		storeKey := string(kv.Key)
+		if _, present := ms.store[storeKey]; present {
+			return errors.New("given key already exists")
+		}
+		ms.store[storeKey] = memStoreObject{kv.Value, 0}
 	}
-	ms.store[storeKey] = memStoreObject{value, expiryTS}
-	return nil
-}
 
-func (ms *memStore) Put(key []byte, value []byte) error {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-
-	storeKey := string(key)
-	if _, present := ms.store[storeKey]; present {
-		return errors.New("Given key already exists")
-	}
-	ms.store[storeKey] = memStoreObject{value, 0}
 	return nil
 }
 
@@ -216,13 +210,17 @@ func (ms *memStore) Close() error {
 	return nil
 }
 
-func (ms *memStore) GetSnapshot() ([]byte, error) {
-	return gobEncode(ms.store)
+func (ms *memStore) GetSnapshot() (io.ReadCloser, error) {
+	snap, err := gobEncode(ms.store)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.NopCloser(bytes.NewBuffer(snap)), nil
 }
 
-func (ms *memStore) PutSnapshot(snap []byte) error {
+func (ms *memStore) PutSnapshot(snap io.ReadCloser) error {
 	data := make(map[string]memStoreObject)
-	err := gob.NewDecoder(bytes.NewBuffer(snap)).Decode(data)
+	err := gob.NewDecoder(snap).Decode(data)
 	ms.store = data
 	return err
 }

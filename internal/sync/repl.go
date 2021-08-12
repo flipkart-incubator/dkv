@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"github.com/golang/protobuf/proto"
+	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
@@ -23,7 +24,7 @@ func NewDKVReplStore(kvs storage.KVStore) db.Store {
 	return &dkvReplStore{kvs}
 }
 
-func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
+func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) ([]byte, error) {
 	intReq := new(raftpb.InternalRaftRequest)
 	if err := proto.Unmarshal(req, intReq); err != nil {
 		return nil, err
@@ -31,6 +32,8 @@ func (dr *dkvReplStore) Save(req []byte) ([]byte, error) {
 	switch {
 	case intReq.Put != nil:
 		return dr.put(intReq.Put)
+	case intReq.MultiPut != nil:
+		return dr.multiPut(intReq.MultiPut)
 	case intReq.Delete != nil:
 		return dr.delete(intReq.Delete)
 	case intReq.Cas != nil:
@@ -56,7 +59,16 @@ func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 }
 
 func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
-	err := dr.kvs.Put(putReq.Key, putReq.Value)
+	err := dr.kvs.Put(&serverpb.KVPair{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS})
+	return nil, err
+}
+
+func (dr *dkvReplStore) multiPut(multiPutReq *serverpb.MultiPutRequest) ([]byte, error) {
+	puts := make([]*serverpb.KVPair, len(multiPutReq.PutRequest))
+	for i, request := range multiPutReq.PutRequest {
+		puts[i] = &serverpb.KVPair{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
+	}
+	err := dr.kvs.Put(puts...)
 	return nil, err
 }
 
@@ -102,10 +114,15 @@ func (dr *dkvReplStore) Close() error {
 	return dr.kvs.Close()
 }
 
-func (dr *dkvReplStore) Backup() ([]byte, error) {
+// TODO: implement this correctly
+func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
+	return db.RaftEntry{}, errors.New("not implemented")
+}
+
+func (dr *dkvReplStore) Backup(_ db.SnapshotState) (io.ReadCloser, error) {
 	return dr.kvs.GetSnapshot()
 }
 
-func (dr *dkvReplStore) Restore(data []byte) error {
+func (dr *dkvReplStore) Restore(data io.ReadCloser) error {
 	return dr.kvs.PutSnapshot(data)
 }

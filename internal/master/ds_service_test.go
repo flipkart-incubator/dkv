@@ -13,8 +13,6 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/dkv/internal/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	dkv_sync "github.com/flipkart-incubator/dkv/internal/sync"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -56,6 +54,7 @@ func TestDistributedService(t *testing.T) {
 	t.Run("testDistAtomicIncrDecr", testDistAtomicIncrDecr)
 	t.Run("testLinearizableGet", testLinearizableGet)
 	t.Run("testRestore", testRestore)
+	t.Run("testGetStatus", testGetStatus)
 	t.Run("testNewDKVNodeJoiningAndLeaving", testNewDKVNodeJoiningAndLeaving)
 }
 
@@ -213,11 +212,31 @@ func testRestore(t *testing.T) {
 	}
 }
 
+func testGetStatus(t *testing.T) {
+	leaderCount := 0
+	followerCount := 0
+	for _, dkv := range dkvSvcs {
+		info, _ := dkv.GetStatus(nil, nil)
+		if info.Status == serverpb.RegionStatus_LEADER {
+			leaderCount++
+		} else if info.Status == serverpb.RegionStatus_PRIMARY_FOLLOWER {
+			followerCount++
+		} else {
+			t.Errorf("Incorrect node status. Actual %s", info.Status.String())
+		}
+	}
+	if leaderCount != 1 {
+		t.Errorf("Incorrect leader counts . Expected %d, Actual %d", 1, leaderCount)
+	}
+	expectedFollowerCount := len(dkvSvcs) - 1
+	if followerCount != expectedFollowerCount {
+		t.Errorf("Incorrect follower counts . Expected %d, Actual %d", expectedFollowerCount, followerCount)
+	}
+}
+
 func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 	// Create and start the new DKV node
 	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, newNodeURL, clusterURL)
-	defer dkvSvc.Close()
-	defer grpcSrv.GracefulStop()
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
 	<-time.After(3 * time.Second)
 
@@ -239,14 +258,27 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 			if actualValue, err := dkvCli.Get(rc, []byte(key)); err != nil {
 				t.Fatalf("Unable to GET for CLI ID: %d. Key: %s, Error: %v", i, key, err)
 			} else if string(actualValue.Value) != expectedValue {
-				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue)
+				t.Errorf("GET mismatch for CLI ID: %d. Key: %s, Expected Value: %s, Actual Value: %s", i, key, expectedValue, actualValue.Value)
 			}
+		}
+		regionInfo, _ := dkvSvc.GetStatus(nil, nil)
+		// Currently new region will be marked as follower
+		if regionInfo.Status != serverpb.RegionStatus_PRIMARY_FOLLOWER {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_PRIMARY_FOLLOWER.String(), regionInfo.Status.String())
 		}
 		// Remove new DKV node through the client of any other DKV Node (2)
 		if err := dkvClis[2].RemoveNode(newNodeURL); err != nil {
 			t.Fatal(err)
 		}
+		// TODO - node should now ideally be marked inactive but since status check is using ip address, can't test here
 		<-time.After(3 * time.Second)
+
+		grpcSrv.GracefulStop()
+		dkvSvc.Close()
+		regionInfo, _ = dkvSvc.GetStatus(nil, nil)
+		if regionInfo.Status != serverpb.RegionStatus_INACTIVE {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.RegionStatus_INACTIVE.String(), regionInfo.Status.String())
+		}
 	}
 }
 
@@ -308,36 +340,15 @@ func newListener(port int) net.Listener {
 	}
 }
 
-func newKVStoreWithID(id int) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
-	dbFolder := fmt.Sprintf("%s_%d", dbFolder, id)
-	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
-		panic(err)
-	}
-	switch engine {
-	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder,
-			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
-		if err != nil {
-			panic(err)
-		}
-		return rocksDb, rocksDb, rocksDb
-	case "badger":
-		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
-		if err != nil {
-			panic(err)
-		}
-		return bdgrDb, nil, bdgrDb
-	default:
-		panic(fmt.Sprintf("Unknown storage engine: %s", engine))
-	}
-}
-
 func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server) {
-	kvs, cp, br := newKVStoreWithID(id)
+	dir := fmt.Sprintf("%s_%d", dbFolder, id)
+	kvs, cp, br := newKVStore(dir)
 	dkvRepl := newReplicator(kvs, nodeURL, clusURL)
 	dkvRepl.Start()
+	regionInfo := &serverpb.RegionInfo{}
+	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
 	lgr, _ := zap.NewDevelopment()
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, lgr , stats.NewNoOpClient())
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, lgr, stats.NewNoOpClient(), regionInfo)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

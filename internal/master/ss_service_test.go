@@ -3,6 +3,12 @@ package master
 import (
 	"bytes"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"net"
 	"os/exec"
 	"strings"
@@ -10,14 +16,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/stats"
-	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/dkv/internal/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
+)
+
+var (
+	dkvCli   *ctl.DKVClient
+	dkvSvc   DKVService
+	grpcSrvr *grpc.Server
 )
 
 const (
@@ -27,12 +33,6 @@ const (
 	dkvSvcHost = "localhost"
 	engine     = "rocksdb"
 	// engine = "badger"
-)
-
-var (
-	dkvCli   *ctl.DKVClient
-	dkvSvc   DKVService
-	grpcSrvr *grpc.Server
 )
 
 func TestStandaloneService(t *testing.T) {
@@ -314,20 +314,20 @@ func testBackupRestore(t *testing.T) {
 	}
 }
 
-func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
-	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
+func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
+	if err := exec.Command("rm", "-rf", dir).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder,
+		rocksDb, err := rocksdb.OpenDB(dir,
 			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}
 		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
+		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dir))
 		if err != nil {
 			panic(err)
 		}
@@ -338,9 +338,9 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 }
 
 func serveStandaloneDKV() {
-	kvs, cp, ba := newKVStore()
+	kvs, cp, ba := newKVStore(dbFolder)
 	lgr, _ := zap.NewDevelopment()
-	dkvSvc = NewStandaloneService(kvs, cp, ba, lgr, stats.NewNoOpClient())
+	dkvSvc = NewStandaloneService(kvs, cp, ba, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{})
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

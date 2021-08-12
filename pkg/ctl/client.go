@@ -3,6 +3,8 @@ package ctl
 import (
 	"context"
 	"errors"
+	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/nexus/models"
 	"io"
 	"time"
 
@@ -21,6 +23,7 @@ type DKVClient struct {
 	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
 	dkvClusCli serverpb.DKVClusterClient
+	dkvDisCli  serverpb.DKVDiscoveryClient
 }
 
 // TODO: Should these be paramterised ?
@@ -51,7 +54,8 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
 		dkvClusCli := serverpb.NewDKVClusterClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli}
+		dkvDisCli := serverpb.NewDKVDiscoveryClient(conn)
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli}
 	}
 	return dkvClnt, err
 }
@@ -189,14 +193,41 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 
 // ListNodes retrieves the current members of the Nexus cluster
 // along with identifying the leader.
-func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]string, error) {
+func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
 	defer cancel()
 	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})
-	if err := errorFromStatus(res.Status, err); err != nil {
-		return 0, nil, err
+	if res != nil {
+		if err = errorFromStatus(res.Status, err); err != nil {
+			return 0, nil, err
+		}
+		return res.Leader, res.Nodes, nil
 	}
-	return res.Leader, res.Nodes, nil
+	return 0, nil, err
+}
+
+func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	_, err := dkvClnt.dkvDisCli.UpdateStatus(ctx, &serverpb.UpdateStatusRequest{
+		RegionInfo: &info,
+		Timestamp:  hlc.UnixNow(),
+	})
+	return err
+}
+
+func (dkvClnt *DKVClient) GetClusterInfo(dcId string, database string, vBucket string) ([]*serverpb.RegionInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	clusterInfo, err := dkvClnt.dkvDisCli.GetClusterInfo(ctx, &serverpb.GetClusterInfoRequest{
+		DcID:     &dcId,
+		Database: &database,
+		VBucket:  &vBucket,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return clusterInfo.GetRegionInfos(), nil
 }
 
 // KVPair is convenience wrapper that captures a key and its value.

@@ -30,7 +30,8 @@ var cmds = []*cmd{
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
-	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
+	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
+	{"getClusterInfo", "<dcId> <database> <vBucket>", "Gets the latest cluster info", (*cmd).getStatus, "", true},
 }
 
 func (c *cmd) usage() {
@@ -171,25 +172,50 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
-	if leader, nodes, err := client.ListNodes(); err != nil {
+	if leaderId, members, err := client.ListNodes(); err != nil {
 		fmt.Printf("Unable to retrieve the nodes of DKV cluster. Error: %v\n", err)
 	} else {
 		var ids []uint64
-		for id := range nodes {
-			if id != leader {
-				ids = append(ids, id)
-			}
+		for id := range members {
+			ids = append(ids, id)
 		}
 		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-		if leaderURL, present := nodes[leader]; present {
+		if _, present := members[leaderId]; present {
 			fmt.Println("Current DKV cluster members:")
-			fmt.Printf("%x => %s (leader)\n", leader, leaderURL)
 		} else {
-			fmt.Println("WARNING: DKV cluster unhealthy, leader unknown")
-			fmt.Println("Current cluster members:")
+			fmt.Println("WARNING: DKV Cluster unhealthy, leader unknown")
+			fmt.Println("Current DKV cluster members:")
 		}
 		for _, id := range ids {
-			fmt.Printf("%x => %s\n", id, nodes[id])
+			fmt.Printf("%x => %s (%s) \n", id, members[id].NodeUrl, members[id].Status)
+		}
+	}
+}
+
+func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
+	dcId := ""
+	database := ""
+	vBucket := ""
+	if len(args) > 0 {
+		dcId = args[0]
+	}
+	if len(args) > 1 {
+		database = args[1]
+	}
+	if len(args) > 2 {
+		vBucket = args[2]
+	}
+	vBuckets, err := client.GetClusterInfo(dcId, database, vBucket)
+	if err != nil {
+		fmt.Printf("Unable to get Status: Error: %v\n", err)
+	} else {
+		if len(vBuckets) == 0 {
+			fmt.Println("Found no nodes with the provided filters")
+		} else {
+			fmt.Println("Current DKV cluster nodes:")
+			for _, bucket := range vBuckets {
+				fmt.Println(bucket.String())
+			}
 		}
 	}
 }
@@ -224,6 +250,16 @@ func trimLower(str string) string {
 	return strings.ToLower(strings.TrimSpace(str))
 }
 
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -246,6 +282,9 @@ func main() {
 
 	var validCmd bool
 	for _, c := range cmds {
+		if !isFlagPassed(c.name) {
+			continue
+		}
 		if c.value != "" || c.emptyValue {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)

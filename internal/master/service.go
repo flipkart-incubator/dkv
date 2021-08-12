@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"google.golang.org/protobuf/types/known/emptypb"
+
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
@@ -26,6 +28,7 @@ import (
 type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
+	serverpb.DKVDiscoveryNodeServer
 	serverpb.DKVReplicationServer
 	serverpb.DKVBackupRestoreServer
 }
@@ -35,22 +38,43 @@ type standaloneService struct {
 	cp    storage.ChangePropagator
 	br    storage.Backupable
 
-	rwl      *sync.RWMutex
-	lg       *zap.Logger
-	statsCli stats.Client
+	rwl        *sync.RWMutex
+	lg         *zap.Logger
+	statsCli   stats.Client
+	regionInfo *serverpb.RegionInfo
+}
+
+func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
+	return ss.regionInfo, nil
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
 	rwl := &sync.RWMutex{}
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli}
+	regionInfo.Status = serverpb.RegionStatus_LEADER
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
-	if err := ss.store.PutTTL(putReq.Key, putReq.Value, putReq.ExpireTS); err != nil {
+	if err := ss.store.Put(&serverpb.KVPair{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS}); err != nil {
+		ss.lg.Error("Unable to PUT", zap.Error(err))
+		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
+	}
+	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
+}
+
+func (ss *standaloneService) MultiPut(ctx context.Context, putReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+	puts := make([]*serverpb.KVPair, len(putReq.PutRequest))
+	for i, request := range putReq.PutRequest {
+		puts[i] = &serverpb.KVPair{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
+	}
+
+	if err := ss.store.Put(puts...); err != nil {
 		ss.lg.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
@@ -161,7 +185,7 @@ func (ss *standaloneService) AddReplica(ctx context.Context, replica *serverpb.R
 
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
-	if err := ss.store.Put([]byte(replicaKey), []byte(replicaValue)); err != nil {
+	if err := ss.store.Put(&serverpb.KVPair{Key: []byte(replicaKey), Value: []byte(replicaValue)}); err != nil {
 		ss.lg.Error("Unable to add replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
@@ -175,9 +199,7 @@ func (ss *standaloneService) RemoveReplica(ctx context.Context, replica *serverp
 
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
-	// We set the current replica key's value to empty - indicating a remove.
-	// Once storage layer exposes DEL primitives, this impl. needs to perhaps change.
-	if err := ss.store.Put([]byte(replicaKey), nil); err != nil {
+	if err := ss.store.Delete([]byte(replicaKey)); err != nil {
 		ss.lg.Error("Unable to remove replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
@@ -199,8 +221,8 @@ func (ss *standaloneService) GetReplicas(ctx context.Context, req *serverpb.GetR
 
 	var replicas []*serverpb.Replica
 	for iter.HasNext() {
-		key, val := iter.Next()
-		replicaKey, replicaVal := string(key), string(val)
+		entry := iter.Next()
+		replicaKey, replicaVal := string(entry.Key), string(entry.Value)
 		replicaAddr := strings.TrimPrefix(replicaKey, dkvMetaReplicaPrefix)
 
 		// checking for valid replicas and not the removed ones whose values are empty
@@ -265,8 +287,8 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 	defer ss.rwl.RUnlock()
 
 	iteration := storage.NewIteration(ss.store, iterReq)
-	err := iteration.ForEach(func(k, v []byte) error {
-		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: k, Value: v}
+	err := iteration.ForEach(func(e *serverpb.KVPair) error {
+		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: e.Key, Value: e.Value}
 		return dkvIterSrvr.Send(itRes)
 	})
 	if err != nil {
@@ -298,17 +320,33 @@ type distributedService struct {
 	raftRepl nexus_api.RaftReplicator
 	lg       *zap.Logger
 	statsCli stats.Client
+	isClosed bool
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli), raftRepl, lgr, statsCli}
+	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Put: putReq})
+	res := &serverpb.PutResponse{Status: newEmptyStatus()}
+	if err != nil {
+		ds.lg.Error("Unable to PUT over Nexus", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	} else {
+		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
+			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			res.Status = newErrorStatus(err)
+		}
+	}
+	return res, err
+}
+
+func (ds *distributedService) MultiPut(ctx context.Context, multiPutReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{MultiPut: multiPutReq})
 	res := &serverpb.PutResponse{Status: newEmptyStatus()}
 	if err != nil {
 		ds.lg.Error("Unable to PUT over Nexus", zap.Error(err))
@@ -369,8 +407,6 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 			} else {
 				if kvs != nil && len(kvs) == 1 {
 					res.Value = kvs[0].Value
-				} else {
-					loadError = fmt.Errorf("unable to compute value for given key from %v", kvs)
 				}
 			}
 		}
@@ -442,10 +478,41 @@ func (ds *distributedService) ListNodes(ctx context.Context, _ *empty.Empty) (*s
 }
 
 func (ds *distributedService) Close() error {
+	ds.lg.Info("Closing the master service")
 	// Do not invoke DKVService::Close here since `raftRepl` already
 	// closes the underlying storage connection.
+	// TODO - fix the above as ideally it should call DKVService::Close if there are more aspects to DKVService to close other than storage
 	ds.raftRepl.Stop()
+
+	ds.isClosed = true
 	return nil
+}
+
+func (ds *distributedService) GetStatus(context context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
+	regionInfo := ds.DKVService.(*standaloneService).regionInfo
+
+	if ds.isClosed {
+		regionInfo.Status = serverpb.RegionStatus_INACTIVE
+	} else {
+		// Currently there is no way for this instance of DKVServer to know if its the local dc follower, or is a follower with a lot of lag
+		// Even the member list api ListMembers() is just an in memory lookup rather than actually looking at the current raft member state
+		// If the current node is itself disconnected, it will provide stale / incorrect member list
+		// For now, we will return status based on listMembers() and identify based on stale data
+		// As of now, there is no hard requirement to identify true leader via service discovery thus using listmembers() is fine
+		// TODO - Provide correct status wrt master / local dc follower / follower with lot of lag
+		leaderId, _ := ds.raftRepl.ListMembers()
+		selfId := ds.raftRepl.Id()
+
+		if leaderId == selfId {
+			regionInfo.Status = serverpb.RegionStatus_LEADER
+		} else {
+			// Leader is unknown. Could be when raft quorum is incomplete or leader election is in progress
+			// TODO - Provide correct status wrt local dc follower / follower with lot of lag
+			regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
+		}
+	}
+	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
+	return regionInfo, nil
 }
 
 func newErrorStatus(err error) *serverpb.Status {
