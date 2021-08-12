@@ -5,6 +5,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -109,6 +110,31 @@ public class SimpleDKVClientTest {
         dkvCli.put(key, expVal, (System.currentTimeMillis() / 1000) - 2);
         String actVal2 = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
         assertEquals(format("Invalid value for key: %s", key), "", actVal2);
+    }
+
+    @Test
+    public void shouldPerformBulkPutAndGet() {
+        int iter = 10;
+        String keyF = "helloBulk_", valPref = "world_";
+        String[] keys = new String[iter];
+        KV.Strings[] items = new KV.Strings[iter];
+        for (int i = 0 ; i <iter; i++){
+            keys[i] = format("%s%d", keyF, i+1);
+            items[i] = new KV.Strings(keys[i], format("%s%d", valPref, i+1));
+        }
+        dkvCli.put(items);
+
+        KV.Strings[] vals = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
+        assertValues(keyF, keys, vals);
+
+        KV.Bytes[] itemsBytes = new KV.Bytes[iter];
+        for (int i = 0 ; i <iter; i++){
+            keys[i] = format("%s%d", keyF, i+1);
+            itemsBytes[i] = new KV.Bytes(keys[i].getBytes(StandardCharsets.UTF_8), format("%s%d", valPref, i+1).getBytes(StandardCharsets.UTF_8));
+        }
+        dkvCli.put(itemsBytes);
+        KV.Strings[] val2 = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
+        assertValues(keyF, keys, val2);
     }
 
     @Test

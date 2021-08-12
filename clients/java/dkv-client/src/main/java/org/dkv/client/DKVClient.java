@@ -110,6 +110,30 @@ public interface DKVClient extends Closeable {
     void put(byte[] key, byte[] value, long expiryTS);
 
     /**
+     * Associates the list of specified value with the specified key
+     * inside DKV database. Also sets the corresponding expiryTS of the key
+     * to the provided value. If this association already exists in the database,
+     * the old value is replaced with the given value.
+     *
+     * @param items List of KV.Strings to be persisted
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void put(KV.Strings ... items);
+
+    /**
+     * Associates the list of specified value with the specified key
+     * inside DKV database. Also sets the corresponding expiryTS of the key
+     * to the provided value. If this association already exists in the database,
+     * the old value is replaced with the given value.
+     *
+     * @param items List of KV.Bytes to be persisted
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void put(KV.Bytes ... items);
+
+    /**
      * Retrieves the value associated with the given key from the DKV
      * database. How recent the value needs to be can be controlled
      * through the <tt>consistency</tt> parameter.
