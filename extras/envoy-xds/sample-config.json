@@ -1,4 +1,7 @@
 {
+    "discoveryServerAddr": "multi:///host1:port,host2:port,host3:port",
+    "dc-id": "default",
+    "database": "default",
     "appId": "local",
     "local.instanceGroups": [
         "local-group"

@@ -17,28 +17,39 @@ type DiscoveryClient struct {
 
 // Create a connection to DKV Service discovery client which provides a view of entire cluster
 // Cluster comprises of all databases and shards (vBuckets) which are registering to this service discovery group
-func InitServiceDiscoveryClient(discoveryServiceAddr string, configPath string) *DiscoveryClient {
-	client, err := ctl.NewInSecureDKVClient(discoveryServiceAddr, "")
+func InitServiceDiscoveryClient(configPath string) *DiscoveryClient {
+	kvs, err := readConfig(configPath)
+	if (err != nil) {
+		log.Panicf("Failed to read Config File %v.", err)
+	}
+	client, err := ctl.NewInSecureDKVClient(kvs["discoveryServerAddr"].(string), "")
 	if (err != nil) {
 	   log.Panicf("Failed to start Discovery Client %v.", err)
 	}
 	return &DiscoveryClient{client: client, configPath: configPath}
 }
 
-func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
-
-	config, err := ioutil.ReadFile(c.configPath)
+func readConfig(configPath string) (map[string]interface{}, error) {
+	config, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
-
 	kvs := make(map[string]interface{})
 	err = json.Unmarshal(config, &kvs)
 	if err != nil {
 		return nil, err
 	}
+	return kvs, nil
+}
 
-	regions, err := c.client.GetClusterInfo("", "", "")
+func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
+
+	kvs, err := readConfig(c.configPath)
+	if (err != nil) {
+		return nil, err
+	}
+
+	regions, err := c.client.GetClusterInfo(kvs["dc-id"].(string), kvs["database"].(string), "")
 
 	if err != nil {
 		return nil, err
@@ -51,8 +62,11 @@ func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
 		if region.Status == serverpb.RegionStatus_LEADER || region.Status == serverpb.RegionStatus_PRIMARY_FOLLOWER ||
 			region.Status == serverpb.RegionStatus_SECONDARY_FOLLOWER {
 			nodeType = "masters"
-		} else {
+		} else if region.Status == serverpb.RegionStatus_ACTIVE_SLAVE {
 			nodeType = "slaves"
+		} else {
+			log.Printf("Unexpected node status %s", region)
+			continue
 		}
 		key := fmt.Sprintf("%s-%s.endpoints", region.VBucket, nodeType)
 		endpoints, ok := all_endpoints[key]

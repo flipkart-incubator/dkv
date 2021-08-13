@@ -29,14 +29,12 @@ var (
 	listenAddr          string
 	pollInterval        time.Duration
 	discoveryClient     *pkg.DiscoveryClient
-	discoveryServerAddr string
 )
 
 func init() {
 	flag.StringVar(&configPath, "config", "", "Path to the config JSON file with Envoy xDS configuration")
 	flag.StringVar(&listenAddr, "listenAddr", "", "Address (host:port) to bind for Envoy xDS")
 	flag.DurationVar(&pollInterval, "pollInterval", 5*time.Second, "Polling interval for checking config updates")
-	flag.StringVar(&discoveryServerAddr, "discoveryServerAddr", "", "Addresses (multi:///host1:port,host2:port,host3:port) of discovery server")
 }
 
 func main() {
@@ -49,7 +47,7 @@ func main() {
 	defer grpcServer.Stop()
 	go grpcServer.Serve(lis)
 
-	discoveryClient = pkg.InitServiceDiscoveryClient(discoveryServerAddr, configPath)
+	discoveryClient = pkg.InitServiceDiscoveryClient(configPath)
 	tckr := time.NewTicker(pollInterval)
 	defer tckr.Stop()
 	go pollForConfigUpdates(tckr, snapshotCache)
@@ -64,12 +62,12 @@ func pollForConfigUpdates(tckr *time.Ticker, snapshotCache cache.SnapshotCache) 
 		envoyConfig, err := discoveryClient.GetEnvoyConfig()
 		if err != nil {
 			log.Printf("Unable to get cluster info: Error: %v", err)
-		}
-
-		if err = envoyConfig.ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
-			log.Printf("Unable to compute and set snapshot. Error: %v", err)
 		} else {
-			snapVersion++
+			if err = envoyConfig.ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
+				log.Printf("Unable to compute and set snapshot. Error: %v", err)
+			} else {
+				snapVersion++
+			}
 		}
 	}
 }
