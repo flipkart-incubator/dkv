@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -119,6 +120,7 @@ func main() {
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
+	printFlagsWithoutPrefix()
 
 	if pprofEnable {
 		go func() {
@@ -131,12 +133,16 @@ func main() {
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
-	srvrRole.printFlags()
+	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
+	nodeAddr, err := nodeAddress()
+	if err != nil {
+		log.Panicf("Failed to detect IP Address %v.", err)
+	}
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            dcID,
-		NodeAddress:     dbListenAddr,
+		NodeAddress:     nodeAddr.Host,
 		Database:        database,
 		VBucket:         vBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -180,7 +186,7 @@ func main() {
 
 		// Discovery servers can be only configured if node started as master.
 		if srvrRole == discoveryRole {
-			err := registerDiscoveryServer(dkvSvc, grpcSrvr)
+			err := registerDiscoveryServer(grpcSrvr, dkvSvc)
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
 			}
@@ -492,7 +498,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	}
 }
 
-func registerDiscoveryServer(dkvService master.DKVService, grpcSrvr *grpc.Server) error {
+func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
 	iniConfig, err := ini.Load(discoveryConf)
 	if err != nil {
 		return fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", discoveryConf, err)
@@ -531,8 +537,34 @@ func newDiscoveryClient() (discovery.Client, error) {
 		}
 		return client, nil
 	} else {
-		return nil, fmt.Errorf("Can't load discovery client configuration from section %s in file %s, error: %v",
+		return nil, fmt.Errorf("can't load discovery client configuration from section %s in file %s, error: %v",
 			discoveryClientConfig, discoveryConf, err)
 	}
 
+}
+
+func nodeAddress() (*url.URL, error) {
+	ip, port, err := net.SplitHostPort(dbListenAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	if ip == "0.0.0.0" {
+		//get interface ip.
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, address := range addrs {
+			// check the address type and if it is not a loopback the display it
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					ip = ipnet.IP.String()
+				}
+			}
+		}
+	}
+
+	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port)}
+	return &ep, nil
 }

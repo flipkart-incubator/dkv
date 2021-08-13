@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"io"
-	"math/rand"
-	"strings"
-	"time"
-
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"io"
+	"math/rand"
+	"strings"
+	"time"
 )
 
 // A DKVService represents a service for serving key value data.
@@ -45,7 +44,7 @@ type ReplicationConfig struct {
 
 type replInfo struct {
 	// can be nil only initially when trying to find a master to replicate from
-	replCli     *ctl.DKVClient
+	replCli *ctl.DKVClient
 	// replActive can be used to avoid setting replCli to nil during master reelection
 	// which would otherwise require additional locks to prevent crashes due to intermediate null switches
 	replActive   bool
@@ -94,6 +93,10 @@ func (ss *slaveService) Put(_ context.Context, _ *serverpb.PutRequest) (*serverp
 	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }
 
+func (ss *slaveService) MultiPut(_ context.Context, _ *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	return nil, errors.New("DKV slave service does not support keyspace mutations")
+}
+
 func (ss *slaveService) Delete(_ context.Context, _ *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {
 	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }
@@ -128,7 +131,7 @@ func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.Mult
 
 func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr serverpb.DKV_IterateServer) error {
 	iteration := storage.NewIteration(ss.store, iterReq)
-	err := iteration.ForEach(func(e *storage.KVEntry) error {
+	err := iteration.ForEach(func(e *serverpb.KVPair) error {
 		itRes := &serverpb.IterateResponse{Status: newEmptyStatus(), Key: e.Key, Value: e.Value}
 		return dkvIterSrvr.Send(itRes)
 	})
@@ -339,7 +342,7 @@ func (ss *slaveService) findNewMaster() (*string, error) {
 			}
 		}
 		if len(filteredVBuckets) == 0 {
-			return nil, fmt.Errorf("No active master found for database %s and vBucket %s",
+			return nil, fmt.Errorf("no active master found for database %s and vBucket %s",
 				ss.regionInfo.Database, ss.regionInfo.VBucket)
 		} else {
 			vBuckets = filteredVBuckets

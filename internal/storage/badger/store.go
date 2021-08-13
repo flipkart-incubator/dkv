@@ -189,28 +189,31 @@ func (bdb *badgerDB) Close() error {
 	return nil
 }
 
-func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
-	defer bdb.opts.statsCli.Timing("badger.putTTL.latency.ms", time.Now())
-	err := bdb.db.Update(func(txn *badger.Txn) error {
-		kv := badger.NewEntry(key, value)
-		if expireTS > 0 {
-			kv.ExpiresAt = expireTS
-		}
-		return txn.SetEntry(kv)
-	})
-	if err != nil {
-		bdb.opts.statsCli.Incr("badger.putTTL.errors", 1)
+func (bdb *badgerDB) Put(pairs ...*serverpb.KVPair) error {
+	metricsPrefix := "badger.put.multi"
+	if len(pairs) == 1 {
+		metricsPrefix = "badger.put.single"
 	}
-	return err
-}
+	defer bdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
 
-func (bdb *badgerDB) Put(key []byte, value []byte) error {
-	defer bdb.opts.statsCli.Timing("badger.put.latency.ms", time.Now())
-	err := bdb.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, value)
-	})
+	wb := bdb.db.NewWriteBatch()
+	defer wb.Cancel()
+	for _, kv := range pairs {
+		if kv == nil {
+			continue //skip nil entries
+		}
+		e := badger.NewEntry(kv.Key, kv.Value)
+		if kv.ExpireTS > 0 {
+			e.ExpiresAt = kv.ExpireTS
+		}
+		err := wb.SetEntry(e)
+		if err != nil {
+			bdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
+		}
+	}
+	err := wb.Flush()
 	if err != nil {
-		bdb.opts.statsCli.Incr("badger.put.errors", 1)
+		bdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
 	}
 	return err
 }
@@ -576,7 +579,7 @@ func (bdbIter *iter) HasNext() bool {
 	return bdbIter.it.Valid()
 }
 
-func (bdbIter *iter) Next() *storage.KVEntry {
+func (bdbIter *iter) Next() *serverpb.KVPair {
 	defer bdbIter.it.Next()
 	item := bdbIter.it.Item()
 	key := item.KeyCopy(nil)
@@ -584,7 +587,7 @@ func (bdbIter *iter) Next() *storage.KVEntry {
 	if err != nil {
 		bdbIter.iterErr = err
 	}
-	return &storage.KVEntry{Key: key, Value: val, ExpireTS: item.ExpiresAt()}
+	return &serverpb.KVPair{Key: key, Value: val, ExpireTS: item.ExpiresAt()}
 }
 
 func (bdbIter *iter) Err() error {

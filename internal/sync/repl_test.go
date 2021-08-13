@@ -58,7 +58,7 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 			if res, err := kvs.Get(key); err != nil {
 				t.Error(err)
 			} else if string(res[0].Value) != string(val) {
-				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0])
+				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0].Value)
 			}
 		}
 	}
@@ -98,7 +98,7 @@ func testGet(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 					t.Error(err)
 				} else {
 					if string(readResults[0].Value) != string(kvsVals[0].Value) {
-						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0], readResults[0].Value)
+						t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, kvsVals[0].Value, readResults[0].Value)
 					}
 				}
 			}
@@ -125,7 +125,7 @@ func testMultiGet(t *testing.T, kvs *memStore, dkvRepl db.Store, keys ...[]byte)
 				} else {
 					for i, readResult := range readResults {
 						if string(readResult.Value) != string(kvsVals[i].Value) {
-							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i], readResult.Value)
+							t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", keys[i], kvsVals[i].Value, readResult.Value)
 						}
 					}
 				}
@@ -148,27 +148,18 @@ func newMemStore() *memStore {
 	return &memStore{store: make(map[string]memStoreObject), mu: sync.Mutex{}}
 }
 
-func (ms *memStore) PutTTL(key []byte, value []byte, expiryTS uint64) error {
+func (ms *memStore) Put(pairs ...*serverpb.KVPair) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	storeKey := string(key)
-	if _, present := ms.store[storeKey]; present {
-		return errors.New("Given key already exists")
+	for _, kv := range pairs {
+		storeKey := string(kv.Key)
+		if _, present := ms.store[storeKey]; present {
+			return errors.New("given key already exists")
+		}
+		ms.store[storeKey] = memStoreObject{kv.Value, 0}
 	}
-	ms.store[storeKey] = memStoreObject{value, expiryTS}
-	return nil
-}
 
-func (ms *memStore) Put(key []byte, value []byte) error {
-	ms.mu.Lock()
-	defer ms.mu.Unlock()
-
-	storeKey := string(key)
-	if _, present := ms.store[storeKey]; present {
-		return errors.New("Given key already exists")
-	}
-	ms.store[storeKey] = memStoreObject{value, 0}
 	return nil
 }
 

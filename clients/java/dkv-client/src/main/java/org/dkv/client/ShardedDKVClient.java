@@ -111,6 +111,30 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
+    public void put(KV.Strings... items) {
+        checkf(items != null && items.length > 0, IllegalArgumentException.class, "must provide at least one kv for multi put");
+        String[] keys = Arrays.stream(items).map(KV::getKey).toArray(String[]::new);
+        Map<DKVShard, List<String>> dkvShards = shardProvider.provideShards(keys);
+        checkf(dkvShards != null && !dkvShards.isEmpty(), IllegalArgumentException.class, "unable to compute shard(s) for the given keys");
+        checkf(dkvShards != null && dkvShards.size() == 1, UnsupportedOperationException.class,"DKV does not yet support cross shard multi put" );
+        DKVShard dkvShard = Iterables.get(dkvShards.keySet(), 0);
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.put(items);
+    }
+
+    @Override
+    public void put(KV.Bytes... items) {
+        checkf(items != null && items.length > 0, IllegalArgumentException.class, "must provide at least one kv for multi put");
+        byte[][] keys = Arrays.stream(items).map(KV::getKey).toArray(byte[][]::new);
+        Map<DKVShard, List<byte[]>> dkvShards = shardProvider.provideShards(keys);
+        checkf(dkvShards != null && !dkvShards.isEmpty(), IllegalArgumentException.class, "unable to compute shard(s) for the given keys");
+        checkf(dkvShards != null && dkvShards.size() == 1, UnsupportedOperationException.class,"DKV does not yet support cross shard multi put" );
+        DKVShard dkvShard = Iterables.get(dkvShards.keySet(), 0);
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.put(items);
+    }
+
+    @Override
     public String get(Api.ReadConsistency consistency, String key) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);

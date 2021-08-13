@@ -1,15 +1,15 @@
 ARG BASE=debian:stretch
-
 FROM $BASE
  
-# Your team alias or your e-mail id
-MAINTAINER DKV Developers (dkv-dev@googlegroups.com)
+LABEL maintainer="DKV Developers (dkv-dev@googlegroups.com)"
  
-# Install basic utilities
-RUN apt-get update && apt-get install --yes --allow-unauthenticated adduser vim sudo git curl unzip build-essential
- 
-# Install Compression libs
-RUN apt-get update && apt-get install --yes --allow-unauthenticated zlib1g-dev libbz2-dev libsnappy-dev
+RUN apt-get update && \
+    # Install basic utilities
+    apt-get install --yes --allow-unauthenticated adduser vim sudo git curl unzip build-essential \
+    # Install Compression libs
+    zlib1g-dev libbz2-dev libsnappy-dev && \  
+    # Cleanup
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install ZStandard lib
 RUN curl -fsSL https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar xz \
@@ -30,9 +30,6 @@ RUN curl -fsSL -O https://github.com/protocolbuffers/protobuf/releases/download/
     && rm protoc-3.15.8-linux-x86_64.zip
 ENV PATH="/usr/local/protoc/bin:${PATH}"
 
-# Install GoRocksDB
-RUN CGO_CFLAGS="-I/usr/local/include" CGO_LDFLAGS="-lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -lzstd" go get github.com/tecbot/gorocksdb
-
 # Install DKV
 RUN git clone https://github.com/flipkart-incubator/dkv.git \
     && cd dkv && GOOS=linux GOARCH=amd64 make build \
@@ -40,6 +37,3 @@ RUN git clone https://github.com/flipkart-incubator/dkv.git \
 ENV PATH="/usr/local/dkv:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
 
-# Cleanup
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
- 
