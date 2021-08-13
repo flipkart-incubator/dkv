@@ -45,10 +45,11 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 	conn, err := grpc.DialContext(ctx, svcAddr,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
-		grpc.WithMaxMsgSize(MaxMsgSize),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)),
 		grpc.WithReadBufferSize(ReadBufSize),
 		grpc.WithWriteBufferSize(WriteBufSize),
-		grpc.WithAuthority(authority))
+		grpc.WithAuthority(authority),
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)

@@ -4,20 +4,21 @@
         "local-group"
     ],
     "local.shards": [
-        "shard0"
+        "shard1",
+        "shard2"
     ],
-    "shard0.listener_addr": "127.0.0.1:10000",
-    "shard0.clusters": [
-        "shard0-masters",
-        "shard0-slaves"
+    "shard1.listener_addr": "127.0.0.1:10000",
+    "shard1.clusters": [
+        "shard1-masters",
+        "shard1-slaves"
     ],
-    "shard0-masters.connect_timeout": "10s",
-    "shard0-slaves.connect_timeout": "10s",
-    "shard0-masters.endpoints": [
-        "127.0.0.1:8080"
+    "shard1-masters.connect_timeout": "10s",
+    "shard1-slaves.connect_timeout": "10s",
+    "shard2.listener_addr": "127.0.0.1:10001",
+    "shard2.clusters": [
+        "shard2-masters",
+        "shard2-slaves"
     ],
-    "shard0-slaves.endpoints": [
-        "127.0.0.1:9090",
-        "127.0.0.1:9191"
-    ]
+    "shard2-masters.connect_timeout": "10s",
+    "shard2-slaves.connect_timeout": "10s"
 }
