@@ -114,7 +114,6 @@ const (
 
 func main() {
 	flag.Parse()
-	printFlagsWithoutPrefix()
 	validateFlags()
 	setupDKVLogger()
 	setupAccessLogger()
