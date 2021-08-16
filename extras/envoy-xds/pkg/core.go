@@ -210,15 +210,11 @@ func (conf EnvoyDKVConfig) readClusters(shrd string) (clusters []string, endpoin
 			for _, clus := range clusters {
 				endpointsKey := fmt.Sprintf("%s.endpoints", clus)
 				if endpointsVal, present := conf[endpointsKey]; present {
-					if endpointsSlc, ok := readAsStringSlice(endpointsVal); ok {
-						if hps, fmtErr := newHostPort(endpointsSlc...); fmtErr == nil {
-							endpoints[clus] = hps
-						} else {
-							err = fmt.Errorf("unable to convert the value for key '%s' as a set of endpoints, error: %v", endpointsKey, fmtErr)
-							break
-						}
+					endpointsArr := endpointsVal.([]string)
+					if hps, fmtErr := newHostPort(endpointsArr...); fmtErr == nil {
+						endpoints[clus] = hps
 					} else {
-						err = fmt.Errorf("'%s' key must have an array of strings as value", endpointsKey)
+						err = fmt.Errorf("unable to convert the value for key '%s' as a set of endpoints, error: %v", endpointsKey, fmtErr)
 						break
 					}
 				} else {
@@ -295,7 +291,7 @@ func newHostPort(hostPortStrs ...string) (hps []hostPort, err error) {
 	return
 }
 
-func (conf EnvoyDKVConfig) readListenerHostPort(shrd string, ) (hp hostPort, err error) {
+func (conf EnvoyDKVConfig) readListenerHostPort(shrd string) (hp hostPort, err error) {
 	listenAddrKey := fmt.Sprintf("%s.listener_addr", shrd)
 	if listenAddrVal, present := conf[listenAddrKey]; !present {
 		err = fmt.Errorf("'%s' key is missing from configuration", listenAddrKey)

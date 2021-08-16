@@ -4,10 +4,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"github.com/flipkart-incubator/dkv/extras/envoy-xds/pkg"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -27,9 +25,10 @@ import (
 )
 
 var (
-	configPath   string
-	listenAddr   string
-	pollInterval time.Duration
+	configPath          string
+	listenAddr          string
+	pollInterval        time.Duration
+	discoveryClient     *pkg.DiscoveryClient
 )
 
 func init() {
@@ -48,6 +47,7 @@ func main() {
 	defer grpcServer.Stop()
 	go grpcServer.Serve(lis)
 
+	discoveryClient = pkg.InitServiceDiscoveryClient(configPath)
 	tckr := time.NewTicker(pollInterval)
 	defer tckr.Stop()
 	go pollForConfigUpdates(tckr, snapshotCache)
@@ -57,39 +57,17 @@ func main() {
 }
 
 func pollForConfigUpdates(tckr *time.Ticker, snapshotCache cache.SnapshotCache) {
-	lastModTime := int64(0)
 	snapVersion := uint(1)
 	for range tckr.C {
-
-		fi, err := os.Stat(configPath)
+		envoyConfig, err := discoveryClient.GetEnvoyConfig()
 		if err != nil {
-			log.Panicf("Unable to stat given config file: %s. Error: %v", configPath, err)
-		}
-
-		if fi.IsDir() {
-			log.Panicf("Given config path: %s points to a directory. This must be a file.", configPath)
-		}
-
-		currModTime := fi.ModTime().Unix()
-		if currModTime <= lastModTime {
-			continue
-		}
-
-		config, err := ioutil.ReadFile(configPath)
-		if err != nil {
-			log.Panicf("Unable to read given config file: %s. Error: %v", configPath, err)
-		}
-
-		kvs := make(map[string]interface{})
-		err = json.Unmarshal(config, &kvs)
-		if err != nil {
-			log.Panicf("Unable to convert the contents of config file: %s into JSON. Error: %v", configPath, err)
-		}
-
-		if err = pkg.EnvoyDKVConfig(kvs).ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
-			log.Panicf("Unable to compute and set snapshot. Error: %v", err)
+			log.Printf("Unable to get cluster info: Error: %v", err)
 		} else {
-			snapVersion++
+			if err = envoyConfig.ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
+				log.Printf("Unable to compute and set snapshot. Error: %v", err)
+			} else {
+				snapVersion++
+			}
 		}
 	}
 }

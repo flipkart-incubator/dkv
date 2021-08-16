@@ -100,7 +100,6 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 			d.logger.Error("Partial failure in getting cluster info", zap.Error(err))
 			return nil, err
 		} else {
-
 			clusterInfo = append(clusterInfo, serverpb.KVPair{
 				Key:   itRes.Key,
 				Value: itRes.Value,
