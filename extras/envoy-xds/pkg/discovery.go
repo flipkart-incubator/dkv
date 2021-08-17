@@ -15,7 +15,7 @@ type DiscoveryClient struct {
 	configPath string
 }
 
-// Create a connection to DKV Service discovery client which provides a view of entire cluster
+// InitServiceDiscoveryClient Create a connection to DKV Service discovery client which provides a view of entire cluster
 // Cluster comprises of all databases and shards (vBuckets) which are registering to this service discovery group
 func InitServiceDiscoveryClient(configPath string) *DiscoveryClient {
 	kvs, err := readConfig(configPath)
@@ -43,20 +43,17 @@ func readConfig(configPath string) (map[string]interface{}, error) {
 }
 
 func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
-
 	kvs, err := readConfig(c.configPath)
 	if err != nil {
 		return nil, err
 	}
 
 	regions, err := c.client.GetClusterInfo(kvs["dc-id"].(string), kvs["database"].(string), "")
-
 	if err != nil {
 		return nil, err
 	}
 
 	allEndpoints := make(map[string][]string)
-
 	for _, region := range regions {
 		var nodeType string
 		if region.Status == serverpb.RegionStatus_LEADER || region.Status == serverpb.RegionStatus_PRIMARY_FOLLOWER ||

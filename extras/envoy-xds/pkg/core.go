@@ -2,27 +2,29 @@ package pkg
 
 import (
 	"fmt"
-	api "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	cluster "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	endpoint "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	listener "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointV2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	listenerV2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
-	route "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	hcm "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/v2"
-	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	"strconv"
 	"strings"
 	"time"
+
+	cluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	hcm "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	envoy_extensions_upstream_http_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/upstreams/http/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
+	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+
+	"github.com/golang/protobuf/ptypes"
 )
 
 const (
-	envoyRouter = "envoy.router"
-	envoyHCM    = "envoy.http_connection_manager"
-	appIdKey    = "appId"
+	appIdKey = "appId"
 )
 
 type EnvoyDKVConfig map[string]interface{}
@@ -50,7 +52,7 @@ func makeGRPCListener(shrd string, hp hostPort, domains ...string) *listener.Lis
 	for i, domain := range domains {
 		vhosts[i] = &route.VirtualHost{
 			Name:    domain,
-			Domains: []string{domain},
+			Domains: []string{"*"},
 			Routes: []*route.Route{{
 				Match: &route.RouteMatch{
 					PathSpecifier: &route.RouteMatch_Prefix{
@@ -62,21 +64,34 @@ func makeGRPCListener(shrd string, hp hostPort, domains ...string) *listener.Lis
 						ClusterSpecifier: &route.RouteAction_Cluster{
 							Cluster: domain,
 						},
+						Timeout: durationpb.New(60 * time.Second),
+						RetryPolicy: &route.RetryPolicy{
+							NumRetries: wrapperspb.UInt32(2),
+							RetryHostPredicate: []*route.RetryPolicy_RetryHostPredicate{
+								{
+									Name: "envoy.retry_host_predicates.previous_hosts",
+								},
+							},
+							HostSelectionRetryMaxAttempts: 3,
+						},
 					},
 				},
 			}},
 		}
 	}
 	manager := &hcm.HttpConnectionManager{
-		CodecType:  hcm.HttpConnectionManager_AUTO,
-		StatPrefix: "ingress_http",
+		CodecType:            hcm.HttpConnectionManager_AUTO,
+		StatPrefix:           "ingress_http",
+		Http2ProtocolOptions: &core.Http2ProtocolOptions{},
 		RouteSpecifier: &hcm.HttpConnectionManager_RouteConfig{
-			RouteConfig: &api.RouteConfiguration{
+			RouteConfig: &route.RouteConfiguration{
 				VirtualHosts: vhosts,
 			},
 		},
 		HttpFilters: []*hcm.HttpFilter{{
-			Name: envoyRouter,
+			Name: wellknown.GRPCWeb,
+		}, {
+			Name: wellknown.Router,
 		}},
 	}
 	pbst, err := ptypes.MarshalAny(manager)
@@ -97,14 +112,27 @@ func makeGRPCListener(shrd string, hp hostPort, domains ...string) *listener.Lis
 				},
 			},
 		},
-		FilterChains: []*listenerV2.FilterChain{{
-			Filters: []*listenerV2.Filter{{
-				Name: envoyHCM,
-				ConfigType: &listenerV2.Filter_TypedConfig{
+		FilterChains: []*listener.FilterChain{{
+			Filters: []*listener.Filter{{
+				Name: wellknown.HTTPConnectionManager,
+				ConfigType: &listener.Filter_TypedConfig{
 					TypedConfig: pbst,
 				},
 			}},
 		}},
+	}
+}
+
+func http2ProtocolOptions() map[string]*any.Any {
+	return map[string]*any.Any{
+		"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": MustMarshalAny(
+			&envoy_extensions_upstream_http_v3.HttpProtocolOptions{
+				UpstreamProtocolOptions: &envoy_extensions_upstream_http_v3.HttpProtocolOptions_ExplicitHttpConfig_{
+					ExplicitHttpConfig: &envoy_extensions_upstream_http_v3.HttpProtocolOptions_ExplicitHttpConfig{
+						ProtocolConfig: &envoy_extensions_upstream_http_v3.HttpProtocolOptions_ExplicitHttpConfig_Http2ProtocolOptions{},
+					},
+				},
+			}),
 	}
 }
 
@@ -114,13 +142,24 @@ func makeClusters(endpoints map[string][]hostPort, connectTimeouts map[string]ti
 		dkvClus.Name = clusName
 		dkvClus.ConnectTimeout = ptypes.DurationProto(connectTimeouts[clusName])
 		dkvClus.ClusterDiscoveryType = &cluster.Cluster_Type{Type: cluster.Cluster_STATIC}
-		dkvClus.Http2ProtocolOptions = new(core.Http2ProtocolOptions)
+		//dkvClus.Http2ProtocolOptions = &core.Http2ProtocolOptions{}
+		dkvClus.TypedExtensionProtocolOptions = http2ProtocolOptions()
+		dkvClus.HealthChecks = []*core.HealthCheck{
+			{
+				Timeout:            durationpb.New(1 * time.Second),
+				Interval:           durationpb.New(5 * time.Second),
+				IntervalJitter:     durationpb.New(1 * time.Second),
+				UnhealthyThreshold: wrapperspb.UInt32(3),
+				HealthyThreshold:   wrapperspb.UInt32(2),
+				HealthChecker:      &core.HealthCheck_TcpHealthCheck_{},
+			},
+		}
 		dkvClus.LbPolicy = cluster.Cluster_ROUND_ROBIN
-		var lbEndpoints []*endpointV2.LbEndpoint
+		var lbEndpoints []*endpoint.LbEndpoint
 		for _, ep := range endpoints[clusName] {
-			lbEndpoints = append(lbEndpoints, &endpointV2.LbEndpoint{
-				HostIdentifier: &endpointV2.LbEndpoint_Endpoint{
-					Endpoint: &endpointV2.Endpoint{
+			lbEndpoints = append(lbEndpoints, &endpoint.LbEndpoint{
+				HostIdentifier: &endpoint.LbEndpoint_Endpoint{
+					Endpoint: &endpoint.Endpoint{
 						Address: &core.Address{
 							Address: &core.Address_SocketAddress{
 								SocketAddress: &core.SocketAddress{
@@ -139,7 +178,7 @@ func makeClusters(endpoints map[string][]hostPort, connectTimeouts map[string]ti
 
 		dkvClus.LoadAssignment = &endpoint.ClusterLoadAssignment{
 			ClusterName: clusName,
-			Endpoints: []*endpointV2.LocalityLbEndpoints{{
+			Endpoints: []*endpoint.LocalityLbEndpoints{{
 				//Locality:
 				LbEndpoints: lbEndpoints,
 			}},
@@ -175,7 +214,16 @@ func (conf EnvoyDKVConfig) computeSnapshot(appId string, version uint) (snap cac
 			snapVersion := strconv.Itoa(int(version))
 			clustsRes := getClusterResources(clusts)
 			lstnrsRes := getListenerResources(lstnrs)
-			snap = cache.NewSnapshot(snapVersion, nil, clustsRes, nil, lstnrsRes, nil)
+
+			snap = cache.NewSnapshot(
+				snapVersion,
+				[]types.Resource{}, // endpoints,
+				clustsRes,
+				[]types.Resource{}, // routes,
+				lstnrsRes,
+				[]types.Resource{}, // runtimes
+				[]types.Resource{}, // secrets,
+			)
 		} else {
 			err = fmt.Errorf("'%s' key must have an array of strings as value", shardsKey)
 		}

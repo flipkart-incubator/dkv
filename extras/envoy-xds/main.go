@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/flipkart-incubator/dkv/extras/envoy-xds/pkg"
 	"log"
 	"net"
 	"os"
@@ -14,12 +13,14 @@ import (
 	"syscall"
 	"time"
 
-	api "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	cluster "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	listener "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/v2"
-	xds "github.com/envoyproxy/go-control-plane/pkg/server/v2"
+	"github.com/flipkart-incubator/dkv/extras/envoy-xds/pkg"
+
+	cluster "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
+	listener "github.com/envoyproxy/go-control-plane/envoy/service/listener/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	xds "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -89,7 +90,7 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 	grpcServer := grpc.NewServer()
 	reflection.Register(grpcServer)
 	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, server)
-	api.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
+	endpoint.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
 	listener.RegisterListenerDiscoveryServiceServer(grpcServer, server)
 	cluster.RegisterClusterDiscoveryServiceServer(grpcServer, server)
 	lis, err := net.Listen("tcp", listenAddr)
