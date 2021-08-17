@@ -19,12 +19,12 @@ type DiscoveryClient struct {
 // Cluster comprises of all databases and shards (vBuckets) which are registering to this service discovery group
 func InitServiceDiscoveryClient(configPath string) *DiscoveryClient {
 	kvs, err := readConfig(configPath)
-	if (err != nil) {
+	if err != nil {
 		log.Panicf("Failed to read Config File %v.", err)
 	}
 	client, err := ctl.NewInSecureDKVClient(kvs["discoveryServerAddr"].(string), "")
-	if (err != nil) {
-	   log.Panicf("Failed to start Discovery Client %v.", err)
+	if err != nil {
+		log.Panicf("Failed to start Discovery Client %v.", err)
 	}
 	return &DiscoveryClient{client: client, configPath: configPath}
 }
@@ -45,7 +45,7 @@ func readConfig(configPath string) (map[string]interface{}, error) {
 func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
 
 	kvs, err := readConfig(c.configPath)
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -55,7 +55,7 @@ func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
 		return nil, err
 	}
 
-	all_endpoints := make(map[string][]string)
+	allEndpoints := make(map[string][]string)
 
 	for _, region := range regions {
 		var nodeType string
@@ -65,21 +65,21 @@ func (c *DiscoveryClient) GetEnvoyConfig() (EnvoyDKVConfig, error) {
 		} else if region.Status == serverpb.RegionStatus_ACTIVE_SLAVE {
 			nodeType = "slaves"
 		} else {
-			log.Printf("Unexpected node status %s", region)
+			log.Printf("Unexpected node status %s \n", region)
 			continue
 		}
 		key := fmt.Sprintf("%s-%s.endpoints", region.VBucket, nodeType)
-		endpoints, ok := all_endpoints[key]
+		endpoints, ok := allEndpoints[key]
 		if !ok {
 			endpoints = make([]string, 0)
 		}
-		all_endpoints[key] = append(endpoints, region.NodeAddress)
+		allEndpoints[key] = append(endpoints, region.NodeAddress)
 	}
 
-	for key, value := range all_endpoints {
+	for key, value := range allEndpoints {
 		kvs[key] = value
 	}
 
-	fmt.Printf("Envoy Config is %s", kvs)
+	fmt.Printf("Envoy Config is %s \n", kvs)
 	return kvs, nil
 }

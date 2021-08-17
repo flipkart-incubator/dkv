@@ -117,7 +117,7 @@ func TestPutIntAndGet(t *testing.T) {
 		if i%2 == 0 {
 			ttl = 0
 		}
-		if err := store.Put(&serverpb.KVPair{Key:[]byte(key),Value: b, ExpireTS: uint64(ttl)}); err != nil {
+		if err := store.Put(&serverpb.KVPair{Key: []byte(key), Value: b, ExpireTS: uint64(ttl)}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -167,7 +167,7 @@ func TestCompactionFilterOnExpiredKeys(t *testing.T) {
 	for i := 1; i <= numKeys; i++ {
 		key, value := fmt.Sprintf("%s_%d", keyPref, i), fmt.Sprintf("V%d", i)
 		expireAt := time.Now().Add(-2 * time.Second).Unix()
-		if err := store.Put(&serverpb.KVPair{Key:[]byte(key),Value: []byte(value),ExpireTS: uint64(expireAt)}); err != nil {
+		if err := store.Put(&serverpb.KVPair{Key: []byte(key), Value: []byte(value), ExpireTS: uint64(expireAt)}); err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		}
 	}
@@ -575,7 +575,7 @@ func TestMultiGet(t *testing.T) {
 		if i&1 == 1 {
 			ttl = time.Now().Add(2 * time.Second).Unix()
 		}
-		err := store.Put(&serverpb.KVPair{Key:[]byte(key), Value:[]byte(value), ExpireTS: uint64(ttl)})
+		err := store.Put(&serverpb.KVPair{Key: []byte(key), Value: []byte(value), ExpireTS: uint64(ttl)})
 		if err != nil {
 			t.Fatalf("Unable to PUT. Key: %s, Value: %s, Error: %v", key, value, err)
 		} else {

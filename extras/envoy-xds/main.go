@@ -25,10 +25,10 @@ import (
 )
 
 var (
-	configPath          string
-	listenAddr          string
-	pollInterval        time.Duration
-	discoveryClient     *pkg.DiscoveryClient
+	configPath      string
+	listenAddr      string
+	pollInterval    time.Duration
+	discoveryClient *pkg.DiscoveryClient
 )
 
 func init() {
@@ -61,10 +61,10 @@ func pollForConfigUpdates(tckr *time.Ticker, snapshotCache cache.SnapshotCache) 
 	for range tckr.C {
 		envoyConfig, err := discoveryClient.GetEnvoyConfig()
 		if err != nil {
-			log.Printf("Unable to get cluster info: Error: %v", err)
+			log.Printf("Unable to get cluster info: Error: %v \n", err)
 		} else {
 			if err = envoyConfig.ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
-				log.Printf("Unable to compute and set snapshot. Error: %v", err)
+				log.Printf("Unable to compute and set snapshot. Error: %v \n", err)
 			} else {
 				snapVersion++
 			}
@@ -97,7 +97,7 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 		log.Panicf("Unable to create listener for xDS GRPC service. Error: %v", err)
 		return nil, nil
 	}
-	log.Printf("Successfully setup the xDS GRPC service at %s...", listenAddr)
+	log.Printf("Successfully setup the xDS GRPC service at %s... \n", listenAddr)
 	return grpcServer, lis
 }
 
