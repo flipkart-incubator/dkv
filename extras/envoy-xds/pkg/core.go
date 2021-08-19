@@ -50,9 +50,13 @@ func (conf EnvoyDKVConfig) ComputeAndSetSnapshot(snapVer uint, snapCache cache.S
 func makeGRPCListener(shrd string, hp hostPort, domains ...string) *listener.Listener {
 	vhosts := make([]*route.VirtualHost, len(domains))
 	for i, domain := range domains {
+		var authorityDomain string
+		if authorityDomain = "*"; len(domains) > 1 {
+			authorityDomain = domain
+		}
 		vhosts[i] = &route.VirtualHost{
 			Name:    domain,
-			Domains: []string{"*"},
+			Domains: []string{authorityDomain},
 			Routes: []*route.Route{{
 				Match: &route.RouteMatch{
 					PathSpecifier: &route.RouteMatch_Prefix{
