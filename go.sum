@@ -69,6 +69,8 @@ github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7 h1:Px
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210507064827-a2162cb9a3f7/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
 github.com/flipkart-incubator/nexus v0.0.0-20210807062046-6003695db21c h1:NbD+5tO3PSkJghIILEWhdLxoBzESVxsDpC9drzsNKQk=
 github.com/flipkart-incubator/nexus v0.0.0-20210807062046-6003695db21c/go.mod h1:ZyCh+RU80Rh7j4WtK+Tjy1FnD9LYMaafAqXwn2zO+w8=
+github.com/flipkart-incubator/nexus v0.0.0-20210821120250-1b6126547f07 h1:jaHfONDLfy65LCJG4ZJvqq2LPagLWOK7WKYBnF2pGoA=
+github.com/flipkart-incubator/nexus v0.0.0-20210821120250-1b6126547f07/go.mod h1:AuyvGHSa6165pCBRTYTE7PHfXc7DKKhSvIPavYItA3k=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
 github.com/go-kit/kit v0.9.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
