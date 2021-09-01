@@ -423,13 +423,6 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 
-	// Prevent any other backups or restores
-	err := rdb.beginGlobalMutation()
-	if err != nil {
-		return nil, err
-	}
-	defer rdb.endGlobalMutation()
-
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
@@ -484,6 +477,13 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 	defer snap.Close()
+
+	// Prevent any other backups or restores
+	err := rdb.beginGlobalMutation()
+	if err != nil {
+		return err
+	}
+	defer rdb.endGlobalMutation()
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
