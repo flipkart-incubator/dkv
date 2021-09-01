@@ -437,14 +437,6 @@ func (r *checkPointSnapshot) Close() error {
 	return os.RemoveAll(r.dir)
 }
 
-// exists returns whether the given file or directory exists
-func exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil { return true, nil }
-	if os.IsNotExist(err) { return false, nil }
-	return false, err
-}
-
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 
@@ -508,12 +500,12 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 	defer snap.Close()
 
-	// Prevent any other backups or restores
-	//err := rdb.beginGlobalMutation()
-	//if err != nil {
-	//	return err
-	//}
-	//defer rdb.endGlobalMutation()
+	//Prevent any other backups or restores
+	err := rdb.beginGlobalMutation()
+	if err != nil {
+		return err
+	}
+	defer rdb.endGlobalMutation()
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
@@ -532,15 +524,6 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to restore from checkpoint", zap.Error(err))
 		return err
 	}
-
-	////print all keys
-	//itOpts, _ := storage.NewIteratorOptions()
-	//it := rdb.Iterate(itOpts)
-	//for it.HasNext() {
-	//	entry := it.Next()
-	//	fmt.Printf("Key: %s Value: %s\n", entry.Key, entry.Value)
-	//}
-	//it.Close()
 
 	return nil
 }
@@ -931,4 +914,12 @@ func checksForRestore(rstrPath string) error {
 	default:
 		return nil
 	}
+}
+
+// exists returns whether the given file or directory exists
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil { return true, nil }
+	if os.IsNotExist(err) { return false, nil }
+	return false, err
 }
