@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -422,6 +423,28 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 	return os.Open(fileName)
 }
 
+type checkPointSnapshot struct {
+	tar *utils.StreamingTar
+	dir string
+}
+
+func (r *checkPointSnapshot) Read(p []byte) (n int, err error) {
+	return r.tar.Read(p)
+}
+
+func (r *checkPointSnapshot) Close() error {
+	r.tar.Close()
+	return os.RemoveAll(r.dir)
+}
+
+// exists returns whether the given file or directory exists
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil { return true, nil }
+	if os.IsNotExist(err) { return false, nil }
+	return false, err
+}
+
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 
@@ -448,14 +471,19 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	fmt.Println("Checkpoint DIR", sstDir)
+	//check that checkpoint was successfully created
+	if created, _ := exists(sstDir); !created {
+		err = fmt.Errorf("checkpoint.CreateCheckpoint failed")
+		rdb.opts.lgr.Error("GetSnapshot: Checkpoint dir was not created", zap.Error(err))
+		return nil, err
+	}
 
 	var files []*os.File
 	// walk through every file in the folder
-	filepath.Walk(sstDir, func(file string, fi os.FileInfo, err error) error {
+	filepath.WalkDir(sstDir, func(path string, fi fs.DirEntry, err error) error {
 		// if not a dir, write file content
 		if !fi.IsDir() {
-			f, err := os.Open(file)
+			f, err := os.Open(path)
 			if err != nil {
 				return err
 			}
@@ -470,7 +498,7 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	return tarF, nil
+	return &checkPointSnapshot{tar: tarF, dir: sstDir}, nil
 }
 
 func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
