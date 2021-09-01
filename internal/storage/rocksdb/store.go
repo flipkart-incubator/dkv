@@ -251,34 +251,36 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) ReplaceDB(checkpointDir string) (err error) {
-	rdb.Close()
+func (rdb *rocksDB) ReplaceDB(checkpointDir string) error {
 	backupDir := fmt.Sprintf("%s.bak", rdb.opts.folderName)
+	rdb.optimTrxnDB.Close()
 
-	err = storage.RenameFolder(rdb.opts.folderName, backupDir)
+	err := storage.RenameFolder(rdb.opts.folderName, backupDir)
 	if err != nil {
 		rdb.opts.lgr.Error("Failed to backup existing db")
-		return
+		return err
 	}
 
 	err = storage.RenameFolder(checkpointDir, rdb.opts.folderName)
 	if err != nil {
 		rdb.opts.lgr.Error("Failed to replace with new db")
-		return
+		return err
 	}
 
 	// In any case, reopen a new DB
 	if finalDB, openErr := openStore(rdb.opts); openErr != nil {
 		rdb.opts.lgr.Error("Failed to open new db")
-		err = openErr
+		return openErr
 	} else {
 		rdb.db =  finalDB.db
 		rdb.optimTrxnDB = finalDB.optimTrxnDB
 		rdb.normalCF = finalDB.normalCF
 		rdb.ttlCF = finalDB.ttlCF
+
+		_ = os.RemoveAll(backupDir) //remove old db.
 	}
 
-	return
+	return nil
 }
 
 func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
@@ -479,11 +481,11 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 	defer snap.Close()
 
 	// Prevent any other backups or restores
-	err := rdb.beginGlobalMutation()
-	if err != nil {
-		return err
-	}
-	defer rdb.endGlobalMutation()
+	//err := rdb.beginGlobalMutation()
+	//if err != nil {
+	//	return err
+	//}
+	//defer rdb.endGlobalMutation()
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {

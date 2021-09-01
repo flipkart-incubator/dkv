@@ -664,6 +664,7 @@ func TestGetPutSnapshot(t *testing.T) {
 			getKeys(t, numTrxns, keyPrefix1, valPrefix1)
 			getKeys(t, numTrxns, keyPrefix1T, valPrefix1T)
 			//getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+			noKeys(t, numTrxns, keyPrefix2)
 		}
 	}
 }
@@ -687,7 +688,8 @@ func TestGetPutSnapshotTTLOnly(t *testing.T) {
 			t.Fatal(err)
 		} else {
 			getKeys(t, numTrxns, keyPrefix1T, valPrefix1T)
-			getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+			//getKeys(t, numTrxns, keyPrefix2, valPrefix2)
+			noKeys(t, numTrxns, keyPrefix2)
 		}
 	}
 }
