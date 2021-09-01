@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -250,6 +251,36 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
+func (rdb *rocksDB) ReplaceDB(checkpointDir string) (err error) {
+	rdb.Close()
+	backupDir := fmt.Sprintf("%s.bak", rdb.opts.folderName)
+
+	err = storage.RenameFolder(rdb.opts.folderName, backupDir)
+	if err != nil {
+		rdb.opts.lgr.Error("Failed to backup existing db")
+		return
+	}
+
+	err = storage.RenameFolder(checkpointDir, rdb.opts.folderName)
+	if err != nil {
+		rdb.opts.lgr.Error("Failed to replace with new db")
+		return
+	}
+
+	// In any case, reopen a new DB
+	if finalDB, openErr := openStore(rdb.opts); openErr != nil {
+		rdb.opts.lgr.Error("Failed to open new db")
+		err = openErr
+	} else {
+		rdb.db =  finalDB.db
+		rdb.optimTrxnDB = finalDB.optimTrxnDB
+		rdb.normalCF = finalDB.normalCF
+		rdb.ttlCF = finalDB.ttlCF
+	}
+
+	return
+}
+
 func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 	metricsPrefix := "rocksdb.put.multi"
 	if len(pairs) == 1 {
@@ -391,29 +422,54 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
-	snap := rdb.db.NewSnapshot()
-	defer rdb.db.ReleaseSnapshot(snap)
+
+	// Prevent any other backups or restores
+	err := rdb.beginGlobalMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer rdb.endGlobalMutation()
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return nil, err
 	}
-	defer os.RemoveAll(sstDir)
-
-	normalSSTFile, err := rdb.generateSST(snap, rdb.normalCF, sstDir)
+	err = os.RemoveAll(sstDir) //this is preparation step.
 	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to generate sst file", zap.Error(err))
+		rdb.opts.lgr.Error("GetSnapshot: Failed to prepare temporary dir", zap.Error(err))
 		return nil, err
 	}
 
-	ttlSSTFile, err := rdb.generateSST(snap, rdb.ttlCF, sstDir)
+	checkpoint, err := rdb.db.NewCheckpoint()
 	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to generate ttl sst file", zap.Error(err))
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create new checkpoint", zap.Error(err))
 		return nil, err
 	}
 
-	tarF, err := utils.CreateStreamingTar(normalSSTFile, ttlSSTFile)
+	err = checkpoint.CreateCheckpoint(sstDir, 0)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to make checkpoint", zap.Error(err))
+		return nil, err
+	}
+
+	fmt.Println("Checkpoint DIR", sstDir)
+
+	var files []*os.File
+	// walk through every file in the folder
+	filepath.Walk(sstDir, func(file string, fi os.FileInfo, err error) error {
+		// if not a dir, write file content
+		if !fi.IsDir() {
+			f, err := os.Open(file)
+			if err != nil {
+				return err
+			}
+			files = append(files, f)
+		}
+		return nil
+	})
+
+	tarF, err := utils.CreateStreamingTar(files...)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
@@ -434,7 +490,6 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return err
 	}
-	defer os.RemoveAll(sstDir)
 
 	_, err = utils.ExtractTar(snap, fmt.Sprintf("%s/", sstDir))
 	if err != nil {
@@ -442,31 +497,20 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		return err
 	}
 
-	// TODO: Check any option needs to be set
-	ingestOpts := gorocksdb.NewDefaultIngestExternalFileOptions()
-	defer ingestOpts.Destroy()
-
-	for _, cf := range []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF} {
-
-		var fileName string
-		if fileName = sstDir + sstDefaultCF; cf == rdb.ttlCF {
-			fileName = sstDir + sstTtlCF
-		}
-
-		sfi, err := os.Stat(fileName)
-		if err != nil {
-			return err
-		}
-		if sfi.Size() > 0 {
-			err = rdb.db.IngestExternalFileCF(cf, []string{fileName}, ingestOpts)
-			if err != nil {
-				rdb.opts.lgr.Error("PutSnapshot: Failed to ingest sst file", zap.Error(err))
-				return err
-			}
-		} else {
-			rdb.opts.lgr.Warn("PutSnapshot: Skipped to ingest sst file as size is 0", zap.String("file", fileName))
-		}
+	err = rdb.ReplaceDB(sstDir)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to restore from checkpoint", zap.Error(err))
+		return err
 	}
+
+	////print all keys
+	//itOpts, _ := storage.NewIteratorOptions()
+	//it := rdb.Iterate(itOpts)
+	//for it.HasNext() {
+	//	entry := it.Next()
+	//	fmt.Printf("Key: %s Value: %s\n", entry.Key, entry.Value)
+	//}
+	//it.Close()
 
 	return nil
 }
