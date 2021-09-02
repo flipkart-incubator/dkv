@@ -21,7 +21,7 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 
 ## Dependencies
 - Go version 1.16+
-- [RocksDB](https://github.com/facebook/rocksdb) v6.5.3 as a storage engine
+- [RocksDB](https://github.com/facebook/rocksdb) v6.22.1 as a storage engine
 - [GoRocksDB](https://github.com/tecbot/gorocksdb) provides the CGo bindings with RocksDB
 - [Badger](https://github.com/dgraph-io/badger) v1.6 as a storage engine
 - [Nexus](https://github.com/flipkart-incubator/nexus) for sync replication over [Raft](https://raft.github.io/) consensus
@@ -118,12 +118,12 @@ $ ./bin/dkvsrv \
     -db-folder <folder_path> \
     -listen-addr <host:port> \
     -role master \
-    -nexus-node-url http://<host:port> \ #optional when running on separete nodes.
+    -nexus-node-url http://<host:port> \ #optional when running on separate nodes.
     -nexus-cluster-url <cluster_url>
 ```
 
 All these 3 DKV instances form a database cluster each listening on separate ports for
-Nexus & client communications. One can now construct the value for `nexusClusterUrl` param
+Nexus & client communications. One can now construct the value for `nexus-cluster-url` param
 in the above command using this example setup below:
 
 |NexusNodeId|Hostname|NexusPort|
@@ -132,7 +132,7 @@ in the above command using this example setup below:
 |2|dkv.az2|9020|
 |3|dkv.az3|9020|
 
-Then the value for `nexusClusterUrl` must be:
+Then the value for `nexus-cluster-url` must be:
 ```bash
 "http://dkv.az1:9020,http://dkv.az2:9020,http://dkv.az3:9020"
 ```
@@ -253,7 +253,7 @@ $ ./bin/dkvsrv \
 Subsequently, any mutations performed on the master node's keyspace using `dkvctl`
 will be applied automatically onto the slave node's keyspace. By default, a given
 slave node polls for changes from its master node once every _5 seconds_. This can
-be changed through the `replPollInterval` flag while launching the slave node.
+be changed through the `repl-poll-interval` flag while launching the slave node.
 
 Note that only **rocksdb** engine is supported on the DKV master node while the slave
 node can be launched with either *rocksdb* or *badger* storage engines.
@@ -262,7 +262,7 @@ node can be launched with either *rocksdb* or *badger* storage engines.
 
 For slave nodes using the Badger storage engine, we also support an in-memory mode
 where the entire dataset is stored in RAM without any writes to disk whatsoever.
-This can be achieved by using the `-dbDiskless` option during launch as shown here.
+This can be achieved by using the `-diskless` option during launch as shown here.
 
 ```bash
 $ ./bin/dkvsrv \
