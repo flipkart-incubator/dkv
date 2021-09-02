@@ -445,11 +445,6 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return nil, err
 	}
-	err = os.RemoveAll(sstDir) //this is preparation step.
-	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to prepare temporary dir", zap.Error(err))
-		return nil, err
-	}
 
 	checkpoint, err := rdb.db.NewCheckpoint()
 	if err != nil {
@@ -457,23 +452,22 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	err = checkpoint.CreateCheckpoint(sstDir, 0)
+	checkpointDir := fmt.Sprintf("%s/checkpoint", sstDir)
+	err = checkpoint.CreateCheckpoint(checkpointDir, 0)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to make checkpoint", zap.Error(err))
 		return nil, err
 	}
 
 	//check that checkpoint was successfully created
-	if created, _ := exists(sstDir); !created {
+	if created, _ := exists(checkpointDir); !created {
 		err = fmt.Errorf("checkpoint.CreateCheckpoint failed")
 		rdb.opts.lgr.Error("GetSnapshot: Checkpoint dir was not created", zap.Error(err))
 		return nil, err
 	}
 
 	var files []*os.File
-	// walk through every file in the folder
-	filepath.WalkDir(sstDir, func(path string, fi fs.DirEntry, err error) error {
-		// if not a dir, write file content
+	filepath.WalkDir(checkpointDir, func(path string, fi fs.DirEntry, err error) error {
 		if !fi.IsDir() {
 			f, err := os.Open(path)
 			if err != nil {
@@ -489,7 +483,6 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
 	}
-
 	return &checkPointSnapshot{tar: tarF, dir: sstDir}, nil
 }
 
