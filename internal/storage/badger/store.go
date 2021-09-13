@@ -184,6 +184,10 @@ func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 	return &badgerDB{db, bdbOpts, 0}, nil
 }
 
+func (bdb *badgerDB) Compact()  {
+
+}
+
 func (bdb *badgerDB) Close() error {
 	bdb.db.Close()
 	return nil

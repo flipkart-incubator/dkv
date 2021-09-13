@@ -321,16 +321,23 @@ type distributedService struct {
 	lg       *zap.Logger
 	statsCli stats.Client
 	isClosed bool
+	count	int32
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
 	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, false}
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, false, 0}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
+	ds.count++
+	ds.lg.Info("Got PUT Request in master " + string(ds.count))
+	if (ds.count % 10 == 0) {
+		ds.DKVService.(*standaloneService).store.Compact()
+		ds.lg.Info("Compacting storage")
+	}
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Put: putReq})
 	res := &serverpb.PutResponse{Status: newEmptyStatus()}
 	if err != nil {

@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -141,6 +140,11 @@ func WithRocksDBConfig(iniFile string) DBOption {
 // options. It uses the given folder for storing the data files.
 func OpenDB(dbFolder string, dbOpts ...DBOption) (DB, error) {
 	opts := newOptions(dbFolder)
+	// how is stuff restored if all nodes go down and brought back up ?
+	//err := gorocksdb.DestroyDb(dbFolder, opts.rocksDBOpts)
+	//if err != nil {
+	//	panic("Failed to delete database " + dbFolder)
+	//}
 	for _, dbOpt := range dbOpts {
 		dbOpt(opts)
 	}
@@ -246,6 +250,11 @@ func (rdb *rocksDB) Compaction() error {
 	return nil
 }
 
+func (rdb *rocksDB) Compact() {
+	rdb.db.CompactRangeCF(rdb.ttlCF, gorocksdb.Range{nil, nil})
+	rdb.db.CompactRangeCF(rdb.normalCF, gorocksdb.Range{nil, nil})
+}
+
 func (rdb *rocksDB) Close() error {
 	rdb.optimTrxnDB.Close()
 	//rdb.opts.destroy()
@@ -293,6 +302,7 @@ func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 	defer rdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
 	wb := gorocksdb.NewWriteBatch()
 	for _, kv := range pairs {
+		rdb.opts.lgr.Info("Got Put Request for Key " + string(kv.Key) + " and Value " + string(kv.Value));
 		if kv == nil {
 			continue //skip nil entries
 		}
@@ -317,6 +327,8 @@ func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 	if err != nil {
 		rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
 	}
+	changeNum, _ := rdb.GetLatestCommittedChangeNumber()
+	rdb.opts.lgr.Info("Change number is " + strconv.FormatUint(changeNum, 10));
 	return err
 }
 
@@ -439,58 +451,36 @@ func (r *checkPointSnapshot) Close() error {
 
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
+	snap := rdb.db.NewSnapshot()
+	defer rdb.db.ReleaseSnapshot(snap)
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return nil, err
 	}
-	err = os.RemoveAll(sstDir) //this is preparation step.
-	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to prepare temporary dir", zap.Error(err))
-		return nil, err
-	}
+	defer os.RemoveAll(sstDir)
 
-	checkpoint, err := rdb.db.NewCheckpoint()
+	normalSSTFile, err := rdb.generateSST(snap, rdb.normalCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create new checkpoint", zap.Error(err))
 		return nil, err
 	}
 
-	err = checkpoint.CreateCheckpoint(sstDir, 0)
+	ttlSSTFile, err := rdb.generateSST(snap, rdb.ttlCF, sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to make checkpoint", zap.Error(err))
 		return nil, err
 	}
 
-	//check that checkpoint was successfully created
-	if created, _ := exists(sstDir); !created {
-		err = fmt.Errorf("checkpoint.CreateCheckpoint failed")
-		rdb.opts.lgr.Error("GetSnapshot: Checkpoint dir was not created", zap.Error(err))
-		return nil, err
-	}
+	tarF, err := utils.CreateStreamingTar(normalSSTFile, ttlSSTFile)
 
-	var files []*os.File
-	// walk through every file in the folder
-	filepath.WalkDir(sstDir, func(path string, fi fs.DirEntry, err error) error {
-		// if not a dir, write file content
-		if !fi.IsDir() {
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			files = append(files, f)
-		}
-		return nil
-	})
-
-	tarF, err := utils.CreateStreamingTar(files...)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
 		return nil, err
 	}
 
-	return &checkPointSnapshot{tar: tarF, dir: sstDir}, nil
+	return tarF, nil
 }
 
 func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
@@ -500,18 +490,14 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
 	defer snap.Close()
 
-	//Prevent any other backups or restores
-	err := rdb.beginGlobalMutation()
-	if err != nil {
-		return err
-	}
-	defer rdb.endGlobalMutation()
+
 
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return err
 	}
+	defer os.RemoveAll(sstDir)
 
 	_, err = utils.ExtractTar(snap, fmt.Sprintf("%s/", sstDir))
 	if err != nil {
@@ -519,10 +505,30 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		return err
 	}
 
-	err = rdb.ReplaceDB(sstDir)
-	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to restore from checkpoint", zap.Error(err))
-		return err
+	// TODO: Check any option needs to be set
+	ingestOpts := gorocksdb.NewDefaultIngestExternalFileOptions()
+	defer ingestOpts.Destroy()
+
+	for _, cf := range []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF} {
+
+		var fileName string
+		if fileName = sstDir + sstDefaultCF; cf == rdb.ttlCF {
+			fileName = sstDir + sstTtlCF
+		}
+
+		sfi, err := os.Stat(fileName)
+		if err != nil {
+			return err
+		}
+		if sfi.Size() > 0 {
+			err = rdb.db.IngestExternalFileCF(cf, []string{fileName}, ingestOpts)
+			if err != nil {
+				rdb.opts.lgr.Error("PutSnapshot: Failed to ingest sst file", zap.Error(err))
+				return err
+			}
+		} else {
+			rdb.opts.lgr.Warn("PutSnapshot: Skipped to ingest sst file as size is 0", zap.String("file", fileName))
+		}
 	}
 
 	return nil
