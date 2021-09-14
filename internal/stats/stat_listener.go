@@ -20,7 +20,7 @@ type StatListener struct {
 
 type MetricEvent struct {
 	metric DKVMetrics
-	host string
+	host   string
 }
 
 func NewStatListener() *StatListener {
@@ -30,19 +30,19 @@ func NewStatListener() *StatListener {
 func (sl *StatListener) Register(host string, outputChannel chan MetricEvent) (int64, error) {
 	sl.mapMutex.Lock()
 	defer sl.mapMutex.Unlock()
-	if  _ , exists := sl.listenerInfoMap[host] ; !exists {
+	if _, exists := sl.listenerInfoMap[host]; !exists {
 		newListenerInfo := NewListenerInfo(host)
 		if err := newListenerInfo.Start(); err != nil {
 			return 0, err
 		}
 		sl.listenerInfoMap[host] = newListenerInfo
 	}
-	return sl.listenerInfoMap[host].Register(outputChannel) , nil
+	return sl.listenerInfoMap[host].Register(outputChannel), nil
 }
 
 func (sl *StatListener) DeRegister(host string, id int64) {
 	sl.mapMutex.Lock()
-	if li , exists := sl.listenerInfoMap[host] ; exists {
+	if li, exists := sl.listenerInfoMap[host]; exists {
 		li.DeRegister(id)
 		if li.GetChannelCount() == 0 {
 			li.Stop()
@@ -53,17 +53,17 @@ func (sl *StatListener) DeRegister(host string, id int64) {
 }
 
 type ListenerInfo struct {
-	host string
+	host             string
 	outputChannelMap map[int64]chan MetricEvent
-	inputChannel <- chan MetricEvent
-	mapMutex sync.Mutex
-	ctx context.Context
-	cancelFunc context.CancelFunc
+	inputChannel     <-chan MetricEvent
+	mapMutex         sync.Mutex
+	ctx              context.Context
+	cancelFunc       context.CancelFunc
 }
 
 func NewListenerInfo(host string) *ListenerInfo {
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	return &ListenerInfo{host: host,outputChannelMap: make(map[int64]chan MetricEvent,2),inputChannel: make(<- chan MetricEvent,5),ctx:ctx,cancelFunc: cancelFunc}
+	return &ListenerInfo{host: host, outputChannelMap: make(map[int64]chan MetricEvent, 2), inputChannel: make(<-chan MetricEvent, 5), ctx: ctx, cancelFunc: cancelFunc}
 }
 
 func (li *ListenerInfo) GetChannelCount() int {
@@ -72,7 +72,7 @@ func (li *ListenerInfo) GetChannelCount() int {
 
 func (li *ListenerInfo) Start() error {
 	var err error
-	if li.inputChannel, err = getStreamChannel(li.host,li.ctx) ; err == nil{
+	if li.inputChannel, err = getStreamChannel(li.host, li.ctx); err == nil {
 		go li.BroadCast()
 	}
 	return err
@@ -80,16 +80,16 @@ func (li *ListenerInfo) Start() error {
 
 func (li *ListenerInfo) BroadCast() {
 	for {
-		select  {
-		case e := <- li.inputChannel:
+		select {
+		case e := <-li.inputChannel:
 			li.mapMutex.Lock()
-			for _ , outputChan := range li.outputChannelMap {
+			for _, outputChan := range li.outputChannelMap {
 				outputChan <- e
 			}
 			li.mapMutex.Unlock()
-		case <- li.ctx.Done():
+		case <-li.ctx.Done():
 			li.mapMutex.Lock()
-			for _ , outputChan := range li.outputChannelMap {
+			for _, outputChan := range li.outputChannelMap {
 				close(outputChan)
 			}
 			li.mapMutex.Unlock()
@@ -97,20 +97,22 @@ func (li *ListenerInfo) BroadCast() {
 	}
 }
 
-func getStreamChannel(host string , ctx context.Context) (<- chan MetricEvent,error){
+func getStreamChannel(host string, ctx context.Context) (<-chan MetricEvent, error) {
 
 	client := &http.Client{}
 	transport := &http.Transport{}
 	transport.DisableCompression = true
 	client.Transport = transport
-	request, _ := http.NewRequest("GET", host+"/metrics/stream", nil)
+	request, err := http.NewRequest("GET", "http://"+host+"/metrics/stream", nil)
+	if err != nil {
+		return nil, err
+	}
 	/* Add Header to accept streaming events */
 	request.Header.Set("Accept", "text/event-stream")
 	/* Make Channel to Report Events */
-	eventChannel := make(chan MetricEvent,5)
+	eventChannel := make(chan MetricEvent, 5)
 	/* Ensure Request gets Cancelled along with Context */
 	requestWithContext := request.WithContext(ctx)
-
 	/* Fire Request */
 	if response, err := client.Do(requestWithContext); err == nil {
 		/* Open a Reader on Response Body */
@@ -118,7 +120,7 @@ func getStreamChannel(host string , ctx context.Context) (<- chan MetricEvent,er
 	} else {
 		return nil, err
 	}
-	return eventChannel,nil
+	return eventChannel, nil
 }
 
 func parseEvent(response *http.Response, eventChannel chan MetricEvent, host string, ctx context.Context) {
@@ -131,9 +133,9 @@ func parseEvent(response *http.Response, eventChannel chan MetricEvent, host str
 			return
 		default:
 			/* Read Lines Upto Delimiter */
-			if readBytes, err := br.ReadBytes('\n'); err == nil  {
-				if event, _ := buildEvent(readBytes); err == nil {
-					eventChannel <- MetricEvent{metric: *event,host:host}
+			if readBytes, err := br.ReadBytes('\n'); err == nil {
+				if event, err := buildEvent(readBytes); err == nil {
+					eventChannel <- MetricEvent{metric: *event, host: host}
 				}
 			} else {
 				close(eventChannel)
@@ -147,8 +149,8 @@ func buildEvent(byts []byte) (*DKVMetrics, error) {
 	splits := bytes.Split(byts, []byte{':', ' '})
 	if len(splits) == 2 {
 		dkvMetrics := &DKVMetrics{}
-		err := json.Unmarshal(splits[1],dkvMetrics)
-		return dkvMetrics,err
+		err := json.Unmarshal(splits[1], dkvMetrics)
+		return dkvMetrics, err
 	}
 	return nil, errors.New("Invalid Response")
 }

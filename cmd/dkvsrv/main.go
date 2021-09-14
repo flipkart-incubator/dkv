@@ -79,7 +79,7 @@ var (
 	statsCli       stats.Client
 	statsPublisher *stats.StatPublisher
 
-	discoveryClient discovery.Client
+	discoveryClient        discovery.Client
 	statAggregatorRegistry *stats.StatAggregatorRegistry
 )
 
@@ -633,7 +633,7 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	regions, err := discoveryClient.GetClusterStatus("", "")
 	if err != nil {
-		http.Error(w,"Unable to discover peers!",http.StatusInternalServerError)
+		http.Error(w, "Unable to discover peers!", http.StatusInternalServerError)
 		return
 	}
 	if f, ok := w.(http.Flusher); !ok {
@@ -645,8 +645,8 @@ func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
-		statChannel := make(chan map[string]stats.DKVMetrics, 5)
-		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string {return region.VBucket} ,statChannel)
+		statChannel := make(chan map[string]*stats.DKVMetrics, 5)
+		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string { return region.VBucket }, statChannel)
 		defer func() {
 			ioutil.ReadAll(r.Body)
 			r.Body.Close()
