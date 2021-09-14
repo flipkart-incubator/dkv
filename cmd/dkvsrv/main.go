@@ -80,6 +80,7 @@ var (
 	statsPublisher *stats.StatPublisher
 
 	discoveryClient discovery.Client
+	statAggregatorRegistry *stats.StatAggregatorRegistry
 )
 
 func init() {
@@ -427,6 +428,7 @@ func setupStats() {
 		statsCli = stats.NewNoOpClient()
 	}
 	statsPublisher = stats.NewStatPublisher()
+	statAggregatorRegistry = stats.NewStatAggregatorRegistry()
 	go statsPublisher.Run()
 }
 
@@ -629,9 +631,38 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	// request can also send database and vBucket which can be applied to filter metrics.
-	regions, _ := discoveryClient.GetClusterStatus("", "")
-	// Group regions based on DC / database / vBucket and aggregate metrics accordingly
-	json.NewEncoder(w).Encode(regions)
+	regions, err := discoveryClient.GetClusterStatus("", "")
+	if err != nil {
+		http.Error(w,"Unable to discover peers!",http.StatusInternalServerError)
+		return
+	}
+	if f, ok := w.(http.Flusher); !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	} else {
+		// Set the headers related to event streaming.
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		statChannel := make(chan map[string]stats.DKVMetrics, 5)
+		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string {return region.VBucket} ,statChannel)
+		defer func() {
+			ioutil.ReadAll(r.Body)
+			r.Body.Close()
+		}()
+		// Listen to the closing of the http connection via the CloseNotifier
+		notify := w.(http.CloseNotifier).CloseNotify()
+		for {
+			select {
+			case stat := <-statChannel:
+				statJson, _ := json.Marshal(stat)
+				fmt.Fprintf(w, "data: %s\n\n", statJson)
+				f.Flush()
+			case <-notify:
+				statAggregatorRegistry.DeRegister(channelId)
+				return
+			}
+		}
+	}
 }
