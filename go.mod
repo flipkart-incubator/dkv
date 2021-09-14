@@ -17,13 +17,15 @@ require (
 	github.com/golang/snappy v0.0.2 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
-	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/kpango/fastime v1.0.16
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.9.0
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.0.10 // indirect
+	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/smira/go-statsd v1.3.1
 	github.com/vmihailenco/msgpack/v5 v5.3.4
