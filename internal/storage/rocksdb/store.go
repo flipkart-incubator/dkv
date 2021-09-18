@@ -252,28 +252,28 @@ func (rdb *rocksDB) Close() error {
 	return nil
 }
 
-func (rdb *rocksDB) ReplaceDB(checkpointDir string) error {
+func (rdb *rocksDB) replaceDB(checkpointDir string) error {
 	backupDir := fmt.Sprintf("%s.bak", rdb.opts.folderName)
-	rdb.optimTrxnDB.Close()
+	rdb.Close()
 
 	err := storage.RenameFolder(rdb.opts.folderName, backupDir)
 	if err != nil {
-		rdb.opts.lgr.Error("Failed to backup existing db")
+		rdb.opts.lgr.Error("Failed to backup existing db", zap.Error(err))
 		return err
 	}
 
 	err = storage.RenameFolder(checkpointDir, rdb.opts.folderName)
 	if err != nil {
-		rdb.opts.lgr.Error("Failed to replace with new db")
+		rdb.opts.lgr.Error("Failed to replace with new db", zap.Error(err))
 		return err
 	}
 
 	// In any case, reopen a new DB
 	if finalDB, openErr := openStore(rdb.opts); openErr != nil {
-		rdb.opts.lgr.Error("Failed to open new db")
+		rdb.opts.lgr.Error("Failed to open new db", zap.Error(openErr))
 		return openErr
 	} else {
-		rdb.db =  finalDB.db
+		rdb.db = finalDB.db
 		rdb.optimTrxnDB = finalDB.optimTrxnDB
 		rdb.normalCF = finalDB.normalCF
 		rdb.ttlCF = finalDB.ttlCF
@@ -379,9 +379,10 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 }
 
 const (
-	sstPrefix    = "rocksdb-sstfile-"
-	sstDefaultCF = "/default.cf"
-	sstTtlCF     = "/ttl.cf"
+	sstPrefix               = "rocksdb-sstfile-"
+	sstDefaultCF            = "/default.cf"
+	sstTtlCF                = "/ttl.cf"
+	snapshotLogSizeForFlush = 0
 )
 
 func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFamilyHandle, sstDir string) (*os.File, error) {
@@ -440,6 +441,13 @@ func (r *checkPointSnapshot) Close() error {
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
 
+	//Prevent any other backups or restores
+	err := rdb.beginGlobalMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer rdb.endGlobalMutation()
+
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
@@ -453,7 +461,7 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	}
 
 	checkpointDir := fmt.Sprintf("%s/checkpoint", sstDir)
-	err = checkpoint.CreateCheckpoint(checkpointDir, 0)
+	err = checkpoint.CreateCheckpoint(checkpointDir, snapshotLogSizeForFlush)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to make checkpoint", zap.Error(err))
 		return nil, err
@@ -467,7 +475,7 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	}
 
 	var files []*os.File
-	filepath.WalkDir(checkpointDir, func(path string, fi fs.DirEntry, err error) error {
+	err = filepath.WalkDir(checkpointDir, func(path string, fi fs.DirEntry, err error) error {
 		if !fi.IsDir() {
 			f, err := os.Open(path)
 			if err != nil {
@@ -477,10 +485,14 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to iterate the checkpoint directory", zap.Error(err))
+		return nil, err
+	}
 
 	tarF, err := utils.CreateStreamingTar(files...)
 	if err != nil {
-		rdb.opts.lgr.Error("GetSnapshot: Failed to archive sst files", zap.Error(err))
+		rdb.opts.lgr.Error("GetSnapshot: Failed to archive checkpoint files", zap.Error(err))
 		return nil, err
 	}
 	return &checkPointSnapshot{tar: tarF, dir: sstDir}, nil
@@ -512,7 +524,7 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		return err
 	}
 
-	err = rdb.ReplaceDB(sstDir)
+	err = rdb.replaceDB(sstDir)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to restore from checkpoint", zap.Error(err))
 		return err
@@ -912,7 +924,11 @@ func checksForRestore(rstrPath string) error {
 // exists returns whether the given file or directory exists
 func exists(path string) (bool, error) {
 	_, err := os.Stat(path)
-	if err == nil { return true, nil }
-	if os.IsNotExist(err) { return false, nil }
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
 	return false, err
 }
