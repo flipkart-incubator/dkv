@@ -77,10 +77,10 @@ jobs:
     name: Build Java Client
     steps:
       - uses: actions/checkout@v2
-      - name: Set up JDK 9
+      - name: Set up JDK
         uses: actions/setup-java@v2
         with:
-          java-version: '9'
+          java-version: '8'
           distribution: 'adopt'
       - name: Cache Maven packages
         uses: actions/cache@v2
