@@ -69,7 +69,7 @@ var (
 	dkvLogger      *zap.Logger
 	pprofEnable    bool
 
-	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+	nexusLogDirFlag, nexusSnapDirFlag, nexusEntDirFlag *flag.Flag
 
 	statsCli stats.Client
 )
@@ -302,7 +302,7 @@ func setupDKVLogger() {
 		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 		dkvLoggerConfig.EncoderConfig.StacktraceKey = "stacktrace"
 	} else {
-		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	}
 
 	if lg, err := dkvLoggerConfig.Build(); err != nil {
@@ -395,16 +395,20 @@ func (role dkvSrvrRole) printFlags() {
 }
 
 func setDKVDefaultsForNexusDirs() {
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
+	nexusLogDirFlag, nexusSnapDirFlag, nexusEntDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir"), flag.Lookup("nexus-entry-dir")
 	dbPath := flag.Lookup("db-folder").DefValue
-	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
+	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue, nexusEntDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap"), path.Join(dbPath, "ents")
 	nexusLogDirFlag.Value.Set("")
 	nexusSnapDirFlag.Value.Set("")
+	nexusEntDirFlag.Value.Set("")
 }
 
 func setFlagsForNexusDirs() {
 	if nexusLogDirFlag.Value.String() == "" {
 		nexusLogDirFlag.Value.Set(path.Join(dbFolder, "logs"))
+	}
+	if nexusEntDirFlag.Value.String() == "" {
+		nexusEntDirFlag.Value.Set(path.Join(dbFolder, "ents"))
 	}
 	if nexusSnapDirFlag.Value.String() == "" {
 		nexusSnapDirFlag.Value.Set(path.Join(dbFolder, "snap"))
@@ -478,6 +482,9 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 func mkdirNexusDirs() {
 	if err := os.MkdirAll(nexusLogDirFlag.Value.String(), 0777); err != nil {
 		log.Panicf("Unable to create Nexus logDir. Error: %v", err)
+	}
+	if err := os.MkdirAll(nexusEntDirFlag.Value.String(), 0777); err != nil {
+		log.Panicf("Unable to create Nexus entDir. Error: %v", err)
 	}
 	if err := os.MkdirAll(nexusSnapDirFlag.Value.String(), 0777); err != nil {
 		log.Panicf("Unable to create Nexus snapDir. Error: %v", err)

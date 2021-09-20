@@ -407,6 +407,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 		fileName = sstDir + sstTtlCF
 	}
 
+	rdb.opts.lgr.Info("Writing snapshot to file " + fileName)
 	if err := sstWrtr.Open(fileName); err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to open sst writer", zap.Error(err))
 		return nil, err
@@ -423,6 +424,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 
 	if it.Valid() {
 		for it.Valid() {
+			rdb.opts.lgr.Info("Snapshotting key " + string(it.Key().Data()) + " and value " + string(it.Value().Data()));
 			sstWrtr.Add(it.Key().Data(), it.Value().Data())
 			it.Next()
 		}
@@ -454,6 +456,7 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	snap := rdb.db.NewSnapshot()
 	defer rdb.db.ReleaseSnapshot(snap)
 
+	rdb.opts.lgr.Info("Creating snapshot temp dir " + rdb.opts.sstDirectory + " and prefix " + sstPrefix)
 	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
@@ -522,6 +525,7 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		}
 		if sfi.Size() > 0 {
 			err = rdb.db.IngestExternalFileCF(cf, []string{fileName}, ingestOpts)
+			rdb.opts.lgr.Info("Change number after ingestion of file " + string(rdb.db.GetLatestSequenceNumber()))
 			if err != nil {
 				rdb.opts.lgr.Error("PutSnapshot: Failed to ingest sst file", zap.Error(err))
 				return err
