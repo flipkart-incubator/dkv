@@ -10,7 +10,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
-	github.com/flipkart-incubator/gorocksdb v0.0.0-20210902093326-a9882052e724
+	github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4
 	github.com/flipkart-incubator/nexus v0.0.0-20210802072935-cc9377cae938
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.5.2
