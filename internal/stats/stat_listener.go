@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -137,9 +138,6 @@ func parseEvent(response *http.Response, eventChannel chan MetricEvent, host str
 				if event, err := buildEvent(readBytes); err == nil {
 					eventChannel <- MetricEvent{metric: *event, host: host}
 				}
-			} else {
-				close(eventChannel)
-				break
 			}
 		}
 	}
@@ -157,7 +155,6 @@ func buildEvent(byts []byte) (*DKVMetrics, error) {
 
 func (li *ListenerInfo) Stop() {
 	li.cancelFunc()
-	li.ctx.Done()
 }
 
 func (li *ListenerInfo) Register(outputChannel chan MetricEvent) int64 {

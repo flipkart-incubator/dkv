@@ -1,6 +1,66 @@
 <header-nav></header-nav>
 
-
 <div class="container ">
+    <div class="container">
+        <div class="col-lg-1" ></div>
+        <div class="col-lg-10 text-center">
+            <h1>{{througputParser(getMapValSum(stat["dkv_req_count"]))}}</h1>
+        </div>
+        <div class="col-lg-1" ></div>
+    </div>
+</div>
+<hr>
+<div class="container col-lg-12">
+    <div class="container col-lg-6">
+    <div class=" text-center col-lg-3" ng-repeat="(index,op) in ops1">
+        <div> <h5> {{op}} </h5> <hr></div>
+        <div><h2> {{ througputParser(stat["dkv_req_count"][op]) }} <span style="font-size: 12px">rps</span> </h2></div>
+        <div>
+            <table class="table">
+                <tbody>
+                <tr ><td > p50 </td> <td class="text-danger"> {{latencyParser(stat["dkv_latency"][op].p50)}}  </td> </tr>
+                <tr ><td > p90 </td> <td class="text-info">  {{latencyParser(stat["dkv_latency"][op].p90)}} </td> </tr>
+                <tr ><td > p99 </td> <td class="text-default">  {{latencyParser(stat["dkv_latency"][op].p99)}} </td> </tr>
 
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+    <div class="container col-lg-6">
+        <div class=" text-center col-lg-3" ng-repeat="(index,op) in ops2">
+            <div> <h5> {{op}} </h5> <hr></div>
+            <div><h2> {{ througputParser(stat["dkv_req_count"][op]) }} <span style="font-size: 12px">rps</span> </h2></div>
+            <div>
+                <table class="table">
+                    <tbody>
+                    <tr ><td > p50 </td> <td class="text-danger"> {{latencyParser(stat["dkv_latency"][op].p50)}}  </td> </tr>
+                    <tr ><td > p90 </td> <td class="text-info">  {{latencyParser(stat["dkv_latency"][op].p90)}} </td> </tr>
+                    <tr ><td > p99 </td> <td class="text-default">  {{latencyParser(stat["dkv_latency"][op].p99)}} </td> </tr>
+
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="col-lg-12">
+    <hr>
+    <div class="col-lg-12">
+        <div class="col-lg-3 canvas-wrapper">
+            <canvas class="chart chart-line" chart-data="ts.rrate.data" chart-labels="ts.rrate.label" chart-options="ts.rrate.options" chart-series="ts.rrate.series"  chart-colors="ts.rrate.colors"></canvas>
+        </div>
+        <div class="col-lg-3 canvas-wrapper">
+            <canvas class="chart chart-line" chart-data="ts.error.data" chart-labels="ts.error.label" chart-options="ts.error.options" chart-series="ts.error.series"  chart-colors="ts.error.colors"></canvas>
+        </div>
+        <div class="col-lg-3 canvas-wrapper">
+            <canvas class="chart chart-line" chart-data="ts.p50.data" chart-labels="ts.p50.label" chart-options="ts.p50.options" chart-series="ts.p50.series"  chart-colors="ts.p50.colors"></canvas>
+        </div>
+        <div class="col-lg-3 canvas-wrapper">
+            <canvas class="chart chart-line" chart-data="ts.p99.data" chart-labels="ts.p99.label" chart-options="ts.p99.options" chart-series="ts.p99.series"  chart-colors="ts.p99.colors"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-12">
+        <h5> <span class="label" ng-repeat="(i,j) in series" style="background-color: {{colors[i].backgroundColor}}">{{j}}</span></h5>
+    </div>
 </div>

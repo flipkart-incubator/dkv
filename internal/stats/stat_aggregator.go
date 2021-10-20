@@ -41,6 +41,7 @@ func (sr *StatAggregatorRegistry) Register(regions []*serverpb.RegionInfo, tagge
 	defer sr.mapMutex.Unlock()
 
 	sr.statAggregatorMap[id] = statAggregator
+
 	return id
 }
 
@@ -48,7 +49,7 @@ func (sr *StatAggregatorRegistry) DeRegister(id int64) {
 	sr.mapMutex.Lock()
 	defer sr.mapMutex.Unlock()
 	if statAggregator, exist := sr.statAggregatorMap[id]; exist {
-		go statAggregator.Stop()
+		statAggregator.Stop()
 		delete(sr.statAggregatorMap, id)
 	}
 }
@@ -59,10 +60,12 @@ type StatAggregator struct {
 	hostMap           map[string]string
 	channelIds        map[string]int64
 	ctx               context.Context
+	cancelFunc        context.CancelFunc
 }
 
 func NewStatAggregator(outputChannel chan map[string]*DKVMetrics, hostMap map[string]string) *StatAggregator {
-	return &StatAggregator{outputChannel: outputChannel, hostMap: hostMap, channelIds: map[string]int64{}, ctx: context.Background()}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	return &StatAggregator{outputChannel: outputChannel, hostMap: hostMap, channelIds: map[string]int64{}, ctx: ctx, cancelFunc: cancelFunc}
 }
 
 func (sa *StatAggregator) Start(listener *StatListener) {
@@ -86,6 +89,7 @@ func (sa *StatAggregator) Start(listener *StatListener) {
 			if _, exist := sa.aggregatedStatMap[metric.TimeStamp]; !exist {
 				if len(sa.aggregatedStatMap) >= MAX_STAT_BUFFER {
 					index := getMinIndex(sa.aggregatedStatMap)
+					populateConsolidatedStat(sa.aggregatedStatMap[index])
 					sa.outputChannel <- sa.aggregatedStatMap[index]
 					delete(sa.aggregatedStatMap, index)
 				}
@@ -103,6 +107,7 @@ func (sa *StatAggregator) Start(listener *StatListener) {
 
 			/* flushing when all metrics are aggregated */
 			if getStatCount(sa.aggregatedStatMap[metric.TimeStamp]) == len(sa.hostMap) {
+				populateConsolidatedStat(sa.aggregatedStatMap[metric.TimeStamp])
 				sa.outputChannel <- sa.aggregatedStatMap[metric.TimeStamp]
 				delete(sa.aggregatedStatMap, metric.TimeStamp)
 			}
@@ -112,12 +117,13 @@ func (sa *StatAggregator) Start(listener *StatListener) {
 				listener.DeRegister(host, channelId)
 			}
 			close(sa.outputChannel)
+			return
 		}
 	}
 }
 
 func (sa *StatAggregator) Stop() {
-	sa.ctx.Done()
+	sa.cancelFunc()
 }
 
 func getStatCount(metricMap map[string]*DKVMetrics) int {
@@ -136,6 +142,16 @@ func getMinIndex(m map[int64]map[string]*DKVMetrics) int64 {
 		}
 	}
 	return min
+}
+
+func populateConsolidatedStat(m map[string]*DKVMetrics) {
+	dkvMetrics := newDKVMetric()
+	for _, dm := range m {
+		/* it should contain ts of the metric that it is combining */
+		dkvMetrics.TimeStamp = dm.TimeStamp
+		dkvMetrics.Merge(*dm)
+	}
+	m["global"] = dkvMetrics
 }
 func (sa *StatAggregator) getMultiplexedChannel(channels []chan MetricEvent) chan MetricEvent {
 	/* Channel to Write Multiplexed Events */

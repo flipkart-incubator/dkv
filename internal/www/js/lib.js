@@ -1,4 +1,7 @@
-var throuputParser = function (d) {
+var througputParser = function (d) {
+    if ( d === undefined ) {
+        return 0
+    }
     var sizes = ['', 'K', 'M', 'B', 'T'];
     if (d < 1) return d.toFixed(1);
     var i = Math.floor(Math.log(d) / Math.log(1000));
@@ -10,6 +13,9 @@ var throuputParser = function (d) {
 };
 
 var latencyParser = function (d) {
+    if ( d === undefined ) {
+        return 0
+    }
     d = d * 1000000
     var sizes = ['µs', 'ms', 's'];
     var i = Math.floor(Math.log(d) / Math.log(1000));
@@ -20,6 +26,33 @@ var latencyParser = function (d) {
     return base.toFixed(1) + ' ' + sizes[i];
 };
 
+var getMapValSum = function (d) {
+    let sum = 0;
+    for (let key in d) {
+        sum += d[key];
+    }
+    return sum
+}
+
+var getAvgLatency = function (d) {
+    latency = { p50: 0 , p90 : 0 , p99 : 0}
+
+    console.log(d)
+    for (let key in d ) {
+        latency.p50 += d[key].p50
+        latency.p90 += d[key].p90
+        latency.p99 += d[key].p99
+    }
+    console.log(latency)
+
+    count = Object.keys(d).length
+    latency.p50  /= count
+    latency.p90  /= count
+    latency.p99  /= count
+
+    console.log(latency)
+    return latency
+}
 
 var percentageParser = function (d) {
     if (Math.round(d) === d) return Math.round(d)+" %";

@@ -607,6 +607,8 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 
 		statChannel := make(chan stats.DKVMetrics, 5)
 		channelId := statsPublisher.Register(statChannel)
@@ -644,9 +646,11 @@ func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 
 		statChannel := make(chan map[string]*stats.DKVMetrics, 5)
-		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string { return region.VBucket }, statChannel)
+		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string { return region.Database }, statChannel)
 		defer func() {
 			ioutil.ReadAll(r.Body)
 			r.Body.Close()
@@ -660,6 +664,7 @@ func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "data: %s\n\n", statJson)
 				f.Flush()
 			case <-notify:
+				fmt.Println("http request closed")
 				statAggregatorRegistry.DeRegister(channelId)
 				return
 			}
