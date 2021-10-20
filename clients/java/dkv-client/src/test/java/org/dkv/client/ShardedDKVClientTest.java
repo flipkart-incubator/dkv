@@ -8,7 +8,8 @@ import org.junit.Test;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.HashMap;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 import static dkv.serverpb.Api.ReadConsistency.LINEARIZABLE;
 import static dkv.serverpb.Api.ReadConsistency.SEQUENTIAL;
@@ -22,6 +23,7 @@ public class ShardedDKVClientTest {
     private static final Api.ReadConsistency READ_CONSISTENCY = SEQUENTIAL;
 
     private ShardedDKVClient dkvClient;
+    private ShardProvider shardProvider;
 
     @Before
     public void setup() {
@@ -29,7 +31,8 @@ public class ShardedDKVClientTest {
         ShardConfiguration shardConf = loadShardConfig("/three_shard_config.json");
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
 //        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
-        dkvClient = new ShardedDKVClient(new KeyHashBasedShardProvider(shardConf));
+        shardProvider = new KeyHashBasedShardProvider(shardConf);
+        dkvClient = new ShardedDKVClient(shardProvider);
     }
 
     @Test
@@ -62,6 +65,65 @@ public class ShardedDKVClientTest {
 //            fail("expecting an exception");
         } catch (Exception e) {
             assertTrue(e instanceof UnsupportedOperationException);
+        }
+    }
+
+    @Test
+    public void shouldFailBulkPutDueToCrossShard() {
+        int iter = 10;
+        String keyF = "helloBulk_", valPref = "world_";
+        String[] keys = new String[iter];
+        KV.Strings[] items = new KV.Strings[iter];
+        for (int i = 0; i < iter; i++) {
+            keys[i] = format("%s%d", keyF, i + 1);
+            items[i] = new KV.Strings(keys[i], format("%s%d", valPref, i + 1));
+        }
+        assertThrows(UnsupportedOperationException.class, () -> {
+            dkvClient.put(items);
+        });
+    }
+
+    @Test
+    public void shouldPerformBulkPutAndGet() {
+        int iter = 10;
+        String keyF = "helloBulk_";
+        String[] keys = new String[iter];
+        for (int i = 0 ; i <iter; i++){
+            keys[i] = format("%s%d", keyF, i+1);
+        }
+
+        Map<DKVShard, List<String>> dkvShardListMap = shardProvider.provideShards(keys);
+        for (List<String> part: dkvShardListMap.values()) {
+            KV.Strings[] items = new KV.Strings[part.size()];
+            int i = 0;
+            for (String key: part) {
+                items[i++] = new KV.Strings(key,key);
+            }
+            dkvClient.put(items);
+        }
+
+        //should not throw any error. But we can't use this for test.
+        dkvClient.multiGet(SEQUENTIAL, keys);
+
+        //lets do a LINEARIZABLE read.
+        List<KV.Strings> results = new ArrayList<>();
+        for (List<String> part: dkvShardListMap.values()) {
+            String[] items = new String[part.size()];
+            part.toArray(items);
+            KV.Strings[] result = dkvClient.multiGet(LINEARIZABLE, items);
+            results.addAll(Arrays.asList(result));
+        }
+
+        assertValues(keyF, keys, results.stream().toArray(KV.Strings[]::new));
+    }
+
+    private void assertValues(String keyPref, String[] keys, KV.Strings[] vals) {
+        assertEquals("Incorrect number of values from MultiGet", keys.length, vals.length);
+        for (KV.Strings val : vals) {
+            String[] vs = val.getValue().split("_");
+            assertEquals(2, vs.length);
+            int idx = Integer.parseInt(vs[1]);
+            assertEquals(format("Incorrect key for value: %s", val), keys[idx-1], format("%s%d", keyPref, idx));
         }
     }
 

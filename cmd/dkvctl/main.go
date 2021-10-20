@@ -30,7 +30,7 @@ var cmds = []*cmd{
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
-	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
+	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
 	{"getClusterInfo", "<dcId> <database> <vBucket>", "Gets the latest cluster info", (*cmd).getStatus, "", true},
 }
 
@@ -250,6 +250,16 @@ func trimLower(str string) string {
 	return strings.ToLower(strings.TrimSpace(str))
 }
 
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -272,6 +282,9 @@ func main() {
 
 	var validCmd bool
 	for _, c := range cmds {
+		if !isFlagPassed(c.name) {
+			continue
+		}
 		if c.value != "" || c.emptyValue {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)

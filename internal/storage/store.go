@@ -11,13 +11,6 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
-// KVEntry represents a single key-value pair entry
-type KVEntry struct {
-	Key      []byte
-	Value    []byte
-	ExpireTS uint64
-}
-
 type Stat struct {
 	RequestLatency *prometheus.SummaryVec
 	ResponseError  *prometheus.CounterVec
@@ -45,11 +38,9 @@ func NewStat() *Stat {
 // DKV operations.
 type KVStore interface {
 	io.Closer
-	// Put stores the association between the given key and value
-	Put(key []byte, value []byte) error
-	// PutTTL stores the association between the given key and value
-	// and sets the expireTS of the key to the provided epoch in seconds
-	PutTTL(key []byte, value []byte, expireTS uint64) error
+	// Put stores the association between the given key and value and
+	// optionally sets the expireTS of the key to the provided epoch in seconds
+	Put(pairs ...*serverpb.KVPair) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.

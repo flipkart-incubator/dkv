@@ -5,27 +5,34 @@ node:
 admin:
   access_log_path: /tmp/admin_access.log
   address:
-    socket_address: { address: 127.0.0.1, port_value: 9901 }
+    socket_address:
+      protocol: TCP
+      address: 0.0.0.0
+      port_value: 9901
 
 dynamic_resources:
   lds_config:
+    resource_api_version: V3
     api_config_source:
       api_type: GRPC
+      transport_api_version: V3
       grpc_services:
-        - envoy_grpc:
-            cluster_name: xds_cluster
+        envoy_grpc:
+          cluster_name: xds_cluster
   cds_config:
+    resource_api_version: V3
     api_config_source:
       api_type: GRPC
+      transport_api_version: V3
       grpc_services:
-        - envoy_grpc:
-            cluster_name: xds_cluster
+        envoy_grpc:
+          cluster_name: xds_cluster
 
 static_resources:
   clusters:
   - name: xds_cluster
     connect_timeout: 0.25s
-    type: STATIC
+    type: STRICT_DNS
     lb_policy: ROUND_ROBIN
     http2_protocol_options: {}
     upstream_connection_options:
@@ -37,5 +44,5 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 127.0.0.1
+                address: localhost
                 port_value: 7979

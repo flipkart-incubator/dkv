@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"gopkg.in/ini.v1"
@@ -91,7 +90,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 		d.logger.Error("Unable to get cluster info", zap.Error(err))
 		return nil, err
 	}
-	var clusterInfo []storage.KVEntry
+	var clusterInfo []serverpb.KVPair
 	for {
 		itRes, err := kvStrm.Recv()
 		if err == io.EOF {
@@ -101,7 +100,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 			d.logger.Error("Partial failure in getting cluster info", zap.Error(err))
 			return nil, err
 		} else {
-			clusterInfo = append(clusterInfo, storage.KVEntry{
+			clusterInfo = append(clusterInfo, serverpb.KVPair{
 				Key:   itRes.Key,
 				Value: itRes.Value,
 			})

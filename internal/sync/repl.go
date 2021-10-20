@@ -32,6 +32,8 @@ func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) ([]byte, error) {
 	switch {
 	case intReq.Put != nil:
 		return dr.put(intReq.Put)
+	case intReq.MultiPut != nil:
+		return dr.multiPut(intReq.MultiPut)
 	case intReq.Delete != nil:
 		return dr.delete(intReq.Delete)
 	case intReq.Cas != nil:
@@ -57,11 +59,17 @@ func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 }
 
 func (dr *dkvReplStore) put(putReq *serverpb.PutRequest) ([]byte, error) {
-	if putReq.ExpireTS > 0 {
-		return nil, dr.kvs.PutTTL(putReq.Key, putReq.Value, putReq.ExpireTS)
-	} else {
-		return nil, dr.kvs.Put(putReq.Key, putReq.Value)
+	err := dr.kvs.Put(&serverpb.KVPair{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS})
+	return nil, err
+}
+
+func (dr *dkvReplStore) multiPut(multiPutReq *serverpb.MultiPutRequest) ([]byte, error) {
+	puts := make([]*serverpb.KVPair, len(multiPutReq.PutRequest))
+	for i, request := range multiPutReq.PutRequest {
+		puts[i] = &serverpb.KVPair{Key: request.Key, Value: request.Value, ExpireTS: request.ExpireTS}
 	}
+	err := dr.kvs.Put(puts...)
+	return nil, err
 }
 
 func (dr *dkvReplStore) cas(casReq *serverpb.CompareAndSetRequest) ([]byte, error) {
