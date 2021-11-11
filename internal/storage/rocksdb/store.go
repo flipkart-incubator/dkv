@@ -292,6 +292,7 @@ func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 
 	defer rdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
 	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
 	for _, kv := range pairs {
 		if kv == nil {
 			continue //skip nil entries
@@ -323,6 +324,7 @@ func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
 	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
 	wb.DeleteCF(rdb.ttlCF, key)
 	wb.Delete(key)
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
