@@ -1,17 +1,17 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 	"gopkg.in/ini.v1"
 	"io"
 	"strconv"
-
-	"encoding/json"
-	"go.uber.org/zap"
 )
 
 /*
@@ -99,6 +99,8 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 			// Better to return error rather than partial results as incomplete results could cause client misbehaviour
 			d.logger.Error("Partial failure in getting cluster info", zap.Error(err))
 			return nil, err
+		} else if bytes.Contains(itRes.Key, []byte("dkv_meta")) {
+			continue
 		} else {
 			clusterInfo = append(clusterInfo, serverpb.KVPair{
 				Key:   itRes.Key,
