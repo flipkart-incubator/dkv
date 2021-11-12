@@ -74,7 +74,6 @@ func (d *discoverService) UpdateStatus(ctx context.Context, request *serverpb.Up
 		return newErrorStatus(err), err
 	}
 
-	// TODO - check if expiry TTL is working
 	putRequest := serverpb.PutRequest{Key: createKeyToInsert(request.GetRegionInfo()), Value: val, ExpireTS: hlc.GetUnixTimeFromNow(d.config.StatusTTl)}
 	if _, err = d.dkvCli.Put(ctx, &putRequest); err != nil {
 		return newErrorStatus(err), err
