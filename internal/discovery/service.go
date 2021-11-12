@@ -111,7 +111,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 	for _, serializedStatusUpdate := range clusterInfo {
 		statusUpdate := serverpb.UpdateStatusRequest{}
 		if err = json.Unmarshal(serializedStatusUpdate.Value, &statusUpdate); err != nil {
-			d.logger.Error("Unable to unmarshal status request", zap.Error(err))
+			d.logger.Error("Unable to unmarshal status request", zap.Error(err), zap.String("json", string(serializedStatusUpdate.Value)))
 			continue
 		}
 		// Filter regions outside the requested DC (if provided)
