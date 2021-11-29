@@ -59,6 +59,18 @@ func TestSlaveDiscoveryFunctionality(t *testing.T) {
 	testGetStatus(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
+func TestSlaveHealthCheck(t *testing.T) {
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newRocksDBStore(slaveDBFolder)
+	testHealthCheck(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
+}
+
+//func TestSlaveHealthCheckStream(t *testing.T) {
+//	masterRDB := newRocksDBStore(masterDBFolder)
+//	slaveRDB := newRocksDBStore(slaveDBFolder)
+//	//testHealthCheckStream(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
+//}
+
 func TestLargePayloadsDuringRepl(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newBadgerDBStore(slaveDBFolder)
@@ -256,6 +268,60 @@ func validateStatus(t *testing.T, useCase string, expectedStatus serverpb.Region
 	if regionInfo.Status != expectedStatus {
 		t.Errorf("Unexpected status. Use case: %s, Expected: %s, Actual: %s", useCase,
 			expectedStatus.String(), regionInfo.Status.String())
+	}
+}
+
+func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
+	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
+	defer closeMaster()
+
+	numKeys, keyPrefix, valPrefix := 10, "KHealthCheck", "VHealthCheck"
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
+
+	slaveServer := slaveSvc.(*slaveService)
+	validateHealthCheckResponse(t, "replNotStarted", serverpb.HealthCheckResponse_NOT_SERVING)
+
+	// Validate status when too high lag
+	if err := slaveServer.applyChangesFromMaster(2); err != nil {
+		t.Error(err)
+	}
+	if slaveServer.replInfo.replLag != 16 { //todo ask why are there two transactions associated with replication - delete and put
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replInfo.replLag)
+	}
+	validateHealthCheckResponse(t, "tooHighReplLag", serverpb.HealthCheckResponse_NOT_SERVING)
+
+	// Validate status when replication catching up
+	if err := slaveServer.applyChangesFromMaster(4); err != nil {
+		t.Error(err)
+	}
+	if slaveServer.replInfo.replLag != 8 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replInfo.replLag)
+	}
+	validateHealthCheckResponse(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING)
+
+	// Validate status when replication not successful for long time
+	time.Sleep(7 * time.Second)
+	validateHealthCheckResponse(t, "replDelayed", serverpb.HealthCheckResponse_NOT_SERVING)
+
+	// Validate status when replication caught up
+	if err := slaveServer.applyChangesFromMaster(10); err != nil {
+		t.Error(err)
+	}
+	if slaveServer.replInfo.replLag != 0 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replInfo.replLag)
+	}
+	validateHealthCheckResponse(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING)
+
+	// Validate status after closing
+	closeSlave()
+	validateHealthCheckResponse(t, "slaveClosed", serverpb.HealthCheckResponse_NOT_SERVING)
+}
+
+func validateHealthCheckResponse(t *testing.T, useCase string, expectedResponse serverpb.HealthCheckResponse_ServingStatus) {
+	actualResponse, _ := slaveSvc.Check(nil, nil)
+	if actualResponse.GetStatus() != expectedResponse {
+		t.Errorf("Unexpected status. Use case: %s, Expected: %s, Actual: %s", useCase,
+			expectedResponse.String(), actualResponse.GetStatus().String())
 	}
 }
 

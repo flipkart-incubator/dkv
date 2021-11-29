@@ -56,6 +56,7 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
 		t.Run("testBackupRestore", testBackupRestore)
+		t.Run("testStandaloneHealthCheckUnary", testStandaloneHealthCheckUnary)
 	}
 }
 
@@ -384,6 +385,16 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 		} else if string(res.Value) != expectedValue {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, res.Value)
 		}
+	}
+}
+// standalone server should always be running in leader mode
+func testStandaloneHealthCheckUnary(t *testing.T) {
+	healthCheckResponse, err := dkvSvc.Check(nil, nil)
+	if err != nil {
+		t.Errorf("Error occurred while running health check: %v", err)
+	}
+	if healthCheckResponse.Status != serverpb.HealthCheckResponse_SERVING {
+		t.Errorf("Error in health check response. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
 	}
 }
 
