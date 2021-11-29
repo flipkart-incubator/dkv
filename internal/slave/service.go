@@ -118,6 +118,58 @@ func (ss *slaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*
 	return res, err
 }
 
+func(ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+	if ss.isClosed {
+		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+	}
+	if ss.replInfo.replLag > ss.replInfo.replConfig.MaxActiveReplLag {
+		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+	}
+
+	// server has not started replicating yet or the server last replicated more than MaxActiveReplElapsed ago
+	if ss.replInfo.lastReplTime == 0 || hlc.GetTimeAgo(ss.replInfo.lastReplTime) > ss.replInfo.replConfig.MaxActiveReplElapsed {
+		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+	}
+	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
+}
+
+func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.DKVDiscoveryNode_WatchServer) error {
+	ticker := time.NewTicker(10 * time.Second) //todo get from a health check config which is common across all services
+	defer ticker.Stop()
+	for {
+		select {
+		case <- ticker.C: //todo check that this is blocking happens only after 10 seconds or when the service closes
+			if ss.isClosed {
+				if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
+					return err
+				}
+			} else if ss.replInfo.replLag > ss.replInfo.replConfig.MaxActiveReplLag {
+				if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
+					return err
+				}
+			} else if ss.replInfo.lastReplTime == 0 || hlc.GetTimeAgo(ss.replInfo.lastReplTime) > ss.replInfo.replConfig.MaxActiveReplElapsed {
+				if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
+					return err
+				}
+			} else {
+				if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_SERVING)); err != nil {
+					return err
+				}
+			}
+		case <- ss.replInfo.replStop:
+			if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func getHealthCheckResponseWithStatus(status serverpb.HealthCheckResponse_ServingStatus) *serverpb.HealthCheckResponse {
+	return &serverpb.HealthCheckResponse{Status: status}
+}
+
+
 func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	readResults, err := ss.store.Get(multiGetReq.Keys...)
 	res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}

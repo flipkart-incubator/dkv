@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -46,6 +47,36 @@ type standaloneService struct {
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	return ss.regionInfo, nil
+}
+
+
+func(ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+	if ss.regionInfo != nil && ss.regionInfo.Status == serverpb.RegionStatus_LEADER {
+		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
+	}
+	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+}
+
+func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.DKVDiscoveryNode_WatchServer) error {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+				//todo is empty context fine or should we add some timeouts?
+				res, _ := ss.Check(context.Background(), req)
+				err := watcher.Send(res)
+				if err != nil {
+					return err
+				}
+		default:
+			break
+		}
+		err := watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+		if err != nil {
+			return err
+		}
+	}
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
@@ -514,6 +545,62 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
 	return regionInfo, nil
 }
+
+
+func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+	regionInfo := ds.DKVService.(*standaloneService).regionInfo
+
+	if ds.isClosed {
+		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+	} else {
+		// Currently there is no way for this instance of DKVServer to know if its the local dc follower, or is a follower with a lot of lag
+		// Even the member list api ListMembers() is just an in memory lookup rather than actually looking at the current raft member state
+		// If the current node is itself disconnected, it will provide stale / incorrect member list
+		// For now, we will return status based on listMembers() and identify based on stale data
+		// As of now, there is no hard requirement to identify true leader via service discovery thus using listmembers() is fine
+		// TODO - Provide correct status wrt master / local dc follower / follower with lot of lag
+		leaderId, members := ds.raftRepl.ListMembers()
+
+		selfId := ds.raftRepl.Id()
+
+		isMember := members[selfId] != nil
+
+		if leaderId == selfId || isMember {
+			return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
+		} else if !isMember {
+			return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+		}
+
+	}
+	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
+	//todo ask why is this code even written?
+	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+}
+
+
+func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher serverpb.DKVDiscoveryNode_WatchServer) error {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			//todo is empty context fine or should we add some timeouts?
+			res, _ := ds.Check(context.Background(), req)
+			err := watcher.Send(res)
+			if err != nil {
+				return err
+			}
+		default:
+			break
+		}
+		err := watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+		if err != nil {
+			return err
+		}
+	}
+
+}
+
 
 func newErrorStatus(err error) *serverpb.Status {
 	return &serverpb.Status{Code: -1, Message: err.Error()}
