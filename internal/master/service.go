@@ -43,6 +43,8 @@ type standaloneService struct {
 	lg         *zap.Logger
 	statsCli   stats.Client
 	regionInfo *serverpb.RegionInfo
+
+	serverStop chan struct{}
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
@@ -65,11 +67,10 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 		case <-ticker.C:
 				//todo is empty context fine or should we add some timeouts?
 				res, _ := ss.Check(context.Background(), req)
-				err := watcher.Send(res)
-				if err != nil {
+				if err := watcher.Send(res); err != nil {
 					return err
 				}
-		default:
+		case <- ss.serverStop:
 			break
 		}
 		err := watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
@@ -84,7 +85,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo}
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo, make(chan struct{})}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -333,6 +334,7 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 func (ss *standaloneService) Close() error {
 	defer ss.lg.Sync()
 	ss.lg.Info("Closing DKV service")
+	ss.serverStop <- struct{}{}
 	ss.store.Close()
 	return nil
 }
@@ -586,11 +588,10 @@ func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher s
 		case <-ticker.C:
 			//todo is empty context fine or should we add some timeouts?
 			res, _ := ds.Check(context.Background(), req)
-			err := watcher.Send(res)
-			if err != nil {
+			if err := watcher.Send(res); err != nil {
 				return err
 			}
-		default:
+		case <- ds.DKVService.(*standaloneService).serverStop:
 			break
 		}
 		err := watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
@@ -598,7 +599,6 @@ func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher s
 			return err
 		}
 	}
-
 }
 
 

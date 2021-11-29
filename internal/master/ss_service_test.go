@@ -2,6 +2,7 @@ package master
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -9,6 +10,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"io"
 	"net"
 	"os/exec"
 	"strings"
@@ -25,6 +27,11 @@ var (
 	dkvSvc   DKVService
 	grpcSrvr *grpc.Server
 )
+
+type DKVDiscoveryNodeClient struct {
+	cliConn    *grpc.ClientConn
+	dkvNodeDiscoveryCli serverpb.DKVDiscoveryNodeClient
+}
 
 const (
 	dbFolder   = "/tmp/dkv_test_db"
@@ -57,7 +64,19 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testGetChanges", testGetChanges)
 		t.Run("testBackupRestore", testBackupRestore)
 		t.Run("testStandaloneHealthCheckUnary", testStandaloneHealthCheckUnary)
+		t.Run("testHealthCheckStreaming", testStandaloneHealthCheckStreaming)
 	}
+}
+
+func getDkvDiscoveryNodeClient(svcAddr string, options []grpc.DialOption) (*DKVDiscoveryNodeClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, svcAddr, options...)
+	if err != nil {
+		return nil, err
+	}
+	client := serverpb.NewDKVDiscoveryNodeClient(conn)
+	return &DKVDiscoveryNodeClient{cliConn: conn, dkvNodeDiscoveryCli: client}, nil
 }
 
 func testPutAndGet(t *testing.T) {
@@ -395,6 +414,41 @@ func testStandaloneHealthCheckUnary(t *testing.T) {
 	}
 	if healthCheckResponse.Status != serverpb.HealthCheckResponse_SERVING {
 		t.Errorf("Error in health check response. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
+	}
+}
+
+func testStandaloneHealthCheckStreaming(t *testing.T) {
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
+	var options []grpc.DialOption
+	options = append(options, grpc.WithInsecure())
+	options = append(options, grpc.WithBlock())
+	discoveryNodeClient, err := getDkvDiscoveryNodeClient(dkvSvcAddr, options)
+	defer discoveryNodeClient.cliConn.Close()
+	if err != nil {
+		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
+	}
+	if err != nil {
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	watch, err := discoveryNodeClient.dkvNodeDiscoveryCli.Watch(ctx, nil)
+	if err != nil {
+		return
+	}
+
+	for i:=0; i<10; i++ {
+		recv, err := watch.Recv()
+		if err == io.EOF {
+
+		} else if err != nil {
+			t.Errorf("Recevied error response from the server during health check: %v", err)
+		}
+		if recv == nil {
+			t.Errorf("Recevied null message from the server during health check")
+		}
+		if recv.GetStatus() != serverpb.HealthCheckResponse_SERVING {
+			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), recv.GetStatus().String())
+		}
 	}
 }
 
