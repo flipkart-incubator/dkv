@@ -32,6 +32,7 @@ type DKVService interface {
 	serverpb.DKVDiscoveryNodeServer
 	serverpb.DKVReplicationServer
 	serverpb.DKVBackupRestoreServer
+	serverpb.HealthCheckServer
 }
 
 type standaloneService struct {
@@ -44,7 +45,7 @@ type standaloneService struct {
 	statsCli   stats.Client
 	regionInfo *serverpb.RegionInfo
 
-	serverStop chan struct{}
+	isClosed bool
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
@@ -53,31 +54,37 @@ func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Emp
 
 
 func(ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
-	if ss.regionInfo != nil && ss.regionInfo.Status == serverpb.RegionStatus_LEADER {
+	if !ss.isClosed && ss.regionInfo != nil && ss.regionInfo.Status == serverpb.RegionStatus_LEADER {
 		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
 	}
 	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
 }
 
-func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.DKVDiscoveryNode_WatchServer) error {
-	ticker := time.NewTicker(10 * time.Second)
+func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-				//todo is empty context fine or should we add some timeouts?
-				res, _ := ss.Check(context.Background(), req)
-				if err := watcher.Send(res); err != nil {
+			if ss.isClosed {
+				break
+			}
+			res, _ := ss.Check(context.Background(), req)
+			if err := watcher.Send(res); err != nil {
 					return err
-				}
-		case <- ss.serverStop:
+			}
+		default:
 			break
 		}
-		err := watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
-		if err != nil {
-			return err
+		if ss.isClosed {
+			break
 		}
 	}
+	res, err := ss.Check(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	return watcher.Send(res)
 }
 
 // NewStandaloneService creates a standalone variant of the DKVService
@@ -85,7 +92,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo, make(chan struct{})}
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo, false}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -334,7 +341,7 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 func (ss *standaloneService) Close() error {
 	defer ss.lg.Sync()
 	ss.lg.Info("Closing DKV service")
-	ss.serverStop <- struct{}{}
+	ss.isClosed = true
 	ss.store.Close()
 	return nil
 }
@@ -575,30 +582,39 @@ func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverp
 
 	}
 	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
-	//todo ask why is this code even written?
 	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
 }
 
 
-func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher serverpb.DKVDiscoveryNode_WatchServer) error {
-	ticker := time.NewTicker(10 * time.Second)
+func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			//todo is empty context fine or should we add some timeouts?
-			res, _ := ds.Check(context.Background(), req)
+			if ds.isClosed {
+				break
+			}
+			res, err := ds.Check(context.Background(), req)
+			if err != nil {
+				return err
+			}
 			if err := watcher.Send(res); err != nil {
 				return err
 			}
-		case <- ds.DKVService.(*standaloneService).serverStop:
+		default:
 			break
 		}
-		err := watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
-		if err != nil {
-			return err
+
+		if ds.isClosed { //broken out of the loop due to ds closure
+			break
 		}
 	}
+	res, err := ds.Check(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	return watcher.Send(res)
 }
 
 

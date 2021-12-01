@@ -2,6 +2,7 @@ package slave
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"net"
@@ -38,8 +39,14 @@ var (
 
 	slaveCli      *ctl.DKVClient
 	slaveSvc      DKVService
+	healthCheckCli 		*HealthCheckClient
 	slaveGrpcSrvr *grpc.Server
 )
+
+type HealthCheckClient struct {
+	cliConn    *grpc.ClientConn
+	healthCheckCli serverpb.HealthCheckClient
+}
 
 func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
@@ -65,11 +72,11 @@ func TestSlaveHealthCheck(t *testing.T) {
 	testHealthCheck(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
-//func TestSlaveHealthCheckStream(t *testing.T) {
-//	masterRDB := newRocksDBStore(masterDBFolder)
-//	slaveRDB := newRocksDBStore(slaveDBFolder)
-//	//testHealthCheckStream(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
-//}
+func TestSlaveHealthCheckStream(t *testing.T) {
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newRocksDBStore(slaveDBFolder)
+	testHealthCheckStream(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
+}
 
 func TestLargePayloadsDuringRepl(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
@@ -285,7 +292,7 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	if err := slaveServer.applyChangesFromMaster(2); err != nil {
 		t.Error(err)
 	}
-	if slaveServer.replInfo.replLag != 16 { //todo ask why are there two transactions associated with replication - delete and put
+	if slaveServer.replInfo.replLag != 16 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replInfo.replLag)
 	}
 	validateHealthCheckResponse(t, "tooHighReplLag", serverpb.HealthCheckResponse_NOT_SERVING)
@@ -315,6 +322,76 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	// Validate status after closing
 	closeSlave()
 	validateHealthCheckResponse(t, "slaveClosed", serverpb.HealthCheckResponse_NOT_SERVING)
+}
+
+
+func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
+	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
+	defer closeMaster()
+
+	numKeys, keyPrefix, valPrefix := 10, "KHealthCheck", "VHealthCheck"
+	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
+
+	slaveServer := slaveSvc.(*slaveService)
+	healthCheckCli,err := newHealthCheckClient(slaveSvcPort)
+	if err!=nil {
+		t.Errorf("Error while creating health check client. Error: %v", err)
+	}
+	defer healthCheckCli.cliConn.Close()
+	validateHealthCheckResponseStream(t, "replNotStarted", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+
+	// Validate status when too high lag
+	if err := slaveServer.applyChangesFromMaster(2); err != nil {
+		t.Error(err)
+	}
+	if slaveServer.replInfo.replLag != 16 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replInfo.replLag)
+	}
+	validateHealthCheckResponseStream(t, "tooHighReplLag", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+
+	// Validate status when replication catching up
+	if err := slaveServer.applyChangesFromMaster(4); err != nil {
+		t.Error(err)
+	}
+	if slaveServer.replInfo.replLag != 8 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replInfo.replLag)
+	}
+	validateHealthCheckResponseStream(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING, healthCheckCli)
+
+	// Validate status when replication not successful for long time
+	time.Sleep(7 * time.Second)
+	validateHealthCheckResponseStream(t, "replDelayed", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+
+	// Validate status when replication caught up
+	if err := slaveServer.applyChangesFromMaster(10); err != nil {
+		t.Error(err)
+	}
+	if slaveServer.replInfo.replLag != 0 {
+		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replInfo.replLag)
+	}
+	validateHealthCheckResponseStream(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING, healthCheckCli)
+
+	// Validate status after closing
+	closeSlaveOnly()
+	validateHealthCheckResponseStream(t, "slaveClosed", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+	slaveGrpcSrvr.Stop()
+}
+
+func validateHealthCheckResponseStream(t *testing.T, useCase string, expectedResponse serverpb.HealthCheckResponse_ServingStatus, healthCheckCli *HealthCheckClient) {
+	actualResponse, _ := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+	if actualResponse == nil {
+		t.Fatalf("Actual response is nil in use case %s. Expected Response: %s", useCase, expectedResponse.String())
+	}
+	recv, err := actualResponse.Recv()
+	if err != nil {
+		t.Fatalf("Error while receiving response from serve. Error: %v", err)
+	}
+	if recv == nil {
+		t.Errorf("Recevied null message from the server during health check")
+	}
+	if recv.GetStatus() != expectedResponse {
+		t.Errorf("Unexpected status. Use case: %s, Expected: %s, Actual: %s", useCase, expectedResponse.String(), recv.GetStatus().String())
+	}
 }
 
 func validateHealthCheckResponse(t *testing.T, useCase string, expectedResponse serverpb.HealthCheckResponse_ServingStatus) {
@@ -389,6 +466,20 @@ func newDKVClient(port int) *ctl.DKVClient {
 	} else {
 		return client
 	}
+
+}
+
+func newHealthCheckClient(port int) (*HealthCheckClient, error) {
+	var options []grpc.DialOption
+	options = append(options, grpc.WithInsecure())
+	options = append(options, grpc.WithBlock())
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
+	conn, err := grpc.DialContext(context.Background(), dkvSvcAddr, options...)
+	if err != nil {
+		return nil, err
+	}
+	client := serverpb.NewHealthCheckClient(conn)
+	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
 func newRocksDBStore(dbFolder string) rocksdb.DB {
@@ -442,6 +533,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		slaveSvc.(*slaveService).replInfo.replCli = masterCli
 		slaveGrpcSrvr = grpc.NewServer()
 		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
+		serverpb.RegisterHealthCheckServer(slaveGrpcSrvr, slaveSvc)
 		lis := listen(slaveSvcPort)
 		wg.Done()
 		slaveGrpcSrvr.Serve(lis)
@@ -475,6 +567,11 @@ func closeSlave() {
 	slaveCli.Close()
 	slaveSvc.Close()
 	slaveGrpcSrvr.GracefulStop()
+}
+
+func closeSlaveOnly() {
+	slaveCli.Close()
+	slaveSvc.Close()
 }
 
 type testingClusterInfo struct {

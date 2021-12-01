@@ -167,6 +167,7 @@ func main() {
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
+		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
 	case masterRole, discoveryRole:
 		if cp == nil {
 			log.Panicf("Storage engine %s is not supported for DKV master role.", dbEngine)
@@ -182,6 +183,7 @@ func main() {
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
 
 		// Discovery servers can be only configured if node started as master.
 		if srvrRole == discoveryRole {
@@ -208,6 +210,7 @@ func main() {
 		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
 		discoveryClient.RegisterRegion(dkvSvc)
 	default:
 		panic("Invalid 'dbRole'. Allowed values are none|master|slave|discovery.")

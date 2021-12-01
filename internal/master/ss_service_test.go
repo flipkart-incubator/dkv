@@ -28,9 +28,9 @@ var (
 	grpcSrvr *grpc.Server
 )
 
-type DKVDiscoveryNodeClient struct {
+type HealthCheckClient struct {
 	cliConn    *grpc.ClientConn
-	dkvNodeDiscoveryCli serverpb.DKVDiscoveryNodeClient
+	healthCheckCli serverpb.HealthCheckClient
 }
 
 const (
@@ -64,19 +64,32 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testGetChanges", testGetChanges)
 		t.Run("testBackupRestore", testBackupRestore)
 		t.Run("testStandaloneHealthCheckUnary", testStandaloneHealthCheckUnary)
+	}
+}
+
+// test for streaming health check. Caution: this test will take a long time to run ~100s as it tests
+// the watch API 10 times and watch internally responds every 10 seconds.
+func TestStreamingHealthCheck(t *testing.T) {
+	go serveStandaloneDKV()
+	sleepInSecs(3)
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
+	} else {
+		dkvCli = client
 		t.Run("testHealthCheckStreaming", testStandaloneHealthCheckStreaming)
 	}
 }
 
-func getDkvDiscoveryNodeClient(svcAddr string, options []grpc.DialOption) (*DKVDiscoveryNodeClient, error) {
+func getHealthCheckClient(svcAddr string, options []grpc.DialOption) (*HealthCheckClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, svcAddr, options...)
 	if err != nil {
 		return nil, err
 	}
-	client := serverpb.NewDKVDiscoveryNodeClient(conn)
-	return &DKVDiscoveryNodeClient{cliConn: conn, dkvNodeDiscoveryCli: client}, nil
+	client := serverpb.NewHealthCheckClient(conn)
+	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
 func testPutAndGet(t *testing.T) {
@@ -365,6 +378,7 @@ func serveStandaloneDKV() {
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
+	serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
 	listenAndServe(grpcSrvr, dkvSvcPort)
 }
 
@@ -422,8 +436,52 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 	var options []grpc.DialOption
 	options = append(options, grpc.WithInsecure())
 	options = append(options, grpc.WithBlock())
-	discoveryNodeClient, err := getDkvDiscoveryNodeClient(dkvSvcAddr, options)
-	defer discoveryNodeClient.cliConn.Close()
+	healthCheckClient, err := getHealthCheckClient(dkvSvcAddr, options)
+	defer healthCheckClient.cliConn.Close()
+	if err != nil {
+		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
+	}
+	if err != nil {
+	}
+	watch, err := healthCheckClient.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+	if err != nil {
+		t.Errorf("Error received while watching. Error %v", err)
+	}
+	iterations := 10
+	for i:=0; i<iterations; i++ {
+		//at last close the service
+		if i == iterations-1 {
+			dkvCli.Close()
+			dkvSvc.Close()
+		}
+		recv, err := watch.Recv()
+		if err != nil {
+			t.Errorf("Recevied error response from the server during health check: %v", err)
+		}
+		if recv == nil {
+			t.Errorf("Recevied null message from the server during health check")
+		}
+
+		//at last iteration i is closed
+		if i == iterations-1 {
+			if  recv.GetStatus() != serverpb.HealthCheckResponse_NOT_SERVING {
+				t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
+			}
+		} else if recv.GetStatus() != serverpb.HealthCheckResponse_SERVING {
+			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), recv.GetStatus().String())
+		}
+	}
+	t.Logf("Stopping grpc server")
+	grpcSrvr.Stop()
+}
+
+func testHealthCheckStreamingPostShutdown(t *testing.T) {
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
+	var options []grpc.DialOption
+	options = append(options, grpc.WithInsecure())
+	options = append(options, grpc.WithBlock())
+	healthCheckClient, err := getHealthCheckClient(dkvSvcAddr, options)
+	defer healthCheckClient.cliConn.Close()
 	if err != nil {
 		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
 	}
@@ -431,7 +489,7 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	watch, err := discoveryNodeClient.dkvNodeDiscoveryCli.Watch(ctx, nil)
+	watch, err := healthCheckClient.healthCheckCli.Watch(ctx, nil)
 	if err != nil {
 		return
 	}
@@ -446,8 +504,8 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 		if recv == nil {
 			t.Errorf("Recevied null message from the server during health check")
 		}
-		if recv.GetStatus() != serverpb.HealthCheckResponse_SERVING {
-			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), recv.GetStatus().String())
+		if recv.GetStatus() != serverpb.HealthCheckResponse_NOT_SERVING {
+			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
 		}
 	}
 }

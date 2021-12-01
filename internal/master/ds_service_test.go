@@ -242,11 +242,10 @@ func testHealthCheckUnary(t *testing.T) {
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
 	<-time.After(30 * time.Second)
 
-	//todo why is this not failing even before adding it to the cluster
 	//health check shoud fail as the node has not yet been added to the cluster
 	healthCheckResponseBeforeAdditionToCluster, _ := dkvSvc.Check(nil, nil)
-	if healthCheckResponseBeforeAdditionToCluster.Status != serverpb.HealthCheckResponse_SERVING {
-		t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseBeforeAdditionToCluster.Status.String())
+	if healthCheckResponseBeforeAdditionToCluster.Status != serverpb.HealthCheckResponse_NOT_SERVING {
+		t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseBeforeAdditionToCluster.Status.String())
 	}
 
 
@@ -277,9 +276,9 @@ func testHealthCheckUnary(t *testing.T) {
 
 		// The new node should be removed from the raft cluster and shouldn't be serving now
 		healthCheckResponseAfterRemoval, _ := dkvSvc.Check(nil, nil)
-		// The new node should get attached to the server// todo same here -> this should fail maybe check in the dkv svc of another member?
-		if healthCheckResponseAfterRemoval.Status != serverpb.HealthCheckResponse_SERVING {
-			t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
+		// The new node should get attached to the server
+		if healthCheckResponseAfterRemoval.Status != serverpb.HealthCheckResponse_NOT_SERVING {
+			t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponse.Status.String())
 		}
 		grpcSrv.GracefulStop()
 		dkvSvc.Close()
