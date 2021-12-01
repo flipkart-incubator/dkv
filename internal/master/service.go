@@ -71,7 +71,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 			}
 			res, _ := ss.Check(context.Background(), req)
 			if err := watcher.Send(res); err != nil {
-					return err
+				return err
 			}
 		default:
 			break
@@ -585,8 +585,7 @@ func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverp
 	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
 }
 
-
-func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {

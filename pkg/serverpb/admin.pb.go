@@ -143,7 +143,6 @@ type HealthCheckResponse_ServingStatus int32
 
 const (
 	// The status of the service is unknown. This state is often seen at the startup of the service.
-	//todo check if this needs to be implemented as well.
 	HealthCheckResponse_UNKNOWN HealthCheckResponse_ServingStatus = 0
 	// The service is up and ready to serve requests
 	HealthCheckResponse_SERVING HealthCheckResponse_ServingStatus = 1
@@ -2497,9 +2496,11 @@ var _DKVDiscoveryNode_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type HealthCheckClient interface {
-	// Check offers the standard GRPC healt checks on the underlying implementation
+	// Check offers the standard GRPC health checks on the underlying implementation
 	// of the key value store.
 	Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
+	// Watch offers standard GRPC streaming health check on the underlying implementation
+	// of the key value store
 	Watch(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (HealthCheck_WatchClient, error)
 }
 
@@ -2554,9 +2555,11 @@ func (x *healthCheckWatchClient) Recv() (*HealthCheckResponse, error) {
 
 // HealthCheckServer is the server API for HealthCheck service.
 type HealthCheckServer interface {
-	// Check offers the standard GRPC healt checks on the underlying implementation
+	// Check offers the standard GRPC health checks on the underlying implementation
 	// of the key value store.
 	Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
+	// Watch offers standard GRPC streaming health check on the underlying implementation
+	// of the key value store
 	Watch(*HealthCheckRequest, HealthCheck_WatchServer) error
 }
 
