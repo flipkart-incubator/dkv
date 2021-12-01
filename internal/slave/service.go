@@ -135,7 +135,7 @@ func(ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.Healt
 }
 
 func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
-	ticker := time.NewTicker(1 * time.Millisecond) //todo get from a health check config which is common across all services
+	ticker := time.NewTicker(10 * time.Second) //todo get from a health check config which is common across all services
 	defer ticker.Stop()
 	for {
 		select {

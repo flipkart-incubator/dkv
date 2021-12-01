@@ -61,7 +61,7 @@ func(ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.
 }
 
 func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -587,7 +587,7 @@ func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverp
 
 
 func (ds *distributedService)  Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
