@@ -23,6 +23,7 @@ const (
 	dbFolder   = "/tmp/dkv_discovery_test_db"
 	cacheSize  = 3 << 30
 	engine     = "rocksdb"
+	healthCheckPeriod = uint8(10)
 )
 
 func TestDKVDiscoveryService(t *testing.T) {
@@ -157,7 +158,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 
 func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFolder string) (master.DKVService, *grpc.Server) {
 	kvs, cp, ba := newKVStore(dbFolder)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info)
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info, healtCheckPeriod)
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

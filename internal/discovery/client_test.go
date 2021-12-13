@@ -12,6 +12,7 @@ import (
 
 const (
 	discoverySvcPort = 8070
+	healtCheckPeriod = uint8(10)
 )
 
 func TestDiscoveryClient(t *testing.T) {
@@ -106,6 +107,6 @@ func TestDiscoveryClient(t *testing.T) {
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
 	dbDir := fmt.Sprintf("%s_%d", dbFolder, id)
 	kvs, cp, ba := newKVStore(dbDir)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info)
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info, healtCheckPeriod)
 	return dkvSvc
 }
