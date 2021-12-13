@@ -58,6 +58,7 @@ func TestDistributedService(t *testing.T) {
 	t.Run("testGetStatus", testGetStatus)
 	t.Run("testNewDKVNodeJoiningAndLeaving", testNewDKVNodeJoiningAndLeaving)
 	t.Run("testHealthCheckUnary", testHealthCheckUnary)
+	t.Run("testHealthCheckStreaming", testHealthCheckStreaming)
 }
 
 func testDistributedPut(t *testing.T) {
@@ -240,55 +241,65 @@ func testHealthCheckUnary(t *testing.T) {
 	// Create and start the new DKV node
 	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, extraNodeURL, clusterURL)
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
-	<-time.After(30 * time.Second)
-
-	//health check shoud fail as the node has not yet been added to the cluster
-	healthCheckResponseBeforeAdditionToCluster, _ := dkvSvc.Check(nil, nil)
-	if healthCheckResponseBeforeAdditionToCluster.Status != serverpb.HealthCheckResponse_NOT_SERVING {
-		t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseBeforeAdditionToCluster.Status.String())
-	}
-
-
-	// Add this new DKV node through the client of any other DKV node (1)
-	if err := dkvClis[1].AddNode(extraNodeURL); err != nil {
-		t.Fatal(err)
-	}
 	<-time.After(3 * time.Second)
 
-	// Create the client for the new DKV node
-	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[newNodeID])
-	if dkvCli, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
-		t.Fatal(err)
-	} else {
-		defer dkvCli.Close()
-		healthCheckResponse, _ := dkvSvc.Check(nil, nil)
+	//health check should work as the node gets automatically added to the cluster
+	healthCheckResponseNewNode, _ := dkvSvc.Check(nil, nil)
+	if healthCheckResponseNewNode.Status != serverpb.HealthCheckResponse_SERVING {
+		t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseNewNode.Status.String())
+	}
+	grpcSrv.GracefulStop()
+	dkvSvc.Close()
+	healthCheckResponseAfterShutdown, _ := dkvSvc.Check(nil, nil)
+	if healthCheckResponseAfterShutdown.Status != serverpb.HealthCheckResponse_NOT_SERVING {
+		t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
+	}
+}
 
-		// The new node should be attached to the raft cluster and should start serving now
-		if healthCheckResponse.Status != serverpb.HealthCheckResponse_SERVING {
-			t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
-		}
-		// Remove new DKV node through the client of any other DKV Node (2)
-		if err := dkvClis[2].RemoveNode(extraNodeURL); err != nil {
-			t.Fatal(err)
-		}
-		// TODO - node should now ideally be marked inactive but since status check is using ip address, can't test here
-		<-time.After(3 * time.Second)
+func testHealthCheckStreaming(t *testing.T) {
+	// Create and start the new DKV node
+	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, extraNodeURL, clusterURL)
+	serverpb.RegisterHealthCheckServer(grpcSrv, dkvSvc)
+	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
+	<-time.After(3 * time.Second)
 
-		// The new node should be removed from the raft cluster and shouldn't be serving now
-		healthCheckResponseAfterRemoval, _ := dkvSvc.Check(nil, nil)
-		// The new node should get attached to the server
-		if healthCheckResponseAfterRemoval.Status != serverpb.HealthCheckResponse_NOT_SERVING {
-			t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponse.Status.String())
+	healthCheckCli,err := newHealthCheckClient(dkvPorts[newNodeID])
+	if err != nil {
+		t.Fatalf("Error while creating health check client: %v", err)
+	} else  {
+		healthCheckResponseWatcher, error := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+		if error != nil {
+			t.Errorf("Erroneous response from health check client: %v", error)
+		}
+		response, err := healthCheckResponseWatcher.Recv()
+		if err != nil {
+			t.Fatalf("Error while receiving response from Watcher: %v", err)
+		}
+		if response.Status != serverpb.HealthCheckResponse_SERVING {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), response.Status.String())
+		}
+		dkvSvc.Close()
+		healthCheckResponseAfterShutdownWatcher, _ := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+		healthCheckResponseAfterShutdown, _ := healthCheckResponseAfterShutdownWatcher.Recv()
+		if healthCheckResponseAfterShutdown.Status != serverpb.HealthCheckResponse_NOT_SERVING {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
 		}
 		grpcSrv.GracefulStop()
-		dkvSvc.Close()
-
-		// The new node has been shutdown and shouldnt' be serving any requests
-		healthCheckResponseAfterShutdown, _ := dkvSvc.Check(nil, nil)
-		if healthCheckResponseAfterShutdown.Status != serverpb.HealthCheckResponse_NOT_SERVING {
-			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponse.Status.String())
-		}
 	}
+	healthCheckCli.cliConn.Close()
+}
+
+func newHealthCheckClient(port int) (*HealthCheckClient, error) {
+	var options []grpc.DialOption
+	options = append(options, grpc.WithInsecure())
+	options = append(options, grpc.WithBlock())
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
+	conn, err := grpc.DialContext(context.Background(), dkvSvcAddr, options...)
+	if err != nil {
+		return nil, err
+	}
+	client := serverpb.NewHealthCheckClient(conn)
+	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
 func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
@@ -405,7 +416,7 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
 	lgr, _ := zap.NewDevelopment()
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, lgr, stats.NewNoOpClient(), regionInfo)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, lgr, stats.NewNoOpClient(), regionInfo, 10)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

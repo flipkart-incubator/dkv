@@ -44,8 +44,8 @@ type standaloneService struct {
 	lg         *zap.Logger
 	statsCli   stats.Client
 	regionInfo *serverpb.RegionInfo
-
 	isClosed bool
+	healthCheckPeriod uint8
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
@@ -61,7 +61,7 @@ func(ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.
 }
 
 func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Duration(ss.healthCheckPeriod) * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -73,8 +73,6 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 			if err := watcher.Send(res); err != nil {
 				return err
 			}
-		default:
-			break
 		}
 		if ss.isClosed {
 			break
@@ -89,10 +87,10 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo, healthCheckPeriod uint8) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo, false}
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, regionInfo, false, healthCheckPeriod}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -366,8 +364,9 @@ type distributedService struct {
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, false}
+	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client,
+	regionInfo *serverpb.RegionInfo, healthCheckPeriod uint8) DKVClusterService {
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo, healthCheckPeriod), raftRepl, lgr, statsCli, false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -586,7 +585,7 @@ func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverp
 }
 
 func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Duration(ds.DKVService.(*standaloneService).healthCheckPeriod) * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -601,10 +600,7 @@ func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher se
 			if err := watcher.Send(res); err != nil {
 				return err
 			}
-		default:
-			break
 		}
-
 		if ds.isClosed { //broken out of the loop due to ds closure
 			break
 		}

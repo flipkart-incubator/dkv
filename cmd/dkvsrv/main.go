@@ -132,6 +132,7 @@ func main() {
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
+	healthCheckPeriod := uint8(1)
 	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
@@ -163,7 +164,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo, healthCheckPeriod)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -174,10 +175,10 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli, regionInfo)
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli, regionInfo, healthCheckPeriod)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo, healthCheckPeriod)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -207,7 +208,7 @@ func main() {
 			ReplMasterAddr:        replMasterAddr,
 		}
 
-		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient)
+		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient, healthCheckPeriod)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)

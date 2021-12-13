@@ -66,6 +66,7 @@ type slaveService struct {
 	clusterInfo discovery.ClusterInfoGetter
 	isClosed    bool
 	replInfo    *replInfo
+	healthCheckPeriod uint8
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -73,18 +74,20 @@ type slaveService struct {
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
 func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
-	statsCli stats.Client, regionInfo *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) (DKVService, error) {
+	statsCli stats.Client, regionInfo *serverpb.RegionInfo, replConf *ReplicationConfig,
+	clusterInfo discovery.ClusterInfoGetter, healthCheckPeriod uint8) (DKVService, error) {
 	if store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca` and `replPollInterval` are all mandatory")
 	}
-	return newSlaveService(store, ca, lgr, statsCli, regionInfo, replConf, clusterInfo), nil
+	return newSlaveService(store, ca, lgr, statsCli, regionInfo, replConf, clusterInfo, healthCheckPeriod), nil
 }
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
-	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
+	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig,
+	clusterInfo discovery.ClusterInfoGetter, healthCheckPeriod uint8) *slaveService {
 	ri := &replInfo{replConfig: replConf}
 	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,
-		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
+		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, healthCheckPeriod: healthCheckPeriod}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
@@ -135,7 +138,7 @@ func(ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.Healt
 }
 
 func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
-	ticker := time.NewTicker(10 * time.Second) //todo get from a health check config which is common across all services
+	ticker := time.NewTicker(time.Duration(ss.healthCheckPeriod) * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -151,7 +154,6 @@ func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.
 			if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
 				return err
 			}
-			break
 		}
 		if ss.isClosed {
 			break

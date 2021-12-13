@@ -356,6 +356,11 @@ func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore
 	if slaveServer.replInfo.replLag != 8 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replInfo.replLag)
 	}
+
+	// this health check has been done in the same thread as the replication thread. That's why we cannot
+	// have a health check time interval greater than the max replication lag. In a production use case
+	// health check will done parallel to replication so the health check will not fail in case the time period
+	// of the health check is greater than max replication lag
 	validateHealthCheckResponseStream(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING, healthCheckCli)
 
 	// Validate status when replication not successful for long time
@@ -508,7 +513,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
 	lgr, _ := zap.NewDevelopment()
-	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{})
+	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{}, 10)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -526,7 +531,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplLag:     10,
 		MaxActiveReplElapsed: 5,
 	}
-	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}); err != nil {
+	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, 1); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
