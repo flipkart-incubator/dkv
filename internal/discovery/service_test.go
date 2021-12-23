@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	dkvSvcPort = 8080
-	dkvSvcHost = "localhost"
-	dbFolder   = "/tmp/dkv_discovery_test_db"
-	cacheSize  = 3 << 30
-	engine     = "rocksdb"
+	dkvSvcPort        = 8080
+	dkvSvcHost        = "localhost"
+	dbFolder          = "/tmp/dkv_discovery_test_db"
+	cacheSize         = 3 << 30
+	engine            = "rocksdb"
 	healthCheckPeriod = uint8(10)
 )
 

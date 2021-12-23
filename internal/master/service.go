@@ -37,22 +37,21 @@ type DKVService interface {
 }
 
 type standaloneService struct {
-	store storage.KVStore
-	cp    storage.ChangePropagator
-	br    storage.Backupable
+	store      storage.KVStore
+	cp         storage.ChangePropagator
+	br         storage.Backupable
 	rwl        *sync.RWMutex
 	regionInfo *serverpb.RegionInfo
-	isClosed          bool
-	shutdown          chan struct{}
-	opts serveropts.ServerOpts
+	isClosed   bool
+	shutdown   chan struct{}
+	opts       serveropts.ServerOpts
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	return ss.regionInfo, nil
 }
 
-
-func(ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+func (ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
 	if !ss.isClosed && ss.regionInfo != nil && ss.regionInfo.Status == serverpb.RegionStatus_LEADER {
 		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
 	}
@@ -75,7 +74,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 			if err := checkAndSendResponse(req, watcher, ss); err != nil {
 				return err
 			}
-		case <- ss.shutdown:
+		case <-ss.shutdown:
 			if err := checkAndSendResponse(req, watcher, ss); err != nil {
 				return err
 			}
@@ -368,7 +367,7 @@ type distributedService struct {
 	// shutdown should be a buffer channel to avoid blocking close in case the health check client
 	// is not running
 	shutdown chan struct{}
-	opts serveropts.ServerOpts
+	opts     serveropts.ServerOpts
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
@@ -568,7 +567,6 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 	return regionInfo, nil
 }
 
-
 func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
 	regionInfo := ds.DKVService.(*standaloneService).regionInfo
 	if ds.isClosed {
@@ -616,7 +614,6 @@ func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher se
 		}
 	}
 }
-
 
 func newErrorStatus(err error) *serverpb.Status {
 	return &serverpb.Status{Code: -1, Message: err.Error()}

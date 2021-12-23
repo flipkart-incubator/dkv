@@ -59,8 +59,8 @@ type replInfo struct {
 }
 
 type CrossCuttingTools struct {
-	Lg       *zap.Logger
-	StatsCli stats.Client
+	Lg                        *zap.Logger
+	StatsCli                  stats.Client
 	HealthCheckTickerInterval uint8
 }
 
@@ -70,8 +70,8 @@ type slaveService struct {
 	regionInfo  *serverpb.RegionInfo
 	clusterInfo discovery.ClusterInfoGetter
 	isClosed    bool
-	replInfo                  *replInfo
-	serveropts serveropts.ServerOpts
+	replInfo    *replInfo
+	serveropts  serveropts.ServerOpts
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -90,7 +90,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *ser
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
 	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts serveropts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo,  serveropts: serveropts}
+	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
@@ -125,7 +125,7 @@ func (ss *slaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*
 	return res, err
 }
 
-func(ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+func (ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
 	if ss.isClosed {
 		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
 	}
@@ -140,7 +140,7 @@ func(ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.Healt
 	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
 }
 
-func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+func (ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
 	if ss.isClosed {
 		if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
 			return err
@@ -150,7 +150,7 @@ func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.
 	defer ticker.Stop()
 	for {
 		select {
-		case <- ticker.C:
+		case <-ticker.C:
 			checkResponse, err := ss.Check(context.Background(), req)
 			if err != nil {
 				return err
@@ -158,7 +158,7 @@ func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.
 			if err := watcher.Send(checkResponse); err != nil {
 				return err
 			}
-		case <- ss.replInfo.replStop:
+		case <-ss.replInfo.replStop:
 			return watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING))
 		}
 	}
@@ -167,7 +167,6 @@ func(ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.
 func getHealthCheckResponseWithStatus(status serverpb.HealthCheckResponse_ServingStatus) *serverpb.HealthCheckResponse {
 	return &serverpb.HealthCheckResponse{Status: status}
 }
-
 
 func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	readResults, err := ss.store.Get(multiGetReq.Keys...)

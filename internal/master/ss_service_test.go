@@ -26,17 +26,17 @@ import (
 var (
 	dkvCli   *ctl.DKVClient
 	dkvSvc   DKVService
-	grpcSrvr   *grpc.Server
-	lgr, _ = zap.NewDevelopment()
-	opts   = serveroptsInternal.ServerOpts{
+	grpcSrvr *grpc.Server
+	lgr, _   = zap.NewDevelopment()
+	opts     = serveroptsInternal.ServerOpts{
 		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
-		StatsCli: stats.NewNoOpClient(),
-		Logger : lgr,
+		StatsCli:                  stats.NewNoOpClient(),
+		Logger:                    lgr,
 	}
 )
 
 type HealthCheckClient struct {
-	cliConn    *grpc.ClientConn
+	cliConn        *grpc.ClientConn
 	healthCheckCli serverpb.HealthCheckClient
 }
 
@@ -426,6 +426,7 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 		}
 	}
 }
+
 // standalone server should always be running in leader mode
 func testStandaloneHealthCheckUnary(t *testing.T) {
 	healthCheckResponse, err := dkvSvc.Check(nil, nil)
@@ -454,7 +455,7 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 		t.Errorf("Error received while watching. Error %v", err)
 	}
 	iterations := 10
-	for i:=0; i<iterations; i++ {
+	for i := 0; i < iterations; i++ {
 		//at last close the service
 		if i == iterations-1 {
 			dkvCli.Close()
@@ -470,7 +471,7 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 
 		//at last iteration i is closed
 		if i == iterations-1 {
-			if  recv.GetStatus() != serverpb.HealthCheckResponse_NOT_SERVING {
+			if recv.GetStatus() != serverpb.HealthCheckResponse_NOT_SERVING {
 				t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
 			}
 		} else if recv.GetStatus() != serverpb.HealthCheckResponse_SERVING {
@@ -480,7 +481,6 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 	t.Logf("Stopping grpc server")
 	grpcSrvr.Stop()
 }
-
 
 func sleepInSecs(duration int) {
 	<-time.After(time.Duration(duration) * time.Second)

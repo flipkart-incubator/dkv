@@ -7,6 +7,6 @@ import (
 
 type ServerOpts struct {
 	HealthCheckTickerInterval uint8
-	StatsCli stats.Client
-	Logger   *zap.Logger
+	StatsCli                  stats.Client
+	Logger                    *zap.Logger
 }

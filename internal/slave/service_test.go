@@ -39,20 +39,20 @@ var (
 	masterSvc      master.DKVService
 	masterGrpcSrvr *grpc.Server
 
-	slaveCli      *ctl.DKVClient
-	slaveSvc      DKVService
-	healthCheckCli 		*HealthCheckClient
-	slaveGrpcSrvr *grpc.Server
-	lgr,_ = zap.NewDevelopment()
-	opts  = serveroptsInternal.ServerOpts {
-		Logger: lgr,
-		StatsCli: stats.NewNoOpClient(),
+	slaveCli       *ctl.DKVClient
+	slaveSvc       DKVService
+	healthCheckCli *HealthCheckClient
+	slaveGrpcSrvr  *grpc.Server
+	lgr, _         = zap.NewDevelopment()
+	opts           = serveroptsInternal.ServerOpts{
+		Logger:                    lgr,
+		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
 	}
 )
 
 type HealthCheckClient struct {
-	cliConn    *grpc.ClientConn
+	cliConn        *grpc.ClientConn
 	healthCheckCli serverpb.HealthCheckClient
 }
 
@@ -332,7 +332,6 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	validateHealthCheckResponse(t, "slaveClosed", serverpb.HealthCheckResponse_NOT_SERVING)
 }
 
-
 func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
 	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
 	defer closeMaster()
@@ -341,8 +340,8 @@ func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
 
 	slaveServer := slaveSvc.(*slaveService)
-	healthCheckCli,err := newHealthCheckClient(slaveSvcPort)
-	if err!=nil {
+	healthCheckCli, err := newHealthCheckClient(slaveSvcPort)
+	if err != nil {
 		t.Errorf("Error while creating health check client. Error: %v", err)
 	}
 	defer healthCheckCli.cliConn.Close()
@@ -538,8 +537,8 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplElapsed: 5,
 	}
 	specialOpts := serveroptsInternal.ServerOpts{
-		Logger: lgr,
-		StatsCli: stats.NewNoOpClient(),
+		Logger:                    lgr,
+		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint8(1),
 	}
 	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, specialOpts); err != nil {

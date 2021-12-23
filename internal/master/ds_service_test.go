@@ -21,25 +21,25 @@ import (
 )
 
 const (
-	clusterSize = 3
-	logDir      = "/tmp/dkv_test/logs"
-	snapDir     = "/tmp/dkv_test/snap"
-	clusterURL  = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
-	replTimeout = 3 * time.Second
-	newNodeID   = 4
-	newNodeURL  = "http://127.0.0.1:9324"
-	extraNodeURL  = "http://127.0.0.1:9325"
+	clusterSize  = 3
+	logDir       = "/tmp/dkv_test/logs"
+	snapDir      = "/tmp/dkv_test/snap"
+	clusterURL   = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
+	replTimeout  = 3 * time.Second
+	newNodeID    = 4
+	newNodeURL   = "http://127.0.0.1:9324"
+	extraNodeURL = "http://127.0.0.1:9325"
 )
 
 var (
-	grpcSrvs = make(map[int]*grpc.Server)
-	dkvPorts = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084}
-	dkvClis  = make(map[int]*ctl.DKVClient)
-	dkvSvcs  = make(map[int]DKVService)
+	grpcSrvs           = make(map[int]*grpc.Server)
+	dkvPorts           = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084}
+	dkvClis            = make(map[int]*ctl.DKVClient)
+	dkvSvcs            = make(map[int]DKVService)
 	dkvUrlToServiceMap = make(map[string]DKVService)
-	mutex    = sync.Mutex{}
-	rc           = serverpb.ReadConsistency_SEQUENTIAL
-	leaderDkvSvc DKVService
+	mutex              = sync.Mutex{}
+	rc                 = serverpb.ReadConsistency_SEQUENTIAL
+	leaderDkvSvc       DKVService
 )
 
 func TestDistributedService(t *testing.T) {
@@ -273,7 +273,7 @@ func testGetStatus(t *testing.T) {
 	}
 }
 
-func testHealthCheckUnary(t *testing.T)  {
+func testHealthCheckUnary(t *testing.T) {
 	dir := fmt.Sprintf("%s_%d", dbFolder, newNodeID)
 	kvs, cp, br := newKVStore(dir)
 	// Create and start the new DKV node
@@ -331,10 +331,10 @@ func testHealthCheckStreaming(t *testing.T) {
 	}
 	<-time.After(3 * time.Second)
 
-	healthCheckCli,err := newHealthCheckClient(dkvPorts[newNodeID])
+	healthCheckCli, err := newHealthCheckClient(dkvPorts[newNodeID])
 	if err != nil {
 		t.Fatalf("Error while creating health check client: %v", err)
-	} else  {
+	} else {
 		healthCheckResponseWatcher, error := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
 		if error != nil {
 			t.Errorf("Erroneous response from health check client: %v", error)
@@ -364,7 +364,6 @@ func testHealthCheckStreaming(t *testing.T) {
 		if healthCheckResponseAfterReelection.Status != serverpb.HealthCheckResponse_SERVING {
 			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
 		}
-
 
 		if err := dkvSvc.Close(); err != nil {
 			t.Fatalf("Error while closing the dkv service. Error: %v", err)
