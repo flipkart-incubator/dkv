@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
+	"github.com/flipkart-incubator/dkv/internal/health"
+	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"gopkg.in/ini.v1"
 	"log"
 	"net"
@@ -132,7 +134,6 @@ func main() {
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(dbRole)
-	healthCheckPeriod := uint8(1)
 	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
@@ -150,6 +151,8 @@ func main() {
 		NexusClusterUrl: nil,
 	}
 
+	serveropts := getServerOpts()
+
 	var discoveryClient discovery.Client
 	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
@@ -164,7 +167,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo, healthCheckPeriod)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, regionInfo, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -175,10 +178,10 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli, regionInfo, healthCheckPeriod)
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), regionInfo, serveropts)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo, healthCheckPeriod)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, regionInfo, serveropts)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -207,8 +210,7 @@ func main() {
 			DisableAutoMasterDisc: disableAutoMasterDisc,
 			ReplMasterAddr:        replMasterAddr,
 		}
-
-		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient, healthCheckPeriod)
+		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
@@ -219,6 +221,14 @@ func main() {
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
 	log.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
+}
+
+func getServerOpts() serveroptsInternal.ServerOpts {
+	return serveroptsInternal.ServerOpts{
+		Logger:                    dkvLogger,
+		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		StatsCli:                  statsCli,
+	}
 }
 
 func validateFlags() {

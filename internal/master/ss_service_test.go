@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/health"
+	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"io"
 	"net"
 	"os/exec"
 	"strings"
@@ -25,7 +26,13 @@ import (
 var (
 	dkvCli   *ctl.DKVClient
 	dkvSvc   DKVService
-	grpcSrvr *grpc.Server
+	grpcSrvr   *grpc.Server
+	lgr, _ = zap.NewDevelopment()
+	opts   = serveroptsInternal.ServerOpts{
+		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		StatsCli: stats.NewNoOpClient(),
+		Logger : lgr,
+	}
 )
 
 type HealthCheckClient struct {
@@ -67,7 +74,7 @@ func TestStandaloneService(t *testing.T) {
 	}
 }
 
-// test for streaming health check. Caution: this test will take a long time to run ~100s as it tests
+// test for streaming health check. Caution: this test will take a long time to run ~90s as it tests
 // the watch API 10 times and watch internally responds every 10 seconds.
 func TestStreamingHealthCheck(t *testing.T) {
 	go serveStandaloneDKV()
@@ -372,8 +379,7 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 
 func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore(dbFolder)
-	lgr, _ := zap.NewDevelopment()
-	dkvSvc = NewStandaloneService(kvs, cp, ba, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{}, 10)
+	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, opts)
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
@@ -441,9 +447,9 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
 	}
-	if err != nil {
-	}
+
 	watch, err := healthCheckClient.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+
 	if err != nil {
 		t.Errorf("Error received while watching. Error %v", err)
 	}
@@ -475,40 +481,6 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 	grpcSrvr.Stop()
 }
 
-func testHealthCheckStreamingPostShutdown(t *testing.T) {
-	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	var options []grpc.DialOption
-	options = append(options, grpc.WithInsecure())
-	options = append(options, grpc.WithBlock())
-	healthCheckClient, err := getHealthCheckClient(dkvSvcAddr, options)
-	defer healthCheckClient.cliConn.Close()
-	if err != nil {
-		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
-	}
-	if err != nil {
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	watch, err := healthCheckClient.healthCheckCli.Watch(ctx, nil)
-	if err != nil {
-		return
-	}
-
-	for i:=0; i<10; i++ {
-		recv, err := watch.Recv()
-		if err == io.EOF {
-
-		} else if err != nil {
-			t.Errorf("Recevied error response from the server during health check: %v", err)
-		}
-		if recv == nil {
-			t.Errorf("Recevied null message from the server during health check")
-		}
-		if recv.GetStatus() != serverpb.HealthCheckResponse_NOT_SERVING {
-			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
-		}
-	}
-}
 
 func sleepInSecs(duration int) {
 	<-time.After(time.Duration(duration) * time.Second)

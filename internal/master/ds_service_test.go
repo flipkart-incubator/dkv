@@ -11,14 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	dkv_sync "github.com/flipkart-incubator/dkv/internal/sync"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -38,8 +36,10 @@ var (
 	dkvPorts = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084}
 	dkvClis  = make(map[int]*ctl.DKVClient)
 	dkvSvcs  = make(map[int]DKVService)
+	dkvUrlToServiceMap = make(map[string]DKVService)
 	mutex    = sync.Mutex{}
-	rc       = serverpb.ReadConsistency_SEQUENTIAL
+	rc           = serverpb.ReadConsistency_SEQUENTIAL
+	leaderDkvSvc DKVService
 )
 
 func TestDistributedService(t *testing.T) {
@@ -57,8 +57,44 @@ func TestDistributedService(t *testing.T) {
 	t.Run("testRestore", testRestore)
 	t.Run("testGetStatus", testGetStatus)
 	t.Run("testNewDKVNodeJoiningAndLeaving", testNewDKVNodeJoiningAndLeaving)
+}
+
+func TestHealthCheckUnary(t *testing.T) {
+	resetRaftStateDirs(t)
+	initDKVServers()
+	sleepInSecs(3)
+	initDKVClients()
+	defer stopClients()
+
 	t.Run("testHealthCheckUnary", testHealthCheckUnary)
+
+	for id := 1; id <= clusterSize; id++ {
+		//don't close the leader again
+		if dkvSvcs[id] == leaderDkvSvc {
+			continue
+		}
+		dkvSvcs[id].Close()
+		grpcSrvs[id].GracefulStop()
+	}
+}
+
+func TestHealthCheckStreaming(t *testing.T) {
+	resetRaftStateDirs(t)
+	initDKVServers()
+	sleepInSecs(3)
+	initDKVClients()
+	defer stopClients()
+
 	t.Run("testHealthCheckStreaming", testHealthCheckStreaming)
+
+	for id := 1; id <= clusterSize; id++ {
+		//don't close the leader again
+		if dkvSvcs[id] == leaderDkvSvc {
+			continue
+		}
+		dkvSvcs[id].Close()
+		grpcSrvs[id].GracefulStop()
+	}
 }
 
 func testDistributedPut(t *testing.T) {
@@ -237,17 +273,40 @@ func testGetStatus(t *testing.T) {
 	}
 }
 
-func testHealthCheckUnary(t *testing.T) {
+func testHealthCheckUnary(t *testing.T)  {
+	dir := fmt.Sprintf("%s_%d", dbFolder, newNodeID)
+	kvs, cp, br := newKVStore(dir)
 	// Create and start the new DKV node
-	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, extraNodeURL, clusterURL)
+	dkvRepl := newReplicator(kvs, extraNodeURL, clusterURL)
+	dkvSvc, grpcSrv := newDistributedDKVNodeWithRepl(newNodeID, extraNodeURL, clusterURL, dkvRepl, kvs, cp, br)
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
+	if err := dkvClis[1].AddNode(extraNodeURL); err != nil {
+		t.Fatal(err)
+	}
 	<-time.After(3 * time.Second)
 
-	//health check should work as the node gets automatically added to the cluster
 	healthCheckResponseNewNode, _ := dkvSvc.Check(nil, nil)
 	if healthCheckResponseNewNode.Status != serverpb.HealthCheckResponse_SERVING {
 		t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseNewNode.Status.String())
 	}
+
+	// Now remove the leader from the cluster. Since the this node was attached later, it won't be leader at first
+	// But after re-election it can be become a leader or follower. But the health check should still return serving
+	// if the re-election was completed successfully
+	leader, members := dkvRepl.ListMembers()
+	leaderDkvSvc = dkvUrlToServiceMap[members[leader].NodeUrl]
+	err := leaderDkvSvc.Close()
+	if err != nil {
+		t.Fatalf("Error while closing leader service. Error: %v", err)
+	}
+	//Let the re-relection get completed
+	<-time.After(10 * time.Second)
+
+	healthCheckResponseAfterReelection, _ := dkvSvc.Check(nil, nil)
+	if healthCheckResponseAfterReelection.Status != serverpb.HealthCheckResponse_SERVING {
+		t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
+	}
+
 	grpcSrv.GracefulStop()
 	dkvSvc.Close()
 	healthCheckResponseAfterShutdown, _ := dkvSvc.Check(nil, nil)
@@ -258,9 +317,18 @@ func testHealthCheckUnary(t *testing.T) {
 
 func testHealthCheckStreaming(t *testing.T) {
 	// Create and start the new DKV node
-	dkvSvc, grpcSrv := newDistributedDKVNode(newNodeID, extraNodeURL, clusterURL)
-	serverpb.RegisterHealthCheckServer(grpcSrv, dkvSvc)
+	dir := fmt.Sprintf("%s_%d", dbFolder, newNodeID)
+	kvs, cp, br := newKVStore(dir)
+	// Create and start the new DKV node
+	dkvRepl := newReplicator(kvs, extraNodeURL, clusterURL)
+	dkvSvc, grpcSrv := newDistributedDKVNodeWithRepl(newNodeID, extraNodeURL, clusterURL, dkvRepl, kvs, cp, br)
 	go grpcSrv.Serve(newListener(dkvPorts[newNodeID]))
+
+	<-time.After(3 * time.Second)
+
+	if err := dkvClis[1].AddNode(extraNodeURL); err != nil {
+		t.Fatal(err)
+	}
 	<-time.After(3 * time.Second)
 
 	healthCheckCli,err := newHealthCheckClient(dkvPorts[newNodeID])
@@ -278,9 +346,31 @@ func testHealthCheckStreaming(t *testing.T) {
 		if response.Status != serverpb.HealthCheckResponse_SERVING {
 			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), response.Status.String())
 		}
-		dkvSvc.Close()
-		healthCheckResponseAfterShutdownWatcher, _ := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
-		healthCheckResponseAfterShutdown, _ := healthCheckResponseAfterShutdownWatcher.Recv()
+
+		// Now remove the leader from the cluster. Since the this node was attached later, it won't be leader at first
+		// But after re-election it can be become a leader or follower. But the health check should still return serving
+		// if the re-election was completed successfully
+		leader, members := dkvRepl.ListMembers()
+		leaderDkvSvc = dkvUrlToServiceMap[members[leader].NodeUrl]
+		er := leaderDkvSvc.Close()
+
+		if er != nil {
+			t.Fatalf("Error while closing leader service. Error: %v", err)
+		}
+		//Let the re-relection get completed
+		<-time.After(10 * time.Second)
+
+		healthCheckResponseAfterReelection, _ := healthCheckResponseWatcher.Recv()
+		if healthCheckResponseAfterReelection.Status != serverpb.HealthCheckResponse_SERVING {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
+		}
+
+
+		if err := dkvSvc.Close(); err != nil {
+			t.Fatalf("Error while closing the dkv service. Error: %v", err)
+		}
+
+		healthCheckResponseAfterShutdown, _ := healthCheckResponseWatcher.Recv()
 		if healthCheckResponseAfterShutdown.Status != serverpb.HealthCheckResponse_NOT_SERVING {
 			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
 		}
@@ -415,11 +505,23 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	lgr, _ := zap.NewDevelopment()
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, lgr, stats.NewNoOpClient(), regionInfo, 10)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, opts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
+	serverpb.RegisterHealthCheckServer(grpcSrv, distSrv)
+	return distSrv, grpcSrv
+}
+
+func newDistributedDKVNodeWithRepl(id int, nodeURL, clusURL string, dkvRepl nexus_api.RaftReplicator, kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable) (DKVService, *grpc.Server) {
+	dkvRepl.Start()
+	regionInfo := &serverpb.RegionInfo{}
+	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, opts)
+	grpcSrv := grpc.NewServer()
+	serverpb.RegisterDKVServer(grpcSrv, distSrv)
+	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
+	serverpb.RegisterHealthCheckServer(grpcSrv, distSrv)
 	return distSrv, grpcSrv
 }
 
@@ -427,6 +529,7 @@ func serveDistributedDKV(id int, nodeURL string) {
 	dkvSvc, grpcSvc := newDistributedDKVNode(id, nodeURL, clusterURL)
 	mutex.Lock()
 	dkvSvcs[id] = dkvSvc
+	dkvUrlToServiceMap[nodeURL] = dkvSvc
 	grpcSrvs[id] = grpcSvc
 	mutex.Unlock()
 	grpcSrvs[id].Serve(newListener(dkvPorts[id]))

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/health"
+	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"net"
 	"os/exec"
 	"sync"
@@ -41,6 +43,12 @@ var (
 	slaveSvc      DKVService
 	healthCheckCli 		*HealthCheckClient
 	slaveGrpcSrvr *grpc.Server
+	lgr,_ = zap.NewDevelopment()
+	opts  = serveroptsInternal.ServerOpts {
+		Logger: lgr,
+		StatsCli: stats.NewNoOpClient(),
+		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+	}
 )
 
 type HealthCheckClient struct {
@@ -512,8 +520,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	lgr, _ := zap.NewDevelopment()
-	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{}, 10)
+	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, opts)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -524,14 +531,18 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient) {
-	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
 		MaxNumChngs:          2,
 		ReplPollInterval:     5 * time.Second,
 		MaxActiveReplLag:     10,
 		MaxActiveReplElapsed: 5,
 	}
-	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, 1); err != nil {
+	specialOpts := serveroptsInternal.ServerOpts{
+		Logger: lgr,
+		StatsCli: stats.NewNoOpClient(),
+		HealthCheckTickerInterval: uint8(1),
+	}
+	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, specialOpts); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
