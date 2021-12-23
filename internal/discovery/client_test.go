@@ -2,7 +2,9 @@ package discovery
 
 import (
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/health"
 	"github.com/flipkart-incubator/dkv/internal/master"
+	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
@@ -12,7 +14,15 @@ import (
 
 const (
 	discoverySvcPort = 8070
-	healtCheckPeriod = uint8(10)
+)
+
+var (
+	lgr, _     = zap.NewDevelopment()
+	serveropts = serveroptsInternal.ServerOpts{
+		Logger:                    lgr,
+		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		StatsCli:                  stats.NewNoOpClient(),
+	}
 )
 
 func TestDiscoveryClient(t *testing.T) {
@@ -107,6 +117,6 @@ func TestDiscoveryClient(t *testing.T) {
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
 	dbDir := fmt.Sprintf("%s_%d", dbFolder, id)
 	kvs, cp, ba := newKVStore(dbDir)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info, healtCheckPeriod)
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts)
 	return dkvSvc
 }
