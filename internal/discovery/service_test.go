@@ -3,7 +3,6 @@ package discovery
 import (
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/master"
-	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
@@ -158,7 +157,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 
 func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFolder string) (master.DKVService, *grpc.Server) {
 	kvs, cp, ba := newKVStore(dbFolder)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info, healtCheckPeriod)
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts)
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
