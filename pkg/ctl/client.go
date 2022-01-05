@@ -218,9 +218,9 @@ func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
 }
 
 func (dkvClnt *DKVClient) GetClusterInfo(dcId string, database string, vBucket string) ([]*serverpb.RegionInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
-	defer cancel()
-	clusterInfo, err := dkvClnt.dkvDisCli.GetClusterInfo(ctx, &serverpb.GetClusterInfoRequest{
+	//ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	//defer cancel()
+	clusterInfo, err := dkvClnt.dkvDisCli.GetClusterInfo(context.Background(), &serverpb.GetClusterInfoRequest{
 		DcID:     &dcId,
 		Database: &database,
 		VBucket:  &vBucket,
