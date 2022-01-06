@@ -35,8 +35,8 @@ const (
 	cacheSize        = 3 << 30
 
 	// for creating a distribute server cluster
-	dbFolderMaster   = "/tmp/dkv_test_db_master/new"
-	dbFolderSlave   = "/tmp/dkv_test_db_slave/new"
+	dbFolderMaster   = "/tmp/dkv_test_db_master"
+	dbFolderSlave   = "/tmp/dkv_test_db_slave"
 	clusterSize = 5
 	discoveryPort = 8686
 	logDir      = "/tmp/dkv_test/logs"
@@ -86,8 +86,6 @@ func TestSlaveDiscoveryFunctionality(t *testing.T) {
 }
 
 func TestSlaveAutoConnect(t *testing.T) {
-	//start 3 masters
-
 	//reset raft directories
 	resetRaftStateDirs(t)
 
@@ -97,6 +95,7 @@ func TestSlaveAutoConnect(t *testing.T) {
 	startDiscoveryCli()
 	defer discoverydkvSvc.Close()
 	defer discoveryCli.Close()
+
 	//start dkvservers
 	initDKVServers()
 	sleepInSecs(3)
@@ -104,13 +103,15 @@ func TestSlaveAutoConnect(t *testing.T) {
 	initDKVClients()
 	defer stopClients()
 	defer stopServers()
+
+	//start slave server
 	startSlaveAndAttachToMaster(nil)
 	registerSlaveWithDiscovery()
 	sleepInSecs(10)
 	defer closeSlave()
-	//will be used later to bring masters back up
+
 	lastClosedMasterId := -1
-	for cnt := 0; cnt <5; cnt++ {
+	for cnt := 0; cnt<clusterSize; cnt++ {
 		masterId := getCurrentMasterId(t)
 		t.Log("Current master id:", dkvPorts[masterId])
 		currentMasterSvc := dkvSvcs[masterId]
@@ -127,7 +128,16 @@ func TestSlaveAutoConnect(t *testing.T) {
 			}
 			sleepInSecs(3)
 		}
-		slaveSvc.(*slaveService).applyChangesFromMaster(2)
+		for tmp:=1; tmp<=clusterSize; tmp++ {
+			responseFromSlave, _ := slaveCli.Get(0, []byte(fmt.Sprintf("K_CLI_0_%d", cnt)))
+			t.Log("Data fetch from slave is", responseFromSlave.GetValue())
+			if tmp == masterId {
+				t.Log("Master id is", masterId, ". Not getting value from this CLI")
+				continue
+			}
+			response, _ := dkvClis[tmp].Get(serverpb.ReadConsistency_LINEARIZABLE, []byte(fmt.Sprintf("K_CLI_0_%d", cnt)));
+			t.Log("Current Data value from master CLI", tmp, string(response.GetValue()))
+		}
 		//abruptly stop the master
 		grpcSrvs[masterId].Stop()
 		currentMasterCli.Close()
