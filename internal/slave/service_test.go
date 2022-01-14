@@ -109,25 +109,32 @@ func TestSlaveAutoConnect(t *testing.T) {
 	registerSlaveWithDiscovery()
 	sleepInSecs(10)
 	defer closeSlave()
-
+	if err := slaveSvc.(*slaveService).findAndConnectToMaster(); err != nil {
+		t.Fatalf("Cannot connect to new master. Error: %v", err)
+	}
 	lastClosedMasterId := -1
 	for cnt := 0; cnt<clusterSize; cnt++ {
-		masterId := getCurrentMasterId(t)
+		masterId := getCurrentMasterIdFromSlave(t)
 		t.Log("Current master id:", dkvPorts[masterId])
 		currentMasterSvc := dkvSvcs[masterId]
 		currentMasterCli := dkvClis[masterId]
 		//add some kv using CLI
-		for i := 0; i < 2; i++ {
-			if lastClosedMasterId != -1 {
+		fg := false
+		for i := 0; i < 199; i++ {
+			if lastClosedMasterId != -1 && fg == false {
+				// add current node to the cluster config
 				currentMasterCli.AddNode(getNodeUrl(lastClosedMasterId))
+				fg = true
 			}
-			sleepInSecs(3)
 			key, value := fmt.Sprintf("K_CLI_%d_%d", i, cnt), fmt.Sprintf("V_CLI_%d_%d", i, cnt)
-			if err := currentMasterCli.Put([]byte(key), []byte(value)); err != nil {
+			if err := currentMasterCli.PutTTL([]byte(key), []byte(value), uint64(time.Now().Add(2*time.Hour).Unix())); err != nil {
 				t.Fatalf("Error while putting key to kv. Error: %v", err)
 			}
-			sleepInSecs(3)
 		}
+
+		slaveSvc.(*slaveService).applyChangesFromMaster(100);
+
+		//re check the data from slaves and mastesr
 		for tmp:=1; tmp<=clusterSize; tmp++ {
 			responseFromSlave, _ := slaveCli.Get(0, []byte(fmt.Sprintf("K_CLI_0_%d", cnt)))
 			t.Log("Data fetch from slave is", responseFromSlave.GetValue())
@@ -142,11 +149,13 @@ func TestSlaveAutoConnect(t *testing.T) {
 		grpcSrvs[masterId].Stop()
 		currentMasterCli.Close()
 		currentMasterSvc.Close()
+
 		closedMasters[masterId] = true
 		lastClosedMasterId = masterId
+
 		//let slave connect to a new master
-		sleepInSecs(30)
-		masterId = getCurrentMasterId(t)
+		slaveSvc.(*slaveService).reconnectMaster()
+		masterId = getCurrentMasterIdFromSlave(t)
 		//restart this server again so that it can be used again
 		startDkvSvcAndCli(lastClosedMasterId)
 		sleepInSecs(10)
@@ -179,6 +188,24 @@ func getCurrentMasterId(t *testing.T) int {
 				currentMaster = *region.MasterHost
 			}
 		}
+	}
+	if currentMaster == "" {
+		t.Fatalf("No master found")
+	}
+	detail := strings.Split(currentMaster, ":")
+	for i:=1; i<=clusterSize; i++ {
+		if  fmt.Sprintf("%d", dkvPorts[i]) == detail[1] {
+			return i
+		}
+	}
+	t.Fatalf("Error: Master port not found")
+	return -1
+}
+
+func getCurrentMasterIdFromSlave(t *testing.T) int {
+	var currentMaster string
+	if slaveSvc.(*slaveService).regionInfo.MasterHost != nil {
+		currentMaster = *slaveSvc.(*slaveService).regionInfo.MasterHost
 	}
 	if currentMaster == "" {
 		t.Fatalf("No master found")
@@ -237,8 +264,8 @@ func startSlaveAndAttachToMaster(client *ctl.DKVClient) {
 	// stop the slave poller so as to avoid race with this poller
 	// and the explicit call to applyChangesFromMaster later
 	//TODO Check why is this even required?
-	//slaveSvc.(*slaveService).replInfo.replTckr.Stop()
-	//slaveSvc.(*slaveService).replInfo.replStop <- struct{}{}
+	slaveSvc.(*slaveService).replInfo.replTckr.Stop()
+	slaveSvc.(*slaveService).replInfo.replStop <- struct{}{}
 	//sleepInSecs(2)
 
 	slaveCli = newDKVClient(slaveSvcPort)
@@ -377,6 +404,25 @@ func resetRaftStateDirs(t *testing.T) {
 	if err := exec.Command("mkdir", "-p", snapDir).Run(); err != nil {
 		t.Fatal(err)
 	}
+	for tmp:=1; tmp<=5; tmp++ {
+		folderName := fmt.Sprintf("%s_%d", dbFolderMaster, tmp)
+		if err := exec.Command("rm", "-rf", folderName).Run(); err != nil {
+			t.Fatal(err)
+		}
+		if err := exec.Command("mkdir", "-p", folderName).Run(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for tmp:=1; tmp<=5; tmp++ {
+		folderName := fmt.Sprintf("%s_%d", dbFolderSlave, tmp)
+		if err := exec.Command("rm", "-rf", folderName).Run(); err != nil {
+			t.Fatal(err)
+		}
+		if err := exec.Command("mkdir", "-p", folderName).Run(); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 
@@ -396,7 +442,7 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	defer masterGrpcSrvr.GracefulStop()
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli, true, testingClusterInfo{})
+	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli, false, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -454,7 +500,7 @@ func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.Cha
 	masterCli = newDKVClient(masterSvcPort)
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, true, testingClusterInfo{})
+	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, false, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -471,7 +517,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
 	defer closeMasterAndSlave()
 
-	numKeys, keyPrefix, valPrefix := 10, "K", "V"
+	numKeys, keyPrefix, valPrefix := 100, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
 
 	numKeys, ttlKeyPrefix, ttlValPrefix, ttlExpiredKeyPrefix := 10, "TTL-K", "TTL-V", "EXPIRED-TTL-K"
@@ -703,7 +749,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
 		lis := listen(slaveSvcPort)
 		wg.Done()
-		go slaveGrpcSrvr.Serve(lis)
+		slaveGrpcSrvr.Serve(lis)
 	}
 }
 
