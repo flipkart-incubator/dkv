@@ -76,10 +76,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 				return err
 			}
 		case <-ss.shutdown:
-			if err := checkAndSendResponse(req, watcher, ss); err != nil {
-				return err
-			}
-			return nil
+			return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
 		}
 	}
 }
@@ -607,11 +604,7 @@ func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher se
 				return err
 			}
 		case <-ds.shutdown:
-			res, err := ds.Check(context.Background(), req)
-			if err != nil {
-				return err
-			}
-			return watcher.Send(res)
+			return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
 		}
 	}
 }
