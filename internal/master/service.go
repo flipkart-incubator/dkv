@@ -65,6 +65,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 		if err := checkAndSendResponse(req, watcher, ss); err != nil {
 			return err
 		}
+		return nil
 	}
 	ticker := time.NewTicker(time.Duration(ss.opts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()

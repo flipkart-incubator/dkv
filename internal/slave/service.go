@@ -7,7 +7,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/serveropts"
-	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -56,12 +55,6 @@ type replInfo struct {
 	lastReplTime uint64
 	replConfig   *ReplicationConfig
 	fromChngNum  uint64
-}
-
-type CrossCuttingTools struct {
-	Lg                        *zap.Logger
-	StatsCli                  stats.Client
-	HealthCheckTickerInterval uint8
 }
 
 type slaveService struct {
@@ -145,6 +138,7 @@ func (ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb
 		if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
 			return err
 		}
+		return nil
 	}
 	ticker := time.NewTicker(time.Duration(ss.serveropts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
