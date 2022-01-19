@@ -95,6 +95,7 @@ func init() {
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
+	flag.UintVar(&health.HealthCheckTickerInterval, "health-check-interval", health.DefaultHealthCheckTickterInterval, "Time in seconds between two consecutive streaming health checks.")
 	setDKVDefaultsForNexusDirs()
 }
 

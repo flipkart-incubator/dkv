@@ -1,5 +1,9 @@
 package health
 
+var (
+	HealthCheckTickerInterval uint
+)
+
 const (
-	HealthCheckTickerInterval = uint8(10)
+	DefaultHealthCheckTickterInterval = uint(10)
 )

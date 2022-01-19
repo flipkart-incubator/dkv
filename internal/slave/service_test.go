@@ -539,7 +539,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 	specialOpts := serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
-		HealthCheckTickerInterval: uint8(1),
+		HealthCheckTickerInterval: uint(1),
 	}
 	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, specialOpts); err != nil {
 		panic(err)

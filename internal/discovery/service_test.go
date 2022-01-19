@@ -22,7 +22,6 @@ const (
 	dbFolder          = "/tmp/dkv_discovery_test_db"
 	cacheSize         = 3 << 30
 	engine            = "rocksdb"
-	healthCheckPeriod = uint8(10)
 )
 
 func TestDKVDiscoveryService(t *testing.T) {

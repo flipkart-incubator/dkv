@@ -9,7 +9,7 @@ import (
 //new configurations (e.g. health check interval), tools (e.g. logger, metric handler) should be
 //wrapped in this struct.
 type ServerOpts struct {
-	HealthCheckTickerInterval uint8
+	HealthCheckTickerInterval uint
 	StatsCli                  stats.Client
 	Logger                    *zap.Logger
 }
