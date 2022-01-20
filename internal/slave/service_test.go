@@ -27,44 +27,44 @@ import (
 )
 
 const (
-	masterDBFolder   = "/tmp/dkv_test_db_master"
-	slaveDBFolder    = "/tmp/dkv_test_db_slave"
-	masterSvcPort    = 8181
-	slaveSvcPort     = 8282
-	dkvSvcHost       = "localhost"
-	cacheSize        = 3 << 30
+	masterDBFolder = "/tmp/dkv_test_db_master"
+	slaveDBFolder  = "/tmp/dkv_test_db_slave"
+	masterSvcPort  = 8181
+	slaveSvcPort   = 8282
+	dkvSvcHost     = "localhost"
+	cacheSize      = 3 << 30
 
 	// for creating a distribute server cluster
-	dbFolderMaster   = "/tmp/dkv_test_db_master"
-	dbFolderSlave   = "/tmp/dkv_test_db_slave"
-	clusterSize = 5
-	discoveryPort = 8686
-	logDir      = "/tmp/dkv_test/logs"
-	snapDir     = "/tmp/dkv_test/snap"
-	clusterURL  = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323,http://127.0.0.1:9324,http://127.0.0.1:9325"
-	replTimeout = 3 * time.Second
-	engine     = "rocksdb"
-	dbName = "default"
-	vbucket = "default"
+	dbFolderMaster = "/tmp/dkv_test_db_master"
+	dbFolderSlave  = "/tmp/dkv_test_db_slave"
+	clusterSize    = 5
+	discoveryPort  = 8686
+	logDir         = "/tmp/dkv_test/logs"
+	snapDir        = "/tmp/dkv_test/snap"
+	clusterURL     = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323,http://127.0.0.1:9324,http://127.0.0.1:9325"
+	replTimeout    = 3 * time.Second
+	engine         = "rocksdb"
+	dbName         = "default"
+	vbucket        = "default"
 )
 
 var (
 	masterCli      *ctl.DKVClient
 	masterSvc      master.DKVService
 	masterGrpcSrvr *grpc.Server
-	slaveCli      *ctl.DKVClient
-	slaveSvc      DKVService
-	slaveGrpcSrvr *grpc.Server
+	slaveCli       *ctl.DKVClient
+	slaveSvc       DKVService
+	slaveGrpcSrvr  *grpc.Server
 
 	// for creating a distribute server cluster
-	dkvPorts = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084, 5: 9085}
-	grpcSrvs = make(map[int]*grpc.Server)
-	dkvClis  = make(map[int]*ctl.DKVClient)
-	dkvSvcs  = make(map[int]DKVService)
-	mutex    = sync.Mutex{}
-	discoveryCli discovery.Client
+	dkvPorts        = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084, 5: 9085}
+	grpcSrvs        = make(map[int]*grpc.Server)
+	dkvClis         = make(map[int]*ctl.DKVClient)
+	dkvSvcs         = make(map[int]DKVService)
+	mutex           = sync.Mutex{}
+	discoveryCli    discovery.Client
 	discoverydkvSvc master.DKVService
-	closedMasters = make(map[int]bool)
+	closedMasters   = make(map[int]bool)
 )
 
 func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
@@ -113,7 +113,7 @@ func TestSlaveAutoConnect(t *testing.T) {
 		t.Fatalf("Cannot connect to new master. Error: %v", err)
 	}
 	lastClosedMasterId := -1
-	for cnt := 0; cnt<clusterSize+1; cnt++ {
+	for cnt := 0; cnt < clusterSize+1; cnt++ {
 		masterId := getCurrentMasterIdFromSlave(t)
 		t.Log("Current master id:", dkvPorts[masterId])
 		currentMasterSvc := dkvSvcs[masterId]
@@ -131,7 +131,6 @@ func TestSlaveAutoConnect(t *testing.T) {
 				t.Fatalf("Error while putting key to kv. Error: %v", err)
 			}
 		}
-
 
 		if err := slaveSvc.(*slaveService).applyChangesFromMaster(100); err != nil {
 			t.Errorf("Error while applying changes from master. Error: %v", err)
@@ -153,7 +152,6 @@ func TestSlaveAutoConnect(t *testing.T) {
 		masterId = getCurrentMasterIdFromSlave(t)
 		startDkvSvcAndCli(lastClosedMasterId)
 		sleepInSecs(10)
-
 
 		t.Log("New master port:", dkvPorts[masterId])
 	}
@@ -178,7 +176,7 @@ func getCurrentMasterId(t *testing.T) int {
 	if regions, err := discoveryCli.GetClusterStatus(dbName, vbucket); err != nil {
 		t.Fatalf("Error while fetching the cluster info. Cannot proceed further. Error: %v", err)
 	} else {
-		for _,region := range regions {
+		for _, region := range regions {
 			if region.MasterHost != nil {
 				currentMaster = *region.MasterHost
 			}
@@ -188,8 +186,8 @@ func getCurrentMasterId(t *testing.T) int {
 		t.Fatalf("No master found")
 	}
 	detail := strings.Split(currentMaster, ":")
-	for i:=1; i<=clusterSize; i++ {
-		if  fmt.Sprintf("%d", dkvPorts[i]) == detail[1] {
+	for i := 1; i <= clusterSize; i++ {
+		if fmt.Sprintf("%d", dkvPorts[i]) == detail[1] {
 			return i
 		}
 	}
@@ -206,8 +204,8 @@ func getCurrentMasterIdFromSlave(t *testing.T) int {
 		t.Fatalf("No master found")
 	}
 	detail := strings.Split(currentMaster, ":")
-	for i:=1; i<=clusterSize; i++ {
-		if  fmt.Sprintf("%d", dkvPorts[i]) == detail[1] {
+	for i := 1; i <= clusterSize; i++ {
+		if fmt.Sprintf("%d", dkvPorts[i]) == detail[1] {
 			return i
 		}
 	}
@@ -230,7 +228,7 @@ func registerDkvServerWithDiscovery() {
 
 func startDiscoveryServer() {
 	//todo check why does this need a kv store?
-	discoverykvs, discoverycp, discoveryba := newKVStore(masterDBFolder+"_DC")
+	discoverykvs, discoverycp, discoveryba := newKVStore(masterDBFolder + "_DC")
 	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, zap.NewNop(), stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket})
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, discoverydkvSvc)
@@ -246,7 +244,7 @@ func startDiscoveryServer() {
 func startDiscoveryCli() {
 	clientConfig := &discovery.DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
-	discoveryCli,_ = discovery.NewDiscoveryClient(clientConfig, zap.NewNop())
+	discoveryCli, _ = discovery.NewDiscoveryClient(clientConfig, zap.NewNop())
 }
 
 func startSlaveAndAttachToMaster(client *ctl.DKVClient) {
@@ -274,14 +272,13 @@ func stopClients() {
 
 func stopServers() {
 	for id := 1; id <= clusterSize; id++ {
-		if closedMasters[id]==true {
+		if closedMasters[id] == true {
 			continue
 		}
 		dkvSvcs[id].Close()
 		grpcSrvs[id].GracefulStop()
 	}
 }
-
 
 func initDKVClients(ids ...int) {
 	for id := 1; id <= clusterSize; id++ {
@@ -302,7 +299,6 @@ func initSingleDkvClient(id int) {
 		dkvClis[id] = client
 	}
 }
-
 
 func initDKVServers() {
 	clusURLs := strings.Split(clusterURL, ",")
@@ -368,7 +364,6 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 	}
 }
 
-
 func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server) {
 	dir := fmt.Sprintf("%s_%d", dbFolderMaster, id)
 	kvs, cp, br := newKVStore(dir)
@@ -385,7 +380,6 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	return distSrv, grpcSrv
 }
 
-
 func resetRaftStateDirs(t *testing.T) {
 	if err := exec.Command("rm", "-rf", logDir).Run(); err != nil {
 		t.Fatal(err)
@@ -399,7 +393,7 @@ func resetRaftStateDirs(t *testing.T) {
 	if err := exec.Command("mkdir", "-p", snapDir).Run(); err != nil {
 		t.Fatal(err)
 	}
-	for tmp:=1; tmp<=5; tmp++ {
+	for tmp := 1; tmp <= 5; tmp++ {
 		folderName := fmt.Sprintf("%s_%d", dbFolderMaster, tmp)
 		if err := exec.Command("rm", "-rf", folderName).Run(); err != nil {
 			t.Fatal(err)
@@ -409,7 +403,7 @@ func resetRaftStateDirs(t *testing.T) {
 		}
 	}
 
-	for tmp:=1; tmp<=5; tmp++ {
+	for tmp := 1; tmp <= 5; tmp++ {
 		folderName := fmt.Sprintf("%s_%d", dbFolderSlave, tmp)
 		if err := exec.Command("rm", "-rf", folderName).Run(); err != nil {
 			t.Fatal(err)
@@ -419,8 +413,6 @@ func resetRaftStateDirs(t *testing.T) {
 		}
 	}
 }
-
-
 
 func TestLargePayloadsDuringRepl(t *testing.T) {
 	masterRDB := newRocksDBStore(masterDBFolder)
@@ -512,7 +504,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
 	defer closeMasterAndSlave()
 
-	numKeys, keyPrefix, valPrefix := 100, "K", "V"
+	numKeys, keyPrefix, valPrefix := 10, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
 
 	numKeys, ttlKeyPrefix, ttlValPrefix, ttlExpiredKeyPrefix := 10, "TTL-K", "TTL-V", "EXPIRED-TTL-K"
@@ -727,10 +719,10 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, disableAutoMasterDisc bool, discoveryClient discovery.Client) {
 	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
-		MaxNumChngs:          2,
-		ReplPollInterval:     5 * time.Second,
-		MaxActiveReplLag:     10,
-		MaxActiveReplElapsed: 5,
+		MaxNumChngs:           2,
+		ReplPollInterval:      5 * time.Second,
+		MaxActiveReplLag:      10,
+		MaxActiveReplElapsed:  5,
 		DisableAutoMasterDisc: disableAutoMasterDisc,
 	}
 	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, &replConf, discoveryClient); err != nil {
