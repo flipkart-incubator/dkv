@@ -113,14 +113,14 @@ func TestSlaveAutoConnect(t *testing.T) {
 		t.Fatalf("Cannot connect to new master. Error: %v", err)
 	}
 	lastClosedMasterId := -1
-	for cnt := 0; cnt<clusterSize; cnt++ {
+	for cnt := 0; cnt<clusterSize+1; cnt++ {
 		masterId := getCurrentMasterIdFromSlave(t)
 		t.Log("Current master id:", dkvPorts[masterId])
 		currentMasterSvc := dkvSvcs[masterId]
 		currentMasterCli := dkvClis[masterId]
 		//add some kv using CLI
 		fg := false
-		for i := 0; i < 199; i++ {
+		for i := 0; i < 10; i++ {
 			if lastClosedMasterId != -1 && fg == false {
 				// add current node to the cluster config
 				currentMasterCli.AddNode(getNodeUrl(lastClosedMasterId))
@@ -132,19 +132,11 @@ func TestSlaveAutoConnect(t *testing.T) {
 			}
 		}
 
-		slaveSvc.(*slaveService).applyChangesFromMaster(100);
 
-		//re check the data from slaves and mastesr
-		for tmp:=1; tmp<=clusterSize; tmp++ {
-			responseFromSlave, _ := slaveCli.Get(0, []byte(fmt.Sprintf("K_CLI_0_%d", cnt)))
-			t.Log("Data fetch from slave is", responseFromSlave.GetValue())
-			if tmp == masterId {
-				t.Log("Master id is", masterId, ". Not getting value from this CLI")
-				continue
-			}
-			response, _ := dkvClis[tmp].Get(serverpb.ReadConsistency_LINEARIZABLE, []byte(fmt.Sprintf("K_CLI_0_%d", cnt)));
-			t.Log("Current Data value from master CLI", tmp, string(response.GetValue()))
+		if err := slaveSvc.(*slaveService).applyChangesFromMaster(100); err != nil {
+			t.Errorf("Error while applying changes from master. Error: %v", err)
 		}
+
 		//abruptly stop the master
 		grpcSrvs[masterId].Stop()
 		currentMasterCli.Close()
@@ -153,12 +145,15 @@ func TestSlaveAutoConnect(t *testing.T) {
 		closedMasters[masterId] = true
 		lastClosedMasterId = masterId
 
+		//wait for new leader election
+		sleepInSecs(10)
+
 		//let slave connect to a new master
 		slaveSvc.(*slaveService).reconnectMaster()
 		masterId = getCurrentMasterIdFromSlave(t)
-		//restart this server again so that it can be used again
 		startDkvSvcAndCli(lastClosedMasterId)
 		sleepInSecs(10)
+
 
 		t.Log("New master port:", dkvPorts[masterId])
 	}
