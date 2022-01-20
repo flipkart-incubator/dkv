@@ -512,7 +512,7 @@ func testMasterSlaveRepl(t *testing.T, masterStore, slaveStore storage.KVStore, 
 	initMasterAndSlaves(masterStore, slaveStore, cp, ca, masterBU)
 	defer closeMasterAndSlave()
 
-	numKeys, keyPrefix, valPrefix := 100, "K", "V"
+	numKeys, keyPrefix, valPrefix := 10, "K", "V"
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
 
 	numKeys, ttlKeyPrefix, ttlValPrefix, ttlExpiredKeyPrefix := 10, "TTL-K", "TTL-V", "EXPIRED-TTL-K"
