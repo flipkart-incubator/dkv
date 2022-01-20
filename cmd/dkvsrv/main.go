@@ -74,6 +74,8 @@ var (
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 
 	statsCli stats.Client
+
+	healthCheckTickerInterval uint
 )
 
 func init() {
@@ -95,7 +97,7 @@ func init() {
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
-	flag.UintVar(&health.HealthCheckTickerInterval, "health-check-interval", health.DefaultHealthCheckTickterInterval, "Time in seconds between two consecutive streaming health checks.")
+	flag.UintVar(&healthCheckTickerInterval, "health-check-interval", health.DefaultHealthCheckTickterInterval, "Time in seconds between two consecutive streaming health checks.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -227,7 +229,7 @@ func main() {
 func getServerOpts() serveroptsInternal.ServerOpts {
 	return serveroptsInternal.ServerOpts{
 		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		HealthCheckTickerInterval: healthCheckTickerInterval,
 		StatsCli:                  statsCli,
 	}
 }

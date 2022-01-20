@@ -29,7 +29,7 @@ var (
 	grpcSrvr *grpc.Server
 	lgr, _   = zap.NewDevelopment()
 	opts     = serveroptsInternal.ServerOpts{
-		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		Logger:                    lgr,
 	}

@@ -47,7 +47,7 @@ var (
 	opts           = serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
-		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
 	}
 )
 

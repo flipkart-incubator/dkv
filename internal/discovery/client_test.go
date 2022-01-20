@@ -20,7 +20,7 @@ var (
 	lgr, _     = zap.NewDevelopment()
 	serveropts = serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
-		HealthCheckTickerInterval: health.HealthCheckTickerInterval,
+		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 	}
 )
