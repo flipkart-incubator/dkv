@@ -1,6 +1,6 @@
 module github.com/flipkart-incubator/dkv
 
-go 1.13
+go 1.15
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -37,6 +37,7 @@ require (
 )
 
 replace (
+	github.com/Jille/grpc-multi-resolver => github.com/mqy/grpc-multi-resolver v1.0.0
 	cloud.google.com/go => github.com/googleapis/google-cloud-go v0.26.0
 	go.uber.org/atomic => github.com/uber-go/atomic v1.6.0
 	go.uber.org/multierr => github.com/uber-go/multierr v1.5.0
