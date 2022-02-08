@@ -30,15 +30,15 @@ require (
 	golang.org/x/sys v0.0.0-20210217105451-b926d437f341 // indirect
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
-	google.golang.org/grpc v1.33.2
+	google.golang.org/grpc v1.41.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.62.0
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
 
 replace (
-	github.com/Jille/grpc-multi-resolver => github.com/mqy/grpc-multi-resolver v1.0.0
 	cloud.google.com/go => github.com/googleapis/google-cloud-go v0.26.0
+	github.com/Jille/grpc-multi-resolver => github.com/mqy/grpc-multi-resolver v1.0.1-0.20211016000115-097a4c652dad
 	go.uber.org/atomic => github.com/uber-go/atomic v1.6.0
 	go.uber.org/multierr => github.com/uber-go/multierr v1.5.0
 	go.uber.org/tools => github.com/uber-go/tools v0.0.0-20190618225709-2cfd321de3ee
