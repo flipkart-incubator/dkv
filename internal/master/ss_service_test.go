@@ -4,6 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
+	"os/exec"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -12,12 +19,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"net"
-	"os/exec"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -28,7 +29,7 @@ var (
 	dkvSvc   DKVService
 	grpcSrvr *grpc.Server
 	lgr, _   = zap.NewDevelopment()
-	opts     = serveroptsInternal.ServerOpts{
+	opts     = &serveroptsInternal.ServerOpts{
 		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		Logger:                    lgr,

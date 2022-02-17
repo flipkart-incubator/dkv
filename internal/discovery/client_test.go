@@ -2,14 +2,15 @@ package discovery
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/flipkart-incubator/dkv/internal/health"
 	"github.com/flipkart-incubator/dkv/internal/master"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
-	"testing"
-	"time"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 
 var (
 	lgr, _     = zap.NewDevelopment()
-	serveropts = serveroptsInternal.ServerOpts{
+	serveropts = &serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),

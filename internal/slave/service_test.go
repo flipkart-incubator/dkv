@@ -5,13 +5,14 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/health"
-	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"net"
 	"os/exec"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/health"
+	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -44,7 +45,7 @@ var (
 	healthCheckCli *HealthCheckClient
 	slaveGrpcSrvr  *grpc.Server
 	lgr, _         = zap.NewDevelopment()
-	opts           = serveroptsInternal.ServerOpts{
+	opts           = &serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
@@ -536,7 +537,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplLag:     10,
 		MaxActiveReplElapsed: 5,
 	}
-	specialOpts := serveroptsInternal.ServerOpts{
+	specialOpts := &serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint(1),
