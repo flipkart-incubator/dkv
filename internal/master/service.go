@@ -6,18 +6,19 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/pkg/health"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/serveropts"
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
 	"github.com/flipkart-incubator/nexus/models"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -46,7 +47,7 @@ type standaloneService struct {
 	regionInfo *serverpb.RegionInfo
 	isClosed   bool
 	shutdown   chan struct{}
-	opts       *serveropts.ServerOpts
+	opts       *opts.ServerOpts
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
@@ -83,7 +84,7 @@ func (ss *standaloneService) Watch(req *health.HealthCheckRequest, watcher healt
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *serveropts.ServerOpts) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
 	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts}
@@ -357,13 +358,13 @@ type distributedService struct {
 	// shutdown should be a buffer channel to avoid blocking close in case the health check client
 	// is not running
 	shutdown chan struct{}
-	opts     *serveropts.ServerOpts
+	opts     *opts.ServerOpts
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *serveropts.ServerOpts) DKVClusterService {
+	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVClusterService {
 	return &distributedService{
 		DKVService: NewStandaloneService(kvs, cp, br, regionInfo, opts),
 		raftRepl:   raftRepl,

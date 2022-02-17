@@ -4,14 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
-	"github.com/flipkart-incubator/dkv/internal/stats"
-	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/dkv/internal/storage/badger"
-	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
-	"github.com/flipkart-incubator/dkv/pkg/health"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"net"
 	"os/exec"
 	"strings"
@@ -19,17 +11,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/opts"
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/internal/storage/badger"
+	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
+	"github.com/flipkart-incubator/dkv/pkg/health"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
 var (
-	dkvCli   *ctl.DKVClient
-	dkvSvc   DKVService
-	grpcSrvr *grpc.Server
-	lgr, _   = zap.NewDevelopment()
-	opts     = serveroptsInternal.ServerOpts{
-		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval,
+	dkvCli     *ctl.DKVClient
+	dkvSvc     DKVService
+	grpcSrvr   *grpc.Server
+	lgr, _     = zap.NewDevelopment()
+	serverOpts = &opts.ServerOpts{
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		Logger:                    lgr,
 	}
@@ -379,7 +380,7 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 
 func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore(dbFolder)
-	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, &opts)
+	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, serverOpts)
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

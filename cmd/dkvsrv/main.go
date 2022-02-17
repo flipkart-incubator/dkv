@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/pkg/health"
 	"log"
 	"net"
 	"net/http"
@@ -15,8 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"gopkg.in/ini.v1"
 
 	"github.com/flipkart-incubator/dkv/internal/master"
@@ -152,9 +153,9 @@ func main() {
 		NexusClusterUrl: nil,
 	}
 
-	serveropts := &serveroptsInternal.ServerOpts{
+	serveropts := &opts.ServerOpts{
 		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
 	}
 

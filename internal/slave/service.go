@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/pkg/health"
 	"io"
 	"math/rand"
 	"strings"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/serveropts"
+	opts "github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -66,7 +67,7 @@ type slaveService struct {
 	clusterInfo discovery.ClusterInfoGetter
 	isClosed    bool
 	replInfo    *replInfo
-	serveropts  *serveropts.ServerOpts
+	serveropts  *opts.ServerOpts
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -75,7 +76,7 @@ type slaveService struct {
 // through any of the other key value mutators.
 func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *serverpb.RegionInfo,
 	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter,
-	serveropts *serveropts.ServerOpts) (DKVService, error) {
+	serveropts *opts.ServerOpts) (DKVService, error) {
 	if store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca` and `replPollInterval` are all mandatory")
 	}
@@ -83,7 +84,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *ser
 }
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
-	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *serveropts.ServerOpts) *slaveService {
+	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *opts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
 	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts}
 	ss.findAndConnectToMaster()

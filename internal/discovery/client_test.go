@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/master"
-	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
@@ -18,9 +18,9 @@ const (
 
 var (
 	lgr, _     = zap.NewDevelopment()
-	serveropts = &serveroptsInternal.ServerOpts{
+	serveropts = &opts.ServerOpts{
 		Logger:                    lgr,
-		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 	}
 )

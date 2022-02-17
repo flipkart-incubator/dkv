@@ -5,15 +5,16 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
-	"github.com/flipkart-incubator/dkv/pkg/health"
 	"net"
 	"os/exec"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
 	"github.com/flipkart-incubator/dkv/internal/master"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
@@ -44,10 +45,10 @@ var (
 	healthCheckCli *HealthCheckClient
 	slaveGrpcSrvr  *grpc.Server
 	lgr, _         = zap.NewDevelopment()
-	opts           = serveroptsInternal.ServerOpts{
+	serverOpts     = &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
-		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 	}
 )
 
@@ -519,7 +520,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, &opts)
+	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, serverOpts)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -536,7 +537,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplLag:     10,
 		MaxActiveReplElapsed: 5,
 	}
-	specialOpts := &serveroptsInternal.ServerOpts{
+	specialOpts := &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint(1),

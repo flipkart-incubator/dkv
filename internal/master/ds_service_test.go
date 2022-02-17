@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/pkg/health"
 	"net"
 	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/pkg/health"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	dkv_sync "github.com/flipkart-incubator/dkv/internal/sync"
@@ -532,7 +533,7 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, &opts)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, serverOpts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
@@ -544,7 +545,7 @@ func newDistributedDKVNodeWithRepl(id int, nodeURL, clusURL string, dkvRepl nexu
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, &opts)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, serverOpts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)

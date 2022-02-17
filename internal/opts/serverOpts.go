@@ -1,4 +1,4 @@
-package serveropts
+package opts
 
 import (
 	"github.com/flipkart-incubator/dkv/internal/stats"
