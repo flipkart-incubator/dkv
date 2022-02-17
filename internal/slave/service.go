@@ -4,18 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/stats"
+	opts "github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"io"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 // A DKVService represents a service for serving key value data.
@@ -23,6 +26,7 @@ type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
 	serverpb.DKVDiscoveryNodeServer
+	health.HealthServer
 }
 
 type ReplicationConfig struct {
@@ -59,31 +63,30 @@ type replInfo struct {
 type slaveService struct {
 	store       storage.KVStore
 	ca          storage.ChangeApplier
-	lg          *zap.Logger
-	statsCli    stats.Client
 	regionInfo  *serverpb.RegionInfo
 	clusterInfo discovery.ClusterInfoGetter
 	isClosed    bool
 	replInfo    *replInfo
+	serveropts  *opts.ServerOpts
 }
 
 // NewService creates a slave DKVService that periodically polls
 // for changes from master node and replicates them onto its local
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
-func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
-	statsCli stats.Client, regionInfo *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) (DKVService, error) {
+func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *serverpb.RegionInfo,
+	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter,
+	serveropts *opts.ServerOpts) (DKVService, error) {
 	if store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca` and `replPollInterval` are all mandatory")
 	}
-	return newSlaveService(store, ca, lgr, statsCli, regionInfo, replConf, clusterInfo), nil
+	return newSlaveService(store, ca, regionInfo, replConf, clusterInfo, serveropts), nil
 }
 
-func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
-	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
+func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
+	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *opts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli,
-		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
+	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
@@ -118,6 +121,43 @@ func (ss *slaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*
 	return res, err
 }
 
+func (ss *slaveService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
+	if ss.isClosed {
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+	}
+	if ss.replInfo.replLag > ss.replInfo.replConfig.MaxActiveReplLag {
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+	}
+
+	// server has not started replicating yet or the server last replicated more than MaxActiveReplElapsed ago
+	if ss.replInfo.lastReplTime == 0 || hlc.GetTimeAgo(ss.replInfo.lastReplTime) > ss.replInfo.replConfig.MaxActiveReplElapsed {
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+	}
+	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_SERVING}, nil
+}
+
+func (ss *slaveService) Watch(req *health.HealthCheckRequest, watcher health.Health_WatchServer) error {
+	if ss.isClosed {
+		return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
+	}
+	ticker := time.NewTicker(time.Duration(ss.serveropts.HealthCheckTickerInterval) * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			checkResponse, err := ss.Check(context.Background(), req)
+			if err != nil {
+				return err
+			}
+			if err := watcher.Send(checkResponse); err != nil {
+				return err
+			}
+		case <-ss.replInfo.replStop:
+			return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
+		}
+	}
+}
+
 func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {
 	readResults, err := ss.store.Get(multiGetReq.Keys...)
 	res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}
@@ -143,7 +183,7 @@ func (ss *slaveService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSrvr se
 }
 
 func (ss *slaveService) Close() error {
-	ss.lg.Info("Closing the slave service")
+	ss.serveropts.Logger.Info("Closing the slave service")
 	ss.replInfo.replStop <- struct{}{}
 	ss.replInfo.replTckr.Stop()
 	if ss.replInfo.replCli != nil {
@@ -159,7 +199,7 @@ func (ss *slaveService) startReplication() {
 	latestChngNum, _ := ss.ca.GetLatestAppliedChangeNumber()
 	ss.replInfo.fromChngNum = 1 + latestChngNum
 	ss.replInfo.replStop = make(chan struct{})
-	slg := ss.lg.Sugar()
+	slg := ss.serveropts.Logger.Sugar()
 	slg.Infof("Replicating changes from change number: %d and polling interval: %s", ss.replInfo.fromChngNum, ss.replInfo.replConfig.ReplPollInterval.String())
 	slg.Sync()
 	go ss.pollAndApplyChanges()
@@ -169,28 +209,28 @@ func (ss *slaveService) pollAndApplyChanges() {
 	for {
 		select {
 		case <-ss.replInfo.replTckr.C:
-			ss.lg.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
-			ss.statsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
+			ss.serveropts.Logger.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
+			ss.serveropts.StatsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
-				ss.lg.Error("Unable to retrieve changes from master", zap.Error(err))
+				ss.serveropts.Logger.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
-					ss.lg.Error("Unable to replace master", zap.Error(err))
+					ss.serveropts.Logger.Error("Unable to replace master", zap.Error(err))
 				}
 			}
 		case <-ss.replInfo.replStop:
-			ss.lg.Info("Stopping the change poller")
+			ss.serveropts.Logger.Info("Stopping the change poller")
 			break
 		}
 	}
 }
 
 func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
-	defer ss.statsCli.Timing("slave.applyChangesFromMaster.latency.ms", time.Now())
+	defer ss.serveropts.StatsCli.Timing("slave.applyChangesFromMaster.latency.ms", time.Now())
 
 	if ss.replInfo.replCli == nil || !ss.replInfo.replActive {
 		return errors.New("can not replicate as unable to connect to an active master")
 	}
-	ss.lg.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
+	ss.serveropts.Logger.Info("Retrieving changes from master", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum), zap.Uint32("ChangesPerBatch", chngsPerBatch))
 
 	res, err := ss.replInfo.replCli.GetChanges(ss.replInfo.fromChngNum, chngsPerBatch)
 	if err == nil {
@@ -199,7 +239,7 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 			err = errors.New(res.Status.Message)
 		} else {
 			if res.MasterChangeNumber < (ss.replInfo.fromChngNum - 1) {
-				ss.lg.Error("change number of the master node can not be lesser than the change number of the slave node", zap.Uint64("MasterChangeNum", res.MasterChangeNumber), zap.Uint64("FromChangeNum", ss.replInfo.fromChngNum))
+				ss.serveropts.Logger.Error("change number of the master node can not be lesser than the change number of the slave node", zap.Uint64("MasterChangeNum", res.MasterChangeNumber), zap.Uint64("FromChangeNum", ss.replInfo.fromChngNum))
 				err = errors.New("change number of the master node can not be lesser than the change number of the slave node")
 			} else {
 				if err = ss.applyChanges(res); err == nil {
@@ -215,9 +255,9 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 			// the batch size can no longer be halved (= 0) and then
 			// give up with an error. In such cases, this method is
 			// invoked recursively utmost log2[ss.maxNumChngs] times.
-			ss.lg.Warn("GetChanges call exceeded resource limits", zap.Error(err))
+			ss.serveropts.Logger.Warn("GetChanges call exceeded resource limits", zap.Error(err))
 			if newMaxNumChngs := chngsPerBatch >> 1; newMaxNumChngs > 0 {
-				ss.lg.Warn("Retrieving smaller batches of changes", zap.Uint32("before", chngsPerBatch), zap.Uint32("after", newMaxNumChngs))
+				ss.serveropts.Logger.Warn("Retrieving smaller batches of changes", zap.Uint32("before", chngsPerBatch), zap.Uint32("after", newMaxNumChngs))
 				err = ss.applyChangesFromMaster(newMaxNumChngs)
 			} else {
 				err = errors.New("unable to retrieve changes from master due to GRPC resource exhaustion on slave")
@@ -229,16 +269,16 @@ func (ss *slaveService) applyChangesFromMaster(chngsPerBatch uint32) error {
 
 func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) error {
 	if chngsRes.NumberOfChanges > 0 {
-		ss.lg.Info("Applying the changes received from master", zap.Uint32("NumberOfChanges", chngsRes.NumberOfChanges))
+		ss.serveropts.Logger.Info("Applying the changes received from master", zap.Uint32("NumberOfChanges", chngsRes.NumberOfChanges))
 		actChngNum, err := ss.ca.SaveChanges(chngsRes.Changes)
 		if err != nil {
 			return err
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
-		ss.lg.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
+		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
 		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
 	} else {
-		ss.lg.Info("Not received any changes from master")
+		ss.serveropts.Logger.Info("Not received any changes from master")
 	}
 	return nil
 }
@@ -262,7 +302,7 @@ func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empt
 		ss.regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	}
 	ss.regionInfo.MasterHost = &ss.replInfo.replConfig.ReplMasterAddr
-	ss.lg.Debug("Current Info", zap.String("Status", ss.regionInfo.Status.String()),
+	ss.serveropts.Logger.Debug("Current Info", zap.String("Status", ss.regionInfo.Status.String()),
 		zap.Uint64("Repl Lag", ss.replInfo.replLag), zap.Uint64("Last Repl time", ss.replInfo.lastReplTime))
 	return ss.regionInfo, nil
 }
@@ -314,11 +354,11 @@ func (ss *slaveService) findAndConnectToMaster() error {
 			ss.replInfo.replConfig.ReplMasterAddr = *master
 			ss.replInfo.replActive = true
 		} else {
-			ss.lg.Warn("Unable to create a replication client", zap.Error(err))
+			ss.serveropts.Logger.Warn("Unable to create a replication client", zap.Error(err))
 			return err
 		}
 	} else {
-		ss.lg.Warn("Unable to find a master for this slave to replicate from", zap.Error(err))
+		ss.serveropts.Logger.Warn("Unable to find a master for this slave to replicate from", zap.Error(err))
 		return err
 	}
 	return nil
