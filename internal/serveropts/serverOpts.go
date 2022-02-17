@@ -13,3 +13,7 @@ type ServerOpts struct {
 	StatsCli                  stats.Client
 	Logger                    *zap.Logger
 }
+
+const (
+	DefaultHealthCheckTickterInterval = uint(10)
+)

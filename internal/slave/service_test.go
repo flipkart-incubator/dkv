@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	health2 "github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/pkg/health"
 	"net"
@@ -48,7 +47,7 @@ var (
 	opts           = serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
-		HealthCheckTickerInterval: health2.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval,
 	}
 )
 

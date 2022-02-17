@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	health2 "github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -30,7 +29,7 @@ var (
 	grpcSrvr *grpc.Server
 	lgr, _   = zap.NewDevelopment()
 	opts     = serveroptsInternal.ServerOpts{
-		HealthCheckTickerInterval: health2.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		Logger:                    lgr,
 	}

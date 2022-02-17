@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flipkart-incubator/dkv/internal/health"
 	"github.com/flipkart-incubator/dkv/internal/master"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -21,7 +20,7 @@ var (
 	lgr, _     = zap.NewDevelopment()
 	serveropts = &serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
-		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 	}
 )

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-	health2 "github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"gopkg.in/ini.v1"
 
@@ -155,7 +154,7 @@ func main() {
 
 	serveropts := &serveroptsInternal.ServerOpts{
 		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: health2.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		HealthCheckTickerInterval: serveroptsInternal.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
 	}
 
