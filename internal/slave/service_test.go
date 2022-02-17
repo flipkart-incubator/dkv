@@ -537,7 +537,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplLag:     10,
 		MaxActiveReplElapsed: 5,
 	}
-	specialOpts := serveroptsInternal.ServerOpts{
+	specialOpts := &serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint(1),
