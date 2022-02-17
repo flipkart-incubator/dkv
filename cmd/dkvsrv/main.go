@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"log"
 	"net"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"github.com/flipkart-incubator/dkv/internal/health"
+	health2 "github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"gopkg.in/ini.v1"
 
@@ -154,7 +155,7 @@ func main() {
 
 	serveropts := &serveroptsInternal.ServerOpts{
 		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		HealthCheckTickerInterval: health2.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
 	}
 
@@ -176,7 +177,7 @@ func main() {
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
-		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
+		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 	case masterRole, discoveryRole:
 		if cp == nil {
 			log.Panicf("Storage engine %s is not supported for DKV master role.", dbEngine)
@@ -192,7 +193,7 @@ func main() {
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
-		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
+		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 
 		// Discovery servers can be only configured if node started as master.
 		if srvrRole == discoveryRole {
@@ -218,7 +219,7 @@ func main() {
 		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-		serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
+		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 		discoveryClient.RegisterRegion(dkvSvc)
 	default:
 		panic("Invalid 'dbRole'. Allowed values are none|master|slave|discovery.")
