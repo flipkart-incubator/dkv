@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/health"
+	health2 "github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"net"
@@ -29,7 +30,7 @@ var (
 	grpcSrvr *grpc.Server
 	lgr, _   = zap.NewDevelopment()
 	opts     = serveroptsInternal.ServerOpts{
-		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: health2.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		Logger:                    lgr,
 	}
@@ -37,7 +38,7 @@ var (
 
 type HealthCheckClient struct {
 	cliConn        *grpc.ClientConn
-	healthCheckCli serverpb.HealthCheckClient
+	healthCheckCli health.HealthClient
 }
 
 const (
@@ -95,7 +96,7 @@ func getHealthCheckClient(svcAddr string, options []grpc.DialOption) (*HealthChe
 	if err != nil {
 		return nil, err
 	}
-	client := serverpb.NewHealthCheckClient(conn)
+	client := health.NewHealthClient(conn)
 	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
@@ -379,12 +380,12 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 
 func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore(dbFolder)
-	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, opts)
+	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, &opts)
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
-	serverpb.RegisterHealthCheckServer(grpcSrvr, dkvSvc)
+	health.RegisterHealthServer(grpcSrvr, dkvSvc)
 	listenAndServe(grpcSrvr, dkvSvcPort)
 }
 
@@ -433,8 +434,8 @@ func testStandaloneHealthCheckUnary(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error occurred while running health check: %v", err)
 	}
-	if healthCheckResponse.Status != serverpb.HealthCheckResponse_SERVING {
-		t.Errorf("Error in health check response. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
+	if healthCheckResponse.Status != health.HealthCheckResponse_SERVING {
+		t.Errorf("Error in health check response. Expected Value: %s Actual Value: %s", health.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
 	}
 }
 
@@ -449,7 +450,7 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
 	}
 
-	watch, err := healthCheckClient.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+	watch, err := healthCheckClient.healthCheckCli.Watch(context.Background(), &health.HealthCheckRequest{})
 
 	if err != nil {
 		t.Errorf("Error received while watching. Error %v", err)
@@ -471,11 +472,11 @@ func testStandaloneHealthCheckStreaming(t *testing.T) {
 
 		//at last iteration i is closed
 		if i == iterations-1 {
-			if recv.GetStatus() != serverpb.HealthCheckResponse_NOT_SERVING {
-				t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
+			if recv.GetStatus() != health.HealthCheckResponse_NOT_SERVING {
+				t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", health.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
 			}
-		} else if recv.GetStatus() != serverpb.HealthCheckResponse_SERVING {
-			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", serverpb.HealthCheckResponse_SERVING.String(), recv.GetStatus().String())
+		} else if recv.GetStatus() != health.HealthCheckResponse_SERVING {
+			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", health.HealthCheckResponse_SERVING.String(), recv.GetStatus().String())
 		}
 	}
 	t.Logf("Stopping grpc server")

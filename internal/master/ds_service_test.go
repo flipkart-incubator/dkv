@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"net"
 	"os/exec"
 	"strings"
@@ -295,8 +296,8 @@ func testHealthCheckUnary(t *testing.T) {
 	<-time.After(3 * time.Second)
 
 	healthCheckResponseNewNode, _ := dkvSvc.Check(nil, nil)
-	if healthCheckResponseNewNode.Status != serverpb.HealthCheckResponse_SERVING {
-		t.Errorf("Incorrect health check status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseNewNode.Status.String())
+	if healthCheckResponseNewNode.Status != health.HealthCheckResponse_SERVING {
+		t.Errorf("Incorrect health check status. Expected %s, Actual %s", health.HealthCheckResponse_SERVING.String(), healthCheckResponseNewNode.Status.String())
 	}
 
 	// Now remove the leader from the cluster. Since the this node was attached later, it won't be leader at first
@@ -312,15 +313,15 @@ func testHealthCheckUnary(t *testing.T) {
 	<-time.After(10 * time.Second)
 
 	healthCheckResponseAfterReelection, _ := dkvSvc.Check(nil, nil)
-	if healthCheckResponseAfterReelection.Status != serverpb.HealthCheckResponse_SERVING {
-		t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
+	if healthCheckResponseAfterReelection.Status != health.HealthCheckResponse_SERVING {
+		t.Errorf("Incorrect node status. Expected %s, Actual %s", health.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
 	}
 
 	grpcSrv.GracefulStop()
 	dkvSvc.Close()
 	healthCheckResponseAfterShutdown, _ := dkvSvc.Check(nil, nil)
-	if healthCheckResponseAfterShutdown.Status != serverpb.HealthCheckResponse_NOT_SERVING {
-		t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
+	if healthCheckResponseAfterShutdown.Status != health.HealthCheckResponse_NOT_SERVING {
+		t.Errorf("Incorrect node status. Expected %s, Actual %s", health.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
 	}
 }
 
@@ -344,7 +345,7 @@ func testHealthCheckStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while creating health check client: %v", err)
 	} else {
-		healthCheckResponseWatcher, error := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+		healthCheckResponseWatcher, error := healthCheckCli.healthCheckCli.Watch(context.Background(), &health.HealthCheckRequest{})
 		if error != nil {
 			t.Errorf("Erroneous response from health check client: %v", error)
 		}
@@ -352,8 +353,8 @@ func testHealthCheckStreaming(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error while receiving response from Watcher: %v", err)
 		}
-		if response.Status != serverpb.HealthCheckResponse_SERVING {
-			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), response.Status.String())
+		if response.Status != health.HealthCheckResponse_SERVING {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", health.HealthCheckResponse_SERVING.String(), response.Status.String())
 		}
 
 		// Now remove the leader from the cluster. Since the this node was attached later, it won't be leader at first
@@ -370,8 +371,8 @@ func testHealthCheckStreaming(t *testing.T) {
 		<-time.After(10 * time.Second)
 
 		healthCheckResponseAfterReelection, _ := healthCheckResponseWatcher.Recv()
-		if healthCheckResponseAfterReelection.Status != serverpb.HealthCheckResponse_SERVING {
-			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
+		if healthCheckResponseAfterReelection.Status != health.HealthCheckResponse_SERVING {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", health.HealthCheckResponse_SERVING.String(), healthCheckResponseAfterReelection.Status.String())
 		}
 
 		if err := dkvSvc.Close(); err != nil {
@@ -379,8 +380,8 @@ func testHealthCheckStreaming(t *testing.T) {
 		}
 
 		healthCheckResponseAfterShutdown, _ := healthCheckResponseWatcher.Recv()
-		if healthCheckResponseAfterShutdown.Status != serverpb.HealthCheckResponse_NOT_SERVING {
-			t.Errorf("Incorrect node status. Expected %s, Actual %s", serverpb.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
+		if healthCheckResponseAfterShutdown.Status != health.HealthCheckResponse_NOT_SERVING {
+			t.Errorf("Incorrect node status. Expected %s, Actual %s", health.HealthCheckResponse_NOT_SERVING.String(), healthCheckResponseAfterShutdown.Status.String())
 		}
 		grpcSrv.GracefulStop()
 	}
@@ -396,7 +397,7 @@ func newHealthCheckClient(port int) (*HealthCheckClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := serverpb.NewHealthCheckClient(conn)
+	client := health.NewHealthClient(conn)
 	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
@@ -531,11 +532,11 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, opts)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, &opts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
-	serverpb.RegisterHealthCheckServer(grpcSrv, distSrv)
+	health.RegisterHealthServer(grpcSrv, distSrv)
 	return distSrv, grpcSrv
 }
 
@@ -543,11 +544,11 @@ func newDistributedDKVNodeWithRepl(id int, nodeURL, clusURL string, dkvRepl nexu
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, opts)
+	distSrv := NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, &opts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
-	serverpb.RegisterHealthCheckServer(grpcSrv, distSrv)
+	health.RegisterHealthServer(grpcSrv, distSrv)
 	return distSrv, grpcSrv
 }
 

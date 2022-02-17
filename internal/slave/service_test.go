@@ -5,8 +5,9 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/health"
+	health2 "github.com/flipkart-incubator/dkv/internal/health"
 	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"net"
 	"os/exec"
 	"sync"
@@ -47,13 +48,13 @@ var (
 	opts           = serveroptsInternal.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
-		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: health2.DefaultHealthCheckTickterInterval,
 	}
 )
 
 type HealthCheckClient struct {
 	cliConn        *grpc.ClientConn
-	healthCheckCli serverpb.HealthCheckClient
+	healthCheckCli health.HealthClient
 }
 
 func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
@@ -294,7 +295,7 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	putKeys(t, masterCli, numKeys, keyPrefix, valPrefix, 0)
 
 	slaveServer := slaveSvc.(*slaveService)
-	validateHealthCheckResponse(t, "replNotStarted", serverpb.HealthCheckResponse_NOT_SERVING)
+	validateHealthCheckResponse(t, "replNotStarted", health.HealthCheckResponse_NOT_SERVING)
 
 	// Validate status when too high lag
 	if err := slaveServer.applyChangesFromMaster(2); err != nil {
@@ -303,7 +304,7 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	if slaveServer.replInfo.replLag != 16 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replInfo.replLag)
 	}
-	validateHealthCheckResponse(t, "tooHighReplLag", serverpb.HealthCheckResponse_NOT_SERVING)
+	validateHealthCheckResponse(t, "tooHighReplLag", health.HealthCheckResponse_NOT_SERVING)
 
 	// Validate status when replication catching up
 	if err := slaveServer.applyChangesFromMaster(4); err != nil {
@@ -312,11 +313,11 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	if slaveServer.replInfo.replLag != 8 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 8, slaveServer.replInfo.replLag)
 	}
-	validateHealthCheckResponse(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING)
+	validateHealthCheckResponse(t, "replCaughtUp", health.HealthCheckResponse_SERVING)
 
 	// Validate status when replication not successful for long time
 	time.Sleep(7 * time.Second)
-	validateHealthCheckResponse(t, "replDelayed", serverpb.HealthCheckResponse_NOT_SERVING)
+	validateHealthCheckResponse(t, "replDelayed", health.HealthCheckResponse_NOT_SERVING)
 
 	// Validate status when replication caught up
 	if err := slaveServer.applyChangesFromMaster(10); err != nil {
@@ -325,11 +326,11 @@ func testHealthCheck(t *testing.T, masterStore, slaveStore storage.KVStore, cp s
 	if slaveServer.replInfo.replLag != 0 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replInfo.replLag)
 	}
-	validateHealthCheckResponse(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING)
+	validateHealthCheckResponse(t, "replCaughtUp", health.HealthCheckResponse_SERVING)
 
 	// Validate status after closing
 	closeSlave()
-	validateHealthCheckResponse(t, "slaveClosed", serverpb.HealthCheckResponse_NOT_SERVING)
+	validateHealthCheckResponse(t, "slaveClosed", health.HealthCheckResponse_NOT_SERVING)
 }
 
 func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
@@ -345,7 +346,7 @@ func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore
 		t.Errorf("Error while creating health check client. Error: %v", err)
 	}
 	defer healthCheckCli.cliConn.Close()
-	validateHealthCheckResponseStream(t, "replNotStarted", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+	validateHealthCheckResponseStream(t, "replNotStarted", health.HealthCheckResponse_NOT_SERVING, healthCheckCli)
 
 	// Validate status when too high lag
 	if err := slaveServer.applyChangesFromMaster(2); err != nil {
@@ -354,7 +355,7 @@ func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore
 	if slaveServer.replInfo.replLag != 16 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 16, slaveServer.replInfo.replLag)
 	}
-	validateHealthCheckResponseStream(t, "tooHighReplLag", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+	validateHealthCheckResponseStream(t, "tooHighReplLag", health.HealthCheckResponse_NOT_SERVING, healthCheckCli)
 
 	// Validate status when replication catching up
 	if err := slaveServer.applyChangesFromMaster(4); err != nil {
@@ -368,11 +369,11 @@ func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore
 	// have a health check time interval greater than the max replication lag. In a production use case
 	// health check will done parallel to replication so the health check will not fail in case the time period
 	// of the health check is greater than max replication lag
-	validateHealthCheckResponseStream(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING, healthCheckCli)
+	validateHealthCheckResponseStream(t, "replCaughtUp", health.HealthCheckResponse_SERVING, healthCheckCli)
 
 	// Validate status when replication not successful for long time
 	time.Sleep(7 * time.Second)
-	validateHealthCheckResponseStream(t, "replDelayed", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+	validateHealthCheckResponseStream(t, "replDelayed", health.HealthCheckResponse_NOT_SERVING, healthCheckCli)
 
 	// Validate status when replication caught up
 	if err := slaveServer.applyChangesFromMaster(10); err != nil {
@@ -381,16 +382,16 @@ func testHealthCheckStream(t *testing.T, masterStore, slaveStore storage.KVStore
 	if slaveServer.replInfo.replLag != 0 {
 		t.Errorf("Replication lag unexpected, Expected: %d, Actual: %d", 0, slaveServer.replInfo.replLag)
 	}
-	validateHealthCheckResponseStream(t, "replCaughtUp", serverpb.HealthCheckResponse_SERVING, healthCheckCli)
+	validateHealthCheckResponseStream(t, "replCaughtUp", health.HealthCheckResponse_SERVING, healthCheckCli)
 
 	// Validate status after closing
 	closeSlaveOnly()
-	validateHealthCheckResponseStream(t, "slaveClosed", serverpb.HealthCheckResponse_NOT_SERVING, healthCheckCli)
+	validateHealthCheckResponseStream(t, "slaveClosed", health.HealthCheckResponse_NOT_SERVING, healthCheckCli)
 	slaveGrpcSrvr.Stop()
 }
 
-func validateHealthCheckResponseStream(t *testing.T, useCase string, expectedResponse serverpb.HealthCheckResponse_ServingStatus, healthCheckCli *HealthCheckClient) {
-	actualResponse, _ := healthCheckCli.healthCheckCli.Watch(context.Background(), &serverpb.HealthCheckRequest{})
+func validateHealthCheckResponseStream(t *testing.T, useCase string, expectedResponse health.HealthCheckResponse_ServingStatus, healthCheckCli *HealthCheckClient) {
+	actualResponse, _ := healthCheckCli.healthCheckCli.Watch(context.Background(), &health.HealthCheckRequest{})
 	if actualResponse == nil {
 		t.Fatalf("Actual response is nil in use case %s. Expected Response: %s", useCase, expectedResponse.String())
 	}
@@ -406,7 +407,7 @@ func validateHealthCheckResponseStream(t *testing.T, useCase string, expectedRes
 	}
 }
 
-func validateHealthCheckResponse(t *testing.T, useCase string, expectedResponse serverpb.HealthCheckResponse_ServingStatus) {
+func validateHealthCheckResponse(t *testing.T, useCase string, expectedResponse health.HealthCheckResponse_ServingStatus) {
 	actualResponse, _ := slaveSvc.Check(nil, nil)
 	if actualResponse.GetStatus() != expectedResponse {
 		t.Errorf("Unexpected status. Use case: %s, Expected: %s, Actual: %s", useCase,
@@ -490,7 +491,7 @@ func newHealthCheckClient(port int) (*HealthCheckClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := serverpb.NewHealthCheckClient(conn)
+	client := health.NewHealthClient(conn)
 	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
@@ -519,7 +520,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, opts)
+	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, &opts)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -541,14 +542,14 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint(1),
 	}
-	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, specialOpts); err != nil {
+	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, &specialOpts); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
 		slaveSvc.(*slaveService).replInfo.replCli = masterCli
 		slaveGrpcSrvr = grpc.NewServer()
 		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
-		serverpb.RegisterHealthCheckServer(slaveGrpcSrvr, slaveSvc)
+		health.RegisterHealthServer(slaveGrpcSrvr, slaveSvc)
 		lis := listen(slaveSvcPort)
 		wg.Done()
 		slaveGrpcSrvr.Serve(lis)

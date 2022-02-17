@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"io"
 	"strconv"
 	"strings"
@@ -34,7 +35,7 @@ type DKVService interface {
 	serverpb.DKVDiscoveryNodeServer
 	serverpb.DKVReplicationServer
 	serverpb.DKVBackupRestoreServer
-	serverpb.HealthCheckServer
+	health.HealthServer
 }
 
 type standaloneService struct {
@@ -52,18 +53,18 @@ func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Emp
 	return ss.regionInfo, nil
 }
 
-func (ss *standaloneService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+func (ss *standaloneService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
 	if !ss.isClosed && ss.regionInfo != nil && ss.regionInfo.Status == serverpb.RegionStatus_LEADER {
-		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_SERVING}, nil
 	}
-	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 }
 
-func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+func (ss *standaloneService) Watch(req *health.HealthCheckRequest, watcher health.Health_WatchServer) error {
 	// if the call is made after service shutdown, it should always return not serving health check
 	// response
 	if ss.isClosed {
-		return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+		return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
 	}
 	ticker := time.NewTicker(time.Duration(ss.opts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
@@ -75,7 +76,7 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 				return err
 			}
 		case <-ss.shutdown:
-			return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+			return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
 		}
 	}
 }
@@ -556,27 +557,27 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 	return regionInfo, nil
 }
 
-func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+func (ds *distributedService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
 	regionInfo := ds.DKVService.(*standaloneService).regionInfo
 	if ds.isClosed {
-		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 	} else {
 		leaderId, members := ds.raftRepl.ListMembers()
 		selfId := ds.raftRepl.Id()
 		isFollower := members[selfId] != nil && (members[selfId].Status == models.NodeInfo_FOLLOWER)
 		if leaderId == selfId || isFollower {
-			return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
+			return &health.HealthCheckResponse{Status: health.HealthCheckResponse_SERVING}, nil
 		} else if !isFollower {
-			return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+			return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 		}
 	}
 	ds.opts.Logger.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
-	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 }
 
-func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+func (ds *distributedService) Watch(req *health.HealthCheckRequest, watcher health.Health_WatchServer) error {
 	if ds.isClosed {
-		return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+		return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
 	}
 	ticker := time.NewTicker(time.Duration(ds.opts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
@@ -591,7 +592,7 @@ func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher se
 				return err
 			}
 		case <-ds.shutdown:
-			return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+			return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
 		}
 	}
 }

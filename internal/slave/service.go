@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"io"
 	"math/rand"
 	"strings"
@@ -24,7 +25,7 @@ type DKVService interface {
 	io.Closer
 	serverpb.DKVServer
 	serverpb.DKVDiscoveryNodeServer
-	serverpb.HealthCheckServer
+	health.HealthServer
 }
 
 type ReplicationConfig struct {
@@ -119,24 +120,24 @@ func (ss *slaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*
 	return res, err
 }
 
-func (ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.HealthCheckRequest) (*serverpb.HealthCheckResponse, error) {
+func (ss *slaveService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
 	if ss.isClosed {
-		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 	}
 	if ss.replInfo.replLag > ss.replInfo.replConfig.MaxActiveReplLag {
-		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 	}
 
 	// server has not started replicating yet or the server last replicated more than MaxActiveReplElapsed ago
 	if ss.replInfo.lastReplTime == 0 || hlc.GetTimeAgo(ss.replInfo.lastReplTime) > ss.replInfo.replConfig.MaxActiveReplElapsed {
-		return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING}, nil
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 	}
-	return &serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_SERVING}, nil
+	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_SERVING}, nil
 }
 
-func (ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
+func (ss *slaveService) Watch(req *health.HealthCheckRequest, watcher health.Health_WatchServer) error {
 	if ss.isClosed {
-		return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+		return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
 	}
 	ticker := time.NewTicker(time.Duration(ss.serveropts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
@@ -151,7 +152,7 @@ func (ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb
 				return err
 			}
 		case <-ss.replInfo.replStop:
-			return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
+			return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
 		}
 	}
 }
