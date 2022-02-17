@@ -3,10 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"github.com/flipkart-incubator/dkv/internal/health"
-	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
-	"gopkg.in/ini.v1"
 	"log"
 	"net"
 	"net/http"
@@ -17,6 +13,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/discovery"
+	"github.com/flipkart-incubator/dkv/internal/health"
+	serveroptsInternal "github.com/flipkart-incubator/dkv/internal/serveropts"
+	"gopkg.in/ini.v1"
 
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/slave"
@@ -74,8 +75,6 @@ var (
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
 
 	statsCli stats.Client
-
-	healthCheckTickerInterval uint
 )
 
 func init() {
@@ -97,7 +96,6 @@ func init() {
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
-	flag.UintVar(&healthCheckTickerInterval, "health-check-interval", health.DefaultHealthCheckTickterInterval, "Time in seconds between two consecutive streaming health checks.")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -105,9 +103,9 @@ type dkvSrvrRole string
 
 const (
 	noRole        dkvSrvrRole = "none"
-	masterRole                = "master"
-	slaveRole                 = "slave"
-	discoveryRole             = "discovery"
+	masterRole    dkvSrvrRole = "master"
+	slaveRole     dkvSrvrRole = "slave"
+	discoveryRole dkvSrvrRole = "discovery"
 )
 
 const defBlockCacheSize = 3 << 30
@@ -154,7 +152,11 @@ func main() {
 		NexusClusterUrl: nil,
 	}
 
-	serveropts := getServerOpts()
+	serveropts := &serveroptsInternal.ServerOpts{
+		Logger:                    dkvLogger,
+		HealthCheckTickerInterval: health.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		StatsCli:                  statsCli,
+	}
 
 	var discoveryClient discovery.Client
 	if srvrRole != noRole && srvrRole != discoveryRole {
@@ -224,14 +226,6 @@ func main() {
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
 	log.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-}
-
-func getServerOpts() serveroptsInternal.ServerOpts {
-	return serveroptsInternal.ServerOpts{
-		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: healthCheckTickerInterval,
-		StatsCli:                  statsCli,
-	}
 }
 
 func validateFlags() {

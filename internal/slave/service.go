@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/serveropts"
@@ -12,10 +17,6 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"io"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 // A DKVService represents a service for serving key value data.
@@ -64,7 +65,7 @@ type slaveService struct {
 	clusterInfo discovery.ClusterInfoGetter
 	isClosed    bool
 	replInfo    *replInfo
-	serveropts  serveropts.ServerOpts
+	serveropts  *serveropts.ServerOpts
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -73,7 +74,7 @@ type slaveService struct {
 // through any of the other key value mutators.
 func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *serverpb.RegionInfo,
 	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter,
-	serveropts serveropts.ServerOpts) (DKVService, error) {
+	serveropts *serveropts.ServerOpts) (DKVService, error) {
 	if store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca` and `replPollInterval` are all mandatory")
 	}
@@ -81,7 +82,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *ser
 }
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
-	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts serveropts.ServerOpts) *slaveService {
+	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *serveropts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
 	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts}
 	ss.findAndConnectToMaster()
@@ -135,10 +136,7 @@ func (ss *slaveService) Check(ctx context.Context, healthCheckReq *serverpb.Heal
 
 func (ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
 	if ss.isClosed {
-		if err := watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING)); err != nil {
-			return err
-		}
-		return nil
+		return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
 	}
 	ticker := time.NewTicker(time.Duration(ss.serveropts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
@@ -153,13 +151,9 @@ func (ss *slaveService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb
 				return err
 			}
 		case <-ss.replInfo.replStop:
-			return watcher.Send(getHealthCheckResponseWithStatus(serverpb.HealthCheckResponse_NOT_SERVING))
+			return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
 		}
 	}
-}
-
-func getHealthCheckResponseWithStatus(status serverpb.HealthCheckResponse_ServingStatus) *serverpb.HealthCheckResponse {
-	return &serverpb.HealthCheckResponse{Status: status}
 }
 
 func (ss *slaveService) MultiGet(ctx context.Context, multiGetReq *serverpb.MultiGetRequest) (*serverpb.MultiGetResponse, error) {

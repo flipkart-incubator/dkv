@@ -6,13 +6,14 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/serveropts"
-	"github.com/flipkart-incubator/nexus/models"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/serveropts"
+	"github.com/flipkart-incubator/nexus/models"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -44,7 +45,7 @@ type standaloneService struct {
 	regionInfo *serverpb.RegionInfo
 	isClosed   bool
 	shutdown   chan struct{}
-	opts       serveropts.ServerOpts
+	opts       *serveropts.ServerOpts
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
@@ -62,17 +63,15 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 	// if the call is made after service shutdown, it should always return not serving health check
 	// response
 	if ss.isClosed {
-		if err := checkAndSendResponse(req, watcher, ss); err != nil {
-			return err
-		}
-		return nil
+		return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
 	}
 	ticker := time.NewTicker(time.Duration(ss.opts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			if err := checkAndSendResponse(req, watcher, ss); err != nil {
+			res, _ := ss.Check(context.Background(), req)
+			if err := watcher.Send(res); err != nil {
 				return err
 			}
 		case <-ss.shutdown:
@@ -81,17 +80,9 @@ func (ss *standaloneService) Watch(req *serverpb.HealthCheckRequest, watcher ser
 	}
 }
 
-func checkAndSendResponse(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer, ss *standaloneService) error {
-	res, _ := ss.Check(context.Background(), req)
-	if err := watcher.Send(res); err != nil {
-		return err
-	}
-	return nil
-}
-
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts serveropts.ServerOpts) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *serveropts.ServerOpts) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
 	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts}
@@ -365,13 +356,13 @@ type distributedService struct {
 	// shutdown should be a buffer channel to avoid blocking close in case the health check client
 	// is not running
 	shutdown chan struct{}
-	opts     serveropts.ServerOpts
+	opts     *serveropts.ServerOpts
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts serveropts.ServerOpts) DKVClusterService {
+	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *serveropts.ServerOpts) DKVClusterService {
 	return &distributedService{
 		DKVService: NewStandaloneService(kvs, cp, br, regionInfo, opts),
 		raftRepl:   raftRepl,
@@ -585,11 +576,7 @@ func (ds *distributedService) Check(ctx context.Context, healthCheckReq *serverp
 
 func (ds *distributedService) Watch(req *serverpb.HealthCheckRequest, watcher serverpb.HealthCheck_WatchServer) error {
 	if ds.isClosed {
-		res, err := ds.Check(context.Background(), req)
-		if err != nil {
-			return err
-		}
-		return watcher.Send(res)
+		return watcher.Send(&serverpb.HealthCheckResponse{Status: serverpb.HealthCheckResponse_NOT_SERVING})
 	}
 	ticker := time.NewTicker(time.Duration(ds.opts.HealthCheckTickerInterval) * time.Second)
 	defer ticker.Stop()
