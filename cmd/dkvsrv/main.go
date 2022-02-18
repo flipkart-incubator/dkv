@@ -583,7 +583,7 @@ func nodeAddress() (*url.URL, error) {
 
 func setupHttpServer() {
 	router := mux.NewRouter()
-	router.Handle("/metrics/prometheus", promhttp.Handler())
+	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
 	// Should be enabled only for discovery server ?
