@@ -40,7 +40,11 @@ type dkvServiceStat struct {
 	ResponseError *prometheus.CounterVec
 }
 
-func newDKVServiceStat() *dkvServiceStat {
+func NewNoopStat() *dkvServiceStat {
+	return nil
+}
+
+func NewDKVServiceStat() *dkvServiceStat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  "dkv",
 		Name:       "latency",
@@ -75,10 +79,10 @@ func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Emp
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo, stat *dkvServiceStat) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli, newDKVServiceStat(), regionInfo}
+	return &standaloneService{store, cp, br, rwl, lgr, statsCli, stat, regionInfo}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -358,7 +362,7 @@ type distributedService struct {
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
 	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo), raftRepl, lgr, statsCli, newDKVServiceStat(), false}
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo, NewDKVServiceStat()), raftRepl, lgr, statsCli, NewDKVServiceStat(), false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {

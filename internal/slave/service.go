@@ -72,7 +72,11 @@ type stat struct {
 	ReplicationLag prometheus.Gauge
 }
 
-func newStat() *stat {
+func NoOpStat() *stat {
+	return nil
+}
+
+func NewStat() *stat {
 	repliacationLag := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "slave",
 		Name:      "replication_lag",
@@ -89,17 +93,17 @@ func newStat() *stat {
 // storage. As a result, it forbids changes to this local storage
 // through any of the other key value mutators.
 func NewService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
-	statsCli stats.Client, regionInfo *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) (DKVService, error) {
+	statsCli stats.Client, regionInfo *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, stat *stat) (DKVService, error) {
 	if store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca` and `replPollInterval` are all mandatory")
 	}
-	return newSlaveService(store, ca, lgr, statsCli, regionInfo, replConf, clusterInfo), nil
+	return newSlaveService(store, ca, lgr, statsCli, regionInfo, replConf, clusterInfo, stat), nil
 }
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, lgr *zap.Logger,
-	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter) *slaveService {
+	statsCli stats.Client, info *serverpb.RegionInfo, replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, stat *stat) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli, stat: newStat(),
+	ss := &slaveService{store: store, ca: ca, lg: lgr, statsCli: statsCli, stat: stat,
 		regionInfo: info, replInfo: ri, clusterInfo: clusterInfo}
 	ss.findAndConnectToMaster()
 	ss.startReplication()

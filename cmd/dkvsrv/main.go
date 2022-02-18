@@ -173,7 +173,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo)
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo, master.NewDKVServiceStat())
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -186,7 +186,7 @@ func main() {
 			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli, regionInfo)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo)
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo, master.NewDKVServiceStat())
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -215,7 +215,7 @@ func main() {
 			ReplMasterAddr:        replMasterAddr,
 		}
 
-		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient)
+		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient, slave.NewStat())
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		discoveryClient.RegisterRegion(dkvSvc)

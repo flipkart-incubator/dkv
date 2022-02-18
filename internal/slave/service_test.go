@@ -229,7 +229,7 @@ func registerDkvServerWithDiscovery() {
 func startDiscoveryServer() {
 	//todo check why does this need a kv store?
 	discoverykvs, discoverycp, discoveryba := newKVStore(masterDBFolder + "_DC")
-	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, zap.NewNop(), stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket})
+	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, zap.NewNop(), stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, master.NewNoopStat())
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
@@ -706,7 +706,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
 	lgr, _ := zap.NewDevelopment()
-	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{})
+	masterSvc = master.NewStandaloneService(store, cp, bu, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{}, master.NewNoopStat())
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -725,7 +725,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplElapsed:  5,
 		DisableAutoMasterDisc: disableAutoMasterDisc,
 	}
-	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, &replConf, discoveryClient); err != nil {
+	if ss, err := NewService(store, ca, lgr, stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, &replConf, discoveryClient, NoOpStat()); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
