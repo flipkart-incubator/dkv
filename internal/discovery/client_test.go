@@ -88,13 +88,13 @@ func TestDiscoveryClient(t *testing.T) {
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("", "vbucket2")
-	if len(regionInfos) != 0 {
-		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No database", 0, len(regionInfos))
+	if len(regionInfos) != 3 {
+		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No database", 3, len(regionInfos))
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("db1", "")
-	if len(regionInfos) != 0 {
-		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No vBucket", 0, len(regionInfos))
+	if len(regionInfos) != 3 {
+		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No vBucket", 3, len(regionInfos))
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("db1", "vbucket3")
@@ -106,6 +106,6 @@ func TestDiscoveryClient(t *testing.T) {
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
 	dbDir := fmt.Sprintf("%s_%d", dbFolder, id)
 	kvs, cp, ba := newKVStore(dbDir)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info)
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, zap.NewNop(), stats.NewNoOpClient(), info, master.NewNoopStat())
 	return dkvSvc
 }

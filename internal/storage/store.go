@@ -17,7 +17,20 @@ type Stat struct {
 }
 
 func NewNoOpStat() *Stat {
-	return nil
+	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace:  "storage",
+		Name:       "latency",
+		Help:       "Latency statistics for storage operations",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		MaxAge:     10 * time.Second,
+	}, []string{stats.Ops})
+	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "storage",
+		Name:      "error",
+		Help:      "Error count for storage operations",
+	}, []string{stats.Ops})
+	//prometheus.MustRegister(RequestLatency, ResponseError)
+	return &Stat{RequestLatency, ResponseError}
 }
 
 func NewStat() *Stat {

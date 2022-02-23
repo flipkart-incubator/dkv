@@ -456,7 +456,8 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			rocksdb.WithCacheSize(blockCacheSize),
 			rocksdb.WithRocksDBConfig(dbEngineIni),
 			rocksdb.WithLogger(dkvLogger),
-			rocksdb.WithStats(statsCli))
+			rocksdb.WithStats(statsCli),
+			rocksdb.WithPromStats(storage.NewStat()))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
@@ -471,6 +472,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			badger.WithBadgerConfig(dbEngineIni),
 			badger.WithLogger(dkvLogger),
 			badger.WithStats(statsCli),
+			badger.WithPromStats(storage.NewStat()),
 		}
 		if disklessMode {
 			bdbOpts = append(bdbOpts, badger.WithInMemory())
