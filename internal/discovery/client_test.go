@@ -88,8 +88,8 @@ func TestDiscoveryClient(t *testing.T) {
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("", "vbucket2")
-	if len(regionInfos) != 3 {
-		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No database", 3, len(regionInfos))
+	if len(regionInfos) != 1 {
+		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No database", 1, len(regionInfos))
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("db1", "")
