@@ -16,6 +16,10 @@ type Stat struct {
 	ResponseError  *prometheus.CounterVec
 }
 
+func NewNoOpStat() *Stat {
+	return nil
+}
+
 func NewStat() *Stat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  "storage",

@@ -361,8 +361,8 @@ type distributedService struct {
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo, NewDKVServiceStat()), raftRepl, lgr, statsCli, NewDKVServiceStat(), false}
+	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo, stat *dkvServiceStat) DKVClusterService {
+	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo, stat), raftRepl, lgr, statsCli, stat, false}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
