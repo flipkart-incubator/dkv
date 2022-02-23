@@ -1,0 +1,23 @@
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+
+services:
+  grafana:
+    image: grafana/grafana-oss
+    container_name: dkv-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - 3000:3000
+
+  prometheus:
+    image: prom/prometheus
+    container_name: dkv-prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    ports:
+      - 9090:9090
