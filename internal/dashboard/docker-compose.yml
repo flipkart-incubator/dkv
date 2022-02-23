@@ -16,8 +16,14 @@ services:
   prometheus:
     image: prom/prometheus
     container_name: dkv-prometheus
+    environment:
+      - MASTER_HOSTS
+      - SLAVE_HOSTS
+    command:
+      --web.enable-lifecycle
+      --config.file=/etc/prometheus/prometheus.yml
     volumes:
-      - ./prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
+      - $PROM_DIR:/etc/prometheus
+      - prometheus_data:/var/lib/prometheus
     ports:
       - 9090:9090
