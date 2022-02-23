@@ -147,7 +147,9 @@ service DKVDiscovery {
 service DKVDiscoveryNode {
   // Get status of region
   rpc GetStatus (google.protobuf.Empty) returns (RegionInfo);
+
 }
+
 
 message UpdateStatusRequest {
   RegionInfo regionInfo = 1;

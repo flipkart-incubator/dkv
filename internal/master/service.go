@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"strconv"
@@ -13,9 +14,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
+	"github.com/flipkart-incubator/nexus/models"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -33,6 +38,7 @@ type DKVService interface {
 	serverpb.DKVDiscoveryNodeServer
 	serverpb.DKVReplicationServer
 	serverpb.DKVBackupRestoreServer
+	health.HealthServer
 }
 
 type dkvServiceStat struct {
@@ -74,27 +80,55 @@ func NewDKVServiceStat() *dkvServiceStat {
 }
 
 type standaloneService struct {
-	store storage.KVStore
-	cp    storage.ChangePropagator
-	br    storage.Backupable
-
+	store      storage.KVStore
+	cp         storage.ChangePropagator
+	br         storage.Backupable
 	rwl        *sync.RWMutex
-	lg         *zap.Logger
-	statsCli   stats.Client
-	stat       *dkvServiceStat
 	regionInfo *serverpb.RegionInfo
+	isClosed   bool
+	shutdown   chan struct{}
+	opts       *opts.ServerOpts
+	stat       *dkvServiceStat
 }
 
 func (ss *standaloneService) GetStatus(ctx context.Context, request *emptypb.Empty) (*serverpb.RegionInfo, error) {
 	return ss.regionInfo, nil
 }
 
+func (ss *standaloneService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
+	if !ss.isClosed && ss.regionInfo != nil && ss.regionInfo.Status == serverpb.RegionStatus_LEADER {
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_SERVING}, nil
+	}
+	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+}
+
+func (ss *standaloneService) Watch(req *health.HealthCheckRequest, watcher health.Health_WatchServer) error {
+	// if the call is made after service shutdown, it should always return not serving health check
+	// response
+	if ss.isClosed {
+		return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
+	}
+	ticker := time.NewTicker(time.Duration(ss.opts.HealthCheckTickerInterval) * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			res, _ := ss.Check(context.Background(), req)
+			if err := watcher.Send(res); err != nil {
+				return err
+			}
+		case <-ss.shutdown:
+			return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
+		}
+	}
+}
+
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo, stat *dkvServiceStat) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts, stat *dkvServiceStat) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, lgr, statsCli, stat, regionInfo}
+	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts, stat}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -102,7 +136,7 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 	if err := ss.store.Put(&serverpb.KVPair{Key: putReq.Key, Value: putReq.Value, ExpireTS: putReq.ExpireTS}); err != nil {
-		ss.lg.Error("Unable to PUT", zap.Error(err))
+		ss.opts.Logger.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
 	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
@@ -117,7 +151,7 @@ func (ss *standaloneService) MultiPut(ctx context.Context, putReq *serverpb.Mult
 	}
 
 	if err := ss.store.Put(puts...); err != nil {
-		ss.lg.Error("Unable to PUT", zap.Error(err))
+		ss.opts.Logger.Error("Unable to PUT", zap.Error(err))
 		return &serverpb.PutResponse{Status: newErrorStatus(err)}, err
 	}
 	return &serverpb.PutResponse{Status: newEmptyStatus()}, nil
@@ -129,7 +163,7 @@ func (ss *standaloneService) Delete(ctx context.Context, delReq *serverpb.Delete
 	defer ss.rwl.RUnlock()
 
 	if err := ss.store.Delete(delReq.Key); err != nil {
-		ss.lg.Error("Unable to DELETE", zap.Error(err))
+		ss.opts.Logger.Error("Unable to DELETE", zap.Error(err))
 		return &serverpb.DeleteResponse{Status: newErrorStatus(err)}, err
 	}
 	return &serverpb.DeleteResponse{Status: newEmptyStatus()}, nil
@@ -142,7 +176,7 @@ func (ss *standaloneService) Get(ctx context.Context, getReq *serverpb.GetReques
 	readResults, err := ss.store.Get(getReq.Key)
 	res := &serverpb.GetResponse{Status: newEmptyStatus()}
 	if err != nil {
-		ss.lg.Error("Unable to GET", zap.Error(err))
+		ss.opts.Logger.Error("Unable to GET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
 		// Needed to take care of the (valid) case when the
@@ -162,7 +196,7 @@ func (ss *standaloneService) MultiGet(ctx context.Context, multiGetReq *serverpb
 	readResults, err := ss.store.Get(multiGetReq.Keys...)
 	res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}
 	if err != nil {
-		ss.lg.Error("Unable to MultiGET", zap.Error(err))
+		ss.opts.Logger.Error("Unable to MultiGET", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
 		res.KeyValues = readResults
@@ -178,7 +212,7 @@ func (ss *standaloneService) CompareAndSet(ctx context.Context, casReq *serverpb
 	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
 	casRes, err := ss.store.CompareAndSet(casReq.Key, casReq.OldValue, casReq.NewValue)
 	if err != nil {
-		ss.lg.Error("Unable to perform CAS", zap.Error(err))
+		ss.opts.Logger.Error("Unable to perform CAS", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	}
 	res.Updated = casRes
@@ -193,7 +227,7 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 	res := &serverpb.GetChangesResponse{Status: newEmptyStatus(), MasterChangeNumber: latestChngNum}
 	if getChngsReq.FromChangeNumber > latestChngNum {
 		if getChngsReq.FromChangeNumber > (latestChngNum + 1) {
-			ss.lg.Warn("GetChanges: From change number more than the latest change number",
+			ss.opts.Logger.Warn("GetChanges: From change number more than the latest change number",
 				zap.Uint64("FromChangeNumber", getChngsReq.FromChangeNumber), zap.Uint64("LatestChangeNumber", latestChngNum))
 		}
 		return res, nil
@@ -201,7 +235,7 @@ func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *server
 
 	chngs, err := ss.cp.LoadChanges(getChngsReq.FromChangeNumber, int(getChngsReq.MaxNumberOfChanges))
 	if err != nil {
-		ss.lg.Error("Unable to load changes", zap.Error(err))
+		ss.opts.Logger.Error("Unable to load changes", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
 		res.NumberOfChanges = uint32(len(chngs))
@@ -231,10 +265,10 @@ func (ss *standaloneService) AddReplica(ctx context.Context, replica *serverpb.R
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
 	if err := ss.store.Put(&serverpb.KVPair{Key: []byte(replicaKey), Value: []byte(replicaValue)}); err != nil {
-		ss.lg.Error("Unable to add replica", zap.Error(err), zap.String("replica", replicaValue))
+		ss.opts.Logger.Error("Unable to add replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
-	ss.lg.Info("Successfully added replica", zap.String("replica", replicaValue))
+	ss.opts.Logger.Info("Successfully added replica", zap.String("replica", replicaValue))
 	return newEmptyStatus(), nil
 }
 
@@ -245,10 +279,10 @@ func (ss *standaloneService) RemoveReplica(ctx context.Context, replica *serverp
 	replicaValue := asReplicaValue(replica)
 	replicaKey := fmt.Sprintf("%s%s", dkvMetaReplicaPrefix, replicaValue)
 	if err := ss.store.Delete([]byte(replicaKey)); err != nil {
-		ss.lg.Error("Unable to remove replica", zap.Error(err), zap.String("replica", replicaValue))
+		ss.opts.Logger.Error("Unable to remove replica", zap.Error(err), zap.String("replica", replicaValue))
 		return newErrorStatus(err), err
 	}
-	ss.lg.Info("Successfully removed replica", zap.String("replica", replicaValue))
+	ss.opts.Logger.Info("Successfully removed replica", zap.String("replica", replicaValue))
 	return newEmptyStatus(), nil
 }
 
@@ -301,29 +335,29 @@ func (ss *standaloneService) Backup(ctx context.Context, backupReq *serverpb.Bac
 
 	bckpPath := backupReq.BackupPath
 	if err := ss.br.BackupTo(bckpPath); err != nil {
-		ss.lg.Error("Unable to perform backup", zap.Error(err))
+		ss.opts.Logger.Error("Unable to perform backup", zap.Error(err))
 		return newErrorStatus(err), err
 	}
 	return newEmptyStatus(), nil
 }
 
 func (ss *standaloneService) Restore(ctx context.Context, restoreReq *serverpb.RestoreRequest) (*serverpb.Status, error) {
-	ss.lg.Info("Waiting for all other requests to complete")
+	ss.opts.Logger.Info("Waiting for all other requests to complete")
 	ss.rwl.Lock()
 	defer ss.rwl.Unlock()
 
-	ss.lg.Info("Closing the current DB connection")
+	ss.opts.Logger.Info("Closing the current DB connection")
 	ss.store.Close()
 
 	rstrPath := restoreReq.RestorePath
-	ss.lg.Info("Beginning the restoration.", zap.String("RestorePath", rstrPath))
+	ss.opts.Logger.Info("Beginning the restoration.", zap.String("RestorePath", rstrPath))
 	st, ba, cp, _, err := ss.br.RestoreFrom(rstrPath)
 	if err != nil {
-		ss.lg.Error("Unable to perform restore, DKV must be restarted.", zap.Error(err))
+		ss.opts.Logger.Error("Unable to perform restore, DKV must be restarted.", zap.Error(err))
 		return newErrorStatus(err), err
 	}
 	ss.store, ss.br, ss.cp = st, ba, cp
-	ss.lg.Info("Restoration completed")
+	ss.opts.Logger.Info("Restoration completed")
 	return newEmptyStatus(), nil
 }
 
@@ -338,7 +372,7 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 		return dkvIterSrvr.Send(itRes)
 	})
 	if err != nil {
-		ss.lg.Error("Unable to iterate", zap.Error(err))
+		ss.opts.Logger.Error("Unable to iterate", zap.Error(err))
 		itRes := &serverpb.IterateResponse{Status: newErrorStatus(err)}
 		return dkvIterSrvr.Send(itRes)
 	}
@@ -346,8 +380,10 @@ func (ss *standaloneService) Iterate(iterReq *serverpb.IterateRequest, dkvIterSr
 }
 
 func (ss *standaloneService) Close() error {
-	defer ss.lg.Sync()
-	ss.lg.Info("Closing DKV service")
+	defer ss.opts.Logger.Sync()
+	ss.opts.Logger.Info("Closing DKV service")
+	ss.shutdown <- struct{}{}
+	ss.isClosed = true
 	ss.store.Close()
 	return nil
 }
@@ -364,17 +400,25 @@ type DKVClusterService interface {
 type distributedService struct {
 	DKVService
 	raftRepl nexus_api.RaftReplicator
-	lg       *zap.Logger
-	statsCli stats.Client
-	stat     *dkvServiceStat
 	isClosed bool
+	// shutdown should be a buffer channel to avoid blocking close in case the health check client
+	// is not running
+	shutdown chan struct{}
+	opts     *opts.ServerOpts
+	stat     *dkvServiceStat
 }
 
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, lgr *zap.Logger, statsCli stats.Client, regionInfo *serverpb.RegionInfo, stat *dkvServiceStat) DKVClusterService {
-	return &distributedService{NewStandaloneService(kvs, cp, br, lgr, statsCli, regionInfo, stat), raftRepl, lgr, statsCli, stat, false}
+	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts, stat *dkvServiceStat) DKVClusterService {
+	return &distributedService{
+		DKVService: NewStandaloneService(kvs, cp, br, regionInfo, opts, stat),
+		raftRepl:   raftRepl,
+		shutdown:   make(chan struct{}, 1),
+		opts:       opts,
+		stat: 		stat,
+	}
 }
 
 func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -382,11 +426,11 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Put: putReq})
 	res := &serverpb.PutResponse{Status: newEmptyStatus()}
 	if err != nil {
-		ds.lg.Error("Unable to PUT over Nexus", zap.Error(err))
+		ds.opts.Logger.Error("Unable to PUT over Nexus", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
 		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
-			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			ds.opts.Logger.Error("Unable to save in replicated storage", zap.Error(err))
 			res.Status = newErrorStatus(err)
 		}
 	}
@@ -397,11 +441,11 @@ func (ds *distributedService) MultiPut(ctx context.Context, multiPutReq *serverp
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{MultiPut: multiPutReq})
 	res := &serverpb.PutResponse{Status: newEmptyStatus()}
 	if err != nil {
-		ds.lg.Error("Unable to PUT over Nexus", zap.Error(err))
+		ds.opts.Logger.Error("Unable to PUT over Nexus", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
 		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
-			ds.lg.Error("Unable to save in replicated storage", zap.Error(err))
+			ds.opts.Logger.Error("Unable to save in replicated storage", zap.Error(err))
 			res.Status = newErrorStatus(err)
 		}
 	}
@@ -414,7 +458,7 @@ func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverp
 	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
 	casRes, err := ds.raftRepl.Save(ctx, reqBts)
 	if err != nil {
-		ds.lg.Error("Unable to CAS in replicated storage", zap.Error(err))
+		ds.opts.Logger.Error("Unable to CAS in replicated storage", zap.Error(err))
 		res.Status = newErrorStatus(err)
 		return res, err
 	}
@@ -428,11 +472,11 @@ func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.Delet
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{Delete: delReq})
 	res := &serverpb.DeleteResponse{Status: newEmptyStatus()}
 	if err != nil {
-		ds.lg.Error("Unable to DEL over Nexus", zap.Error(err))
+		ds.opts.Logger.Error("Unable to DEL over Nexus", zap.Error(err))
 		res.Status = newErrorStatus(err)
 	} else {
 		if _, err = ds.raftRepl.Save(ctx, reqBts); err != nil {
-			ds.lg.Error("Unable to delete in replicated storage", zap.Error(err))
+			ds.opts.Logger.Error("Unable to delete in replicated storage", zap.Error(err))
 			res.Status = newErrorStatus(err)
 		}
 	}
@@ -449,7 +493,7 @@ func (ds *distributedService) Get(ctx context.Context, getReq *serverpb.GetReque
 		res := &serverpb.GetResponse{Status: newEmptyStatus()}
 		var loadError error
 		if val, err := ds.raftRepl.Load(ctx, reqBts); err != nil {
-			ds.lg.Error("Unable to load from replicated storage", zap.Error(err))
+			ds.opts.Logger.Error("Unable to load from replicated storage", zap.Error(err))
 			res.Status = newErrorStatus(err)
 			loadError = err
 		} else {
@@ -477,7 +521,7 @@ func (ds *distributedService) MultiGet(ctx context.Context, multiGetReq *serverp
 		res := &serverpb.MultiGetResponse{Status: newEmptyStatus()}
 		var readError error
 		if val, err := ds.raftRepl.Load(ctx, reqBts); err != nil {
-			ds.lg.Error("Unable to load (MultiGet) from replicated storage", zap.Error(err))
+			ds.opts.Logger.Error("Unable to load (MultiGet) from replicated storage", zap.Error(err))
 			res.Status = newErrorStatus(err)
 			readError = err
 		} else {
@@ -511,7 +555,7 @@ func (ds *distributedService) Restore(ctx context.Context, restoreReq *serverpb.
 func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNodeRequest) (*serverpb.Status, error) {
 	// TODO: We can include any relevant checks on the joining node - like reachability, storage engine compatibility, etc.
 	if err := ds.raftRepl.AddMember(ctx, req.NodeUrl); err != nil {
-		ds.lg.Error("Unable to add node", zap.Error(err))
+		ds.opts.Logger.Error("Unable to add node", zap.Error(err))
 		return newErrorStatus(err), err
 	}
 	return newEmptyStatus(), nil
@@ -519,7 +563,7 @@ func (ds *distributedService) AddNode(ctx context.Context, req *serverpb.AddNode
 
 func (ds *distributedService) RemoveNode(ctx context.Context, req *serverpb.RemoveNodeRequest) (*serverpb.Status, error) {
 	if err := ds.raftRepl.RemoveMember(ctx, req.NodeUrl); err != nil {
-		ds.lg.Error("Unable to remove node", zap.Error(err))
+		ds.opts.Logger.Error("Unable to remove node", zap.Error(err))
 		return newErrorStatus(err), err
 	}
 	return newEmptyStatus(), nil
@@ -531,12 +575,12 @@ func (ds *distributedService) ListNodes(ctx context.Context, _ *empty.Empty) (*s
 }
 
 func (ds *distributedService) Close() error {
-	ds.lg.Info("Closing the master service")
+	ds.opts.Logger.Info("Closing the master service")
 	// Do not invoke DKVService::Close here since `raftRepl` already
 	// closes the underlying storage connection.
 	// TODO - fix the above as ideally it should call DKVService::Close if there are more aspects to DKVService to close other than storage
 	ds.raftRepl.Stop()
-
+	ds.shutdown <- struct{}{}
 	ds.isClosed = true
 	return nil
 }
@@ -564,8 +608,48 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 			regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
 		}
 	}
-	ds.lg.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
+	ds.opts.Logger.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
 	return regionInfo, nil
+}
+
+func (ds *distributedService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
+	regionInfo := ds.DKVService.(*standaloneService).regionInfo
+	if ds.isClosed {
+		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+	} else {
+		leaderId, members := ds.raftRepl.ListMembers()
+		selfId := ds.raftRepl.Id()
+		isFollower := members[selfId] != nil && (members[selfId].Status == models.NodeInfo_FOLLOWER)
+		if leaderId == selfId || isFollower {
+			return &health.HealthCheckResponse{Status: health.HealthCheckResponse_SERVING}, nil
+		} else if !isFollower {
+			return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+		}
+	}
+	ds.opts.Logger.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
+	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
+}
+
+func (ds *distributedService) Watch(req *health.HealthCheckRequest, watcher health.Health_WatchServer) error {
+	if ds.isClosed {
+		return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
+	}
+	ticker := time.NewTicker(time.Duration(ds.opts.HealthCheckTickerInterval) * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			res, err := ds.Check(context.Background(), req)
+			if err != nil {
+				return err
+			}
+			if err := watcher.Send(res); err != nil {
+				return err
+			}
+		case <-ds.shutdown:
+			return watcher.Send(&health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING})
+		}
+	}
 }
 
 func newErrorStatus(err error) *serverpb.Status {

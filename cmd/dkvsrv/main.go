@@ -20,7 +20,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/pkg/health"
+
 	"github.com/flipkart-incubator/dkv/internal/master"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/slave"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
@@ -110,9 +113,9 @@ type dkvSrvrRole string
 
 const (
 	noRole        dkvSrvrRole = "none"
-	masterRole                = "master"
-	slaveRole                 = "slave"
-	discoveryRole             = "discovery"
+	masterRole    dkvSrvrRole = "master"
+	slaveRole     dkvSrvrRole = "slave"
+	discoveryRole dkvSrvrRole = "discovery"
 )
 
 const defBlockCacheSize = 3 << 30
@@ -160,7 +163,14 @@ func main() {
 		NexusClusterUrl: nil,
 	}
 
-	if srvrRole != noRole {
+	serveropts := &opts.ServerOpts{
+		Logger:                    dkvLogger,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		StatsCli:                  statsCli,
+	}
+
+	var discoveryClient discovery.Client
+	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
 		discoveryClient, err = newDiscoveryClient()
 		if err != nil {
@@ -173,25 +183,27 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, dkvLogger, statsCli, regionInfo, master.NewDKVServiceStat())
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, regionInfo, serveropts, master.NewDKVServiceStat())
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
+		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 	case masterRole, discoveryRole:
 		if cp == nil {
 			log.Panicf("Storage engine %s is not supported for DKV master role.", dbEngine)
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), dkvLogger, statsCli, regionInfo, master.NewDKVServiceStat())
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), regionInfo, serveropts, master.NewDKVServiceStat())
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, dkvLogger, statsCli, regionInfo, master.NewDKVServiceStat())
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, regionInfo, serveropts, master.NewDKVServiceStat())
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 
 		// Discovery servers can be only configured if node started as master.
 		if srvrRole == discoveryRole {
@@ -214,10 +226,10 @@ func main() {
 			DisableAutoMasterDisc: disableAutoMasterDisc,
 			ReplMasterAddr:        replMasterAddr,
 		}
-
-		dkvSvc, _ := slave.NewService(kvs, ca, dkvLogger, statsCli, regionInfo, replConfig, discoveryClient, slave.NewStat())
+		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts, slave.NewStat())
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
+		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 		discoveryClient.RegisterRegion(dkvSvc)
 	default:
 		panic("Invalid 'dbRole'. Allowed values are none|master|slave|discovery.")
