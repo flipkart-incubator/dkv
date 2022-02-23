@@ -897,7 +897,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint(1),
 	}
-	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, testingClusterInfo{}, specialOpts, NoOpStat()); err != nil {
+	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, discoveryClient, specialOpts, NoOpStat()); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
