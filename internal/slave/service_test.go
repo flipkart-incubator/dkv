@@ -45,7 +45,7 @@ const (
 	discoveryPort  = 8686
 	logDir         = "/tmp/dkv_test/logs"
 	snapDir        = "/tmp/dkv_test/snap"
-	clusterURL     = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323,http://127.0.0.1:9324,http://127.0.0.1:9325"
+	clusterURL     = "http://127.0.0.1:9331,http://127.0.0.1:9332,http://127.0.0.1:9333,http://127.0.0.1:9334,http://127.0.0.1:9335"
 	replTimeout    = 3 * time.Second
 	engine         = "rocksdb"
 	dbName         = "default"
@@ -68,7 +68,7 @@ var (
 	}
 
 	// for creating a distribute server cluster
-	dkvPorts        = map[int]int{1: 9081, 2: 9082, 3: 9083, 4: 9084, 5: 9085}
+	dkvPorts        = map[int]int{1: 9091, 2: 9092, 3: 9093, 4: 9094, 5: 9095}
 	grpcSrvs        = make(map[int]*grpc.Server)
 	dkvClis         = make(map[int]*ctl.DKVClient)
 	dkvSvcs         = make(map[int]DKVService)
