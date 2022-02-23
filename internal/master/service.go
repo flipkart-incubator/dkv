@@ -417,7 +417,7 @@ func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br 
 		raftRepl:   raftRepl,
 		shutdown:   make(chan struct{}, 1),
 		opts:       opts,
-		stat: 		stat,
+		stat:       stat,
 	}
 }
 

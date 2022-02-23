@@ -79,7 +79,7 @@ func WithStats(statsCli stats.Client) DBOption {
 }
 
 // WithPromStats is used to inject a prometheus metrics instance
-func WithPromStats (stats *storage.Stat) DBOption {
+func WithPromStats(stats *storage.Stat) DBOption {
 	return func(opts *bdgrOpts) {
 		if stats != nil {
 			opts.promStats = stats
@@ -178,9 +178,9 @@ func WithInMemory() DBOption {
 func OpenDB(dbOpts ...DBOption) (kvs DB, err error) {
 	noopLgr := zap.NewNop()
 	opts := &bdgrOpts{
-		opts:     badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}),
-		lgr:      noopLgr,
-		statsCli: stats.NewNoOpClient(),
+		opts:      badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}),
+		lgr:       noopLgr,
+		statsCli:  stats.NewNoOpClient(),
 		promStats: storage.NewNoOpStat(),
 	}
 	for _, dbOpt := range dbOpts {

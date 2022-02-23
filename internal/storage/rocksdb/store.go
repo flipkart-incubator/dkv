@@ -58,7 +58,7 @@ type rocksDBOpts struct {
 	lgr            *zap.Logger
 	statsCli       stats.Client
 	cfNames        []string
-	promStats		*storage.Stat
+	promStats      *storage.Stat
 }
 
 // DBOption is used to configure the RocksDB
@@ -81,7 +81,7 @@ func WithPromStats(promStats *storage.Stat) DBOption {
 	return func(opts *rocksDBOpts) {
 		if promStats != nil {
 			opts.promStats = promStats
-		} else  {
+		} else {
 			opts.promStats = storage.NewNoOpStat()
 		}
 	}
@@ -203,7 +203,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 		writeOpts:      wrOpts,
 		statsCli:       stats.NewNoOpClient(),
 		cfNames:        cfNames,
-		promStats: 		storage.NewNoOpStat(),
+		promStats:      storage.NewNoOpStat(),
 	}
 }
 
