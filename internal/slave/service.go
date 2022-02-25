@@ -59,6 +59,11 @@ type replInfo struct {
 	lastReplTime uint64
 	replConfig   *ReplicationConfig
 	fromChngNum  uint64
+	//replDelay is an approximation of the delay in time units of the changes seen
+	// in the master and the same changes seen in the slave
+	replDelay float64
+	//replSpeed is an approximation of the rate at which the slave applies the changes
+	replSpeed float64
 }
 
 type slaveService struct {
@@ -72,7 +77,8 @@ type slaveService struct {
 	stat        *stat
 }
 type stat struct {
-	ReplicationLag prometheus.Gauge
+	ReplicationLag   prometheus.Gauge
+	ReplicationDelay prometheus.Gauge
 }
 
 func NoOpStat() *stat {
@@ -80,14 +86,21 @@ func NoOpStat() *stat {
 }
 
 func NewStat() *stat {
-	repliacationLag := prometheus.NewGauge(prometheus.GaugeOpts{
+	replicationLag := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "slave",
 		Name:      "replication_lag",
 		Help:      "replication lag of the slave",
 	})
-	prometheus.MustRegister(repliacationLag)
+	replicationDelay := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "slave",
+		Name:      "replication_delay",
+		Help:      "replication delay of the slave",
+	})
+	prometheus.MustRegister(replicationLag)
+	prometheus.MustRegister(replicationDelay)
 	return &stat{
-		ReplicationLag: repliacationLag,
+		ReplicationLag:   replicationLag,
+		ReplicationDelay: replicationDelay,
 	}
 }
 
@@ -233,6 +246,7 @@ func (ss *slaveService) pollAndApplyChanges() {
 			ss.serveropts.Logger.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
 			ss.serveropts.StatsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
 			ss.stat.ReplicationLag.Set(float64(ss.replInfo.replLag))
+			ss.stat.ReplicationDelay.Set(float64(ss.replInfo.replDelay))
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
 				ss.serveropts.Logger.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
@@ -296,9 +310,15 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
+		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 {
+			ss.replInfo.replSpeed = float64(actChngNum-ss.replInfo.fromChngNum) / float64((hlc.UnixNow() - ss.replInfo.lastReplTime))
+		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
 		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		if ss.replInfo.replSpeed-0 > float64(1e-9) {
+			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeed
+		}
 	} else {
 		ss.serveropts.Logger.Info("Not received any changes from master")
 	}

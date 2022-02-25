@@ -5,16 +5,17 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/discovery"
-	dkv_sync "github.com/flipkart-incubator/dkv/internal/sync"
-	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
-	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
 	"net"
 	"os/exec"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/discovery"
+	dkv_sync "github.com/flipkart-incubator/dkv/internal/sync"
+	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
+	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
 
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
