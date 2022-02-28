@@ -259,7 +259,7 @@ func registerDkvServerWithDiscovery() {
 func startDiscoveryServer() {
 	//todo check why does this need a kv store?
 	discoverykvs, discoverycp, discoveryba := newKVStore(masterDBFolder + "_DC")
-	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, zap.NewNop(), stats.NewNoOpClient(), &serverpb.RegionInfo{Database: dbName, VBucket: vbucket})
+	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, serverOpts)
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
@@ -401,8 +401,7 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	lgr, _ := zap.NewDevelopment()
-	distSrv := master.NewDistributedService(kvs, cp, br, dkvRepl, lgr, stats.NewNoOpClient(), regionInfo)
+	distSrv := master.NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, serverOpts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
