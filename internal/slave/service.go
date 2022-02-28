@@ -45,6 +45,7 @@ type ReplicationConfig struct {
 	// Temporary flag to disable automatic master discovery until https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
 	DisableAutoMasterDisc bool
+	MaxReplHis            int
 }
 
 type replInfo struct {
@@ -61,9 +62,11 @@ type replInfo struct {
 	fromChngNum  uint64
 	//replDelay is an approximation of the delay in time units of the changes seen
 	// in the master and the same changes seen in the slave
-	replDelay float64
-	//replSpeed is an approximation of the rate at which the slave applies the changes
-	replSpeed float64
+	replDelay    float64
+	replSpeedHis chan float64
+
+	replSpeedSum float64
+	replSpeedAvg float64
 }
 
 type slaveService struct {
@@ -233,6 +236,7 @@ func (ss *slaveService) startReplication() {
 	latestChngNum, _ := ss.ca.GetLatestAppliedChangeNumber()
 	ss.replInfo.fromChngNum = 1 + latestChngNum
 	ss.replInfo.replStop = make(chan struct{})
+	ss.replInfo.replSpeedHis = make(chan float64, ss.replInfo.replConfig.MaxReplHis)
 	slg := ss.serveropts.Logger.Sugar()
 	slg.Infof("Replicating changes from change number: %d and polling interval: %s", ss.replInfo.fromChngNum, ss.replInfo.replConfig.ReplPollInterval.String())
 	slg.Sync()
@@ -310,14 +314,21 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
+		if len(ss.replInfo.replSpeedHis) == ss.replInfo.replConfig.MaxReplHis {
+			earliestReplSpeed := <-ss.replInfo.replSpeedHis
+			ss.replInfo.replSpeedSum -= earliestReplSpeed
+		}
 		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 {
-			ss.replInfo.replSpeed = float64(actChngNum-ss.replInfo.fromChngNum) / float64((hlc.UnixNow() - ss.replInfo.lastReplTime))
+			currentReplSpeed := (float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl))
+			ss.replInfo.replSpeedHis <- currentReplSpeed
+			ss.replInfo.replSpeedSum += currentReplSpeed
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
 		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
-		if ss.replInfo.replSpeed-0 > float64(1e-9) {
-			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeed
+		ss.replInfo.replSpeedAvg = ss.replInfo.replSpeedSum / float64(len(ss.replInfo.replSpeedHis))
+		if ss.replInfo.replSpeedAvg > float64(1e-9) {
+			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeedAvg
 		}
 	} else {
 		ss.serveropts.Logger.Info("Not received any changes from master")
