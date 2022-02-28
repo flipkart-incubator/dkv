@@ -4,10 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gopkg.in/ini.v1"
 	"io/ioutil"
 	"log"
 	"net"
@@ -19,6 +15,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/discovery"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/ini.v1"
 
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
@@ -81,6 +82,7 @@ var (
 
 	statsCli       stats.Client
 	statsPublisher *stats.StatPublisher
+	maxReplHis     int
 
 	discoveryClient        discovery.Client
 	statAggregatorRegistry *stats.StatAggregatorRegistry
@@ -106,6 +108,7 @@ func init() {
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
+	flag.IntVar(&maxReplHis, "max-repl-his", 10, "Max replication speed entries to keep in memory. Replication lag will be estimated based on the average of entries present in the history")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -225,6 +228,7 @@ func main() {
 			MaxActiveReplElapsed:  uint64(replPollInterval.Seconds()) * 10,
 			DisableAutoMasterDisc: disableAutoMasterDisc,
 			ReplMasterAddr:        replMasterAddr,
+			MaxReplHis:            maxReplHis,
 		}
 		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts, slave.NewStat())
 		defer dkvSvc.Close()
