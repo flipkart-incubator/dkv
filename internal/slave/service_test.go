@@ -59,17 +59,18 @@ var (
 	masterGrpcSrvr *grpc.Server
 	slaveCli       *ctl.DKVClient
 	slaveSvc       DKVService
-	healthCheckCli *HealthCheckClient
 	slaveGrpcSrvr  *grpc.Server
-	lgr, _         = zap.NewDevelopment()
-	serverOpts     = &opts.ServerOpts{
+	healthCheckCli *HealthCheckClient
+
+	lgr, _     = zap.NewDevelopment()
+	serverOpts = &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 	}
 
 	// for creating a distribute server cluster
-	dkvPorts        = map[int]int{1: 9091, 2: 9092, 3: 9093, 4: 9094, 5: 9095}
+	dkvPorts        = map[int]int{1: 9981, 2: 9982, 3: 9983, 4: 9984, 5: 9985}
 	grpcSrvs        = make(map[int]*grpc.Server)
 	dkvClis         = make(map[int]*ctl.DKVClient)
 	dkvSvcs         = make(map[int]DKVService)
@@ -886,6 +887,7 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, disableAutoMasterDisc bool, discoveryClient discovery.Client) {
+	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
 		MaxNumChngs:           2,
 		ReplPollInterval:      5 * time.Second,
@@ -893,12 +895,14 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplElapsed:  5,
 		DisableAutoMasterDisc: disableAutoMasterDisc,
 	}
+
 	specialOpts := &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		HealthCheckTickerInterval: uint(1),
 	}
-	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, discoveryClient, specialOpts, NoOpStat()); err != nil {
+
+	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, &replConf, discoveryClient, specialOpts, NoOpStat()); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss
