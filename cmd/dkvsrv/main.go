@@ -4,10 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/discovery"
-	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gopkg.in/ini.v1"
 	"io/ioutil"
 	"log"
 	"net"
@@ -19,6 +15,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/discovery"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/ini.v1"
 
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
@@ -39,7 +40,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	_ "net/http/pprof"
+	"net/http/pprof"
 )
 
 var (
@@ -133,13 +134,6 @@ func main() {
 	setFlagsForNexusDirs()
 	setupStats()
 	go setupHttpServer()
-
-	if pprofEnable {
-		go func() {
-			log.Printf("[INFO] Starting pprof on port 6060\n")
-			log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-		}()
-	}
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
@@ -602,6 +596,17 @@ func setupHttpServer() {
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
 	// Should be enabled only for discovery server ?
 	router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
+
+	//Pprof
+	if pprofEnable {
+		log.Printf("[INFO] Enabling pprof...\n")
+		router.HandleFunc("/debug/pprof/", pprof.Index)
+		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
+
 	http.Handle("/", router)
 	http.ListenAndServe(httpServerAddr, nil)
 }
