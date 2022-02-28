@@ -322,11 +322,11 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 			currentReplSpeed := (float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl))
 			ss.replInfo.replSpeedHis <- currentReplSpeed
 			ss.replInfo.replSpeedSum += currentReplSpeed
+			ss.replInfo.replSpeedAvg = ss.replInfo.replSpeedSum / float64(len(ss.replInfo.replSpeedHis))
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
 		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
-		ss.replInfo.replSpeedAvg = ss.replInfo.replSpeedSum / float64(len(ss.replInfo.replSpeedHis))
 		if ss.replInfo.replSpeedAvg > float64(1e-9) {
 			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeedAvg
 		}
