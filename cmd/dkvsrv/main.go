@@ -441,7 +441,7 @@ func setupStats() {
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
-	promRegistry = prometheus.NewRegistry()
+	promRegistry = stats.NewPromethousRegistry()
 	statsStreamer = stats.NewStatStreamer()
 	statAggregatorRegistry = aggregate.NewStatAggregatorRegistry()
 	go statsStreamer.Run()
