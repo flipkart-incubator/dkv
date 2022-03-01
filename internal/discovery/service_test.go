@@ -2,6 +2,11 @@ package discovery
 
 import (
 	"fmt"
+	"net"
+	"os/exec"
+	"testing"
+	"time"
+
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
@@ -10,14 +15,10 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"net"
-	"os/exec"
-	"testing"
-	"time"
 )
 
 const (
-	dkvSvcPort = 8080
+	dkvSvcPort = 8082
 	dkvSvcHost = "localhost"
 	dbFolder   = "/tmp/dkv_discovery_test_db"
 	cacheSize  = 3 << 30
@@ -156,7 +157,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 
 func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFolder string) (master.DKVService, *grpc.Server) {
 	kvs, cp, ba := newKVStore(dbFolder)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts, master.NewNoopStat())
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts)
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

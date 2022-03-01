@@ -6,13 +6,14 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/stats"
-	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
@@ -46,7 +47,7 @@ type dkvServiceStat struct {
 	ResponseError *prometheus.CounterVec
 }
 
-func NewNoopStat() *dkvServiceStat {
+func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  "dkv",
 		Name:       "latency",
@@ -59,23 +60,7 @@ func NewNoopStat() *dkvServiceStat {
 		Name:      "error",
 		Help:      "Error count for storage operations",
 	}, []string{"Ops"})
-	return &dkvServiceStat{RequestLatency, ResponseError}
-}
-
-func NewDKVServiceStat() *dkvServiceStat {
-	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace:  "dkv",
-		Name:       "latency",
-		Help:       "Latency statistics for dkv service",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge:     10 * time.Second,
-	}, []string{"Ops"})
-	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "dkv",
-		Name:      "error",
-		Help:      "Error count for storage operations",
-	}, []string{"Ops"})
-	prometheus.MustRegister(RequestLatency, ResponseError)
+	registry.MustRegister(RequestLatency, ResponseError)
 	return &dkvServiceStat{RequestLatency, ResponseError}
 }
 
@@ -125,10 +110,10 @@ func (ss *standaloneService) Watch(req *health.HealthCheckRequest, watcher healt
 
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
-func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts, stat *dkvServiceStat) DKVService {
+func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts, stat}
+	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts, newDKVServiceStat(opts.PrometheusRegistry)}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -411,13 +396,13 @@ type distributedService struct {
 // NewDistributedService creates a distributed variant of the DKV service
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
-	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts, stat *dkvServiceStat) DKVClusterService {
+	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVClusterService {
 	return &distributedService{
-		DKVService: NewStandaloneService(kvs, cp, br, regionInfo, opts, stat),
+		DKVService: NewStandaloneService(kvs, cp, br, regionInfo, opts),
 		raftRepl:   raftRepl,
 		shutdown:   make(chan struct{}, 1),
 		opts:       opts,
-		stat:       stat,
+		stat:       newDKVServiceStat(opts.PrometheusRegistry),
 	}
 }
 

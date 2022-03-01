@@ -18,6 +18,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/ini.v1"
 
@@ -87,6 +88,7 @@ var (
 	dkvLogger    *zap.Logger
 
 	statsCli      stats.Client
+	promRegistry  prometheus.Registerer
 	statsStreamer *stats.StatStreamer
 
 	discoveryClient        discovery.Client
@@ -167,6 +169,7 @@ func main() {
 		Logger:                    dkvLogger,
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
+		PrometheusRegistry:        promRegistry,
 	}
 
 	if srvrRole != noRole && srvrRole != discoveryRole {
@@ -182,7 +185,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, regionInfo, serveropts, master.NewDKVServiceStat())
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, regionInfo, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -193,10 +196,10 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), regionInfo, serveropts, master.NewDKVServiceStat())
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), regionInfo, serveropts)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, regionInfo, serveropts, master.NewDKVServiceStat())
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, regionInfo, serveropts)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -225,7 +228,7 @@ func main() {
 			DisableAutoMasterDisc: disableAutoMasterDisc,
 			ReplMasterAddr:        replMasterAddr,
 		}
-		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts, slave.NewStat())
+		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		health.RegisterHealthServer(grpcSrvr, dkvSvc)
@@ -438,6 +441,7 @@ func setupStats() {
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
+	promRegistry = prometheus.NewRegistry()
 	statsStreamer = stats.NewStatStreamer()
 	statAggregatorRegistry = aggregate.NewStatAggregatorRegistry()
 	go statsStreamer.Run()
@@ -468,7 +472,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			rocksdb.WithRocksDBConfig(dbEngineIni),
 			rocksdb.WithLogger(dkvLogger),
 			rocksdb.WithStats(statsCli),
-			rocksdb.WithPromStats(storage.NewStat()))
+			rocksdb.WithPromStats(promRegistry))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
@@ -483,7 +487,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			badger.WithBadgerConfig(dbEngineIni),
 			badger.WithLogger(dkvLogger),
 			badger.WithStats(statsCli),
-			badger.WithPromStats(storage.NewStat()),
+			badger.WithPromStats(promRegistry),
 		}
 		if disklessMode {
 			bdbOpts = append(bdbOpts, badger.WithInMemory())

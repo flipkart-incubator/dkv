@@ -6,6 +6,38 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type promethousRegistry struct{}
+
+func (*promethousRegistry) Register(c prometheus.Collector) error {
+	return prometheus.DefaultRegisterer.Register(c)
+}
+
+func (*promethousRegistry) MustRegister(cs ...prometheus.Collector) {
+	prometheus.DefaultRegisterer.MustRegister(cs...)
+}
+
+func (*promethousRegistry) Unregister(c prometheus.Collector) bool {
+	return prometheus.DefaultRegisterer.Unregister(c)
+}
+
+func NewPromethousRegistry() prometheus.Registerer {
+	return &promethousRegistry{}
+}
+
+func (*noopClient) Register(collector prometheus.Collector) error {
+	return nil
+}
+
+func (*noopClient) MustRegister(collectors ...prometheus.Collector) {}
+
+func (*noopClient) Unregister(collector prometheus.Collector) bool {
+	return true
+}
+
+func NewPromethousNoopRegistry() prometheus.Registerer {
+	return &noopClient{}
+}
+
 func MeasureLatency(observer prometheus.Observer, startTime time.Time) {
 	observer.Observe(time.Since(startTime).Seconds())
 }
