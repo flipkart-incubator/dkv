@@ -60,7 +60,7 @@ var (
 	dbFolder       string
 	dbListenAddr   string
 	statsdAddr     string
-	httpServerAddr string
+	httpListenAddr string
 
 	// Service discovery related params
 	discoveryConf string
@@ -91,7 +91,7 @@ func init() {
 	flag.BoolVar(&disklessMode, "diskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
 	flag.StringVar(&dbFolder, "db-folder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
-	flag.StringVar(&httpServerAddr, "http-server-addr", "0.0.0.0:8181", "Address on which the http service binds")
+	flag.StringVar(&httpListenAddr, "http-listen-addr", "0.0.0.0:8081", "Address on which the http service binds")
 	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave|discovery")
@@ -149,7 +149,7 @@ func main() {
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            dcID,
 		NodeAddress:     nodeAddr.Host,
-		HttpAddress:     httpServerAddr,
+		HttpAddress:     httpListenAddr,
 		Database:        database,
 		VBucket:         vBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -608,7 +608,7 @@ func setupHttpServer() {
 	}
 
 	http.Handle("/", router)
-	http.ListenAndServe(httpServerAddr, nil)
+	http.ListenAndServe(httpListenAddr, nil)
 }
 
 func jsonMetricHandler(w http.ResponseWriter, r *http.Request) {
