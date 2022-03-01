@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"log"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,8 +13,16 @@ func (*promethousRegistry) Register(c prometheus.Collector) error {
 	return prometheus.DefaultRegisterer.Register(c)
 }
 
-func (*promethousRegistry) MustRegister(cs ...prometheus.Collector) {
-	prometheus.DefaultRegisterer.MustRegister(cs...)
+func (r *promethousRegistry) MustRegister(cs ...prometheus.Collector) {
+	for _, c := range cs {
+		if err := r.Register(c); err != nil {
+			if metric, ok := c.(prometheus.Metric); ok {
+				log.Printf("Failed to register collector %s: %s", metric.Desc().String(), err)
+			} else {
+				log.Printf("Failed to register collector: %s", err)
+			}
+		}
+	}
 }
 
 func (*promethousRegistry) Unregister(c prometheus.Collector) bool {
