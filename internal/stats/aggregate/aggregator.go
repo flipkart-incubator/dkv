@@ -1,11 +1,13 @@
-package stats
+package aggregate
 
 import (
 	"context"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"sync"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
 var (
@@ -28,7 +30,7 @@ func NewStatAggregatorRegistry() *StatAggregatorRegistry {
 	return &StatAggregatorRegistry{statsListener: statsListener, statAggregatorMap: make(map[int64]*StatAggregator)}
 }
 
-func (sr *StatAggregatorRegistry) Register(regions []*serverpb.RegionInfo, tagger func(*serverpb.RegionInfo) string, outputChannel chan map[string]*DKVMetrics) int64 {
+func (sr *StatAggregatorRegistry) Register(regions []*serverpb.RegionInfo, tagger func(*serverpb.RegionInfo) string, outputChannel chan map[string]*stats.DKVMetrics) int64 {
 	hostMap := map[string]string{}
 	for _, region := range regions {
 		hostMap[region.GetHttpAddress()] = tagger(region)
@@ -55,21 +57,21 @@ func (sr *StatAggregatorRegistry) DeRegister(id int64) {
 }
 
 type StatAggregator struct {
-	outputChannel     chan map[string]*DKVMetrics
-	aggregatedStatMap map[int64]map[string]*DKVMetrics
+	outputChannel     chan map[string]*stats.DKVMetrics
+	aggregatedStatMap map[int64]map[string]*stats.DKVMetrics
 	hostMap           map[string]string
 	channelIds        map[string]int64
 	ctx               context.Context
 	cancelFunc        context.CancelFunc
 }
 
-func NewStatAggregator(outputChannel chan map[string]*DKVMetrics, hostMap map[string]string) *StatAggregator {
+func NewStatAggregator(outputChannel chan map[string]*stats.DKVMetrics, hostMap map[string]string) *StatAggregator {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	return &StatAggregator{outputChannel: outputChannel, hostMap: hostMap, channelIds: map[string]int64{}, ctx: ctx, cancelFunc: cancelFunc}
 }
 
 func (sa *StatAggregator) Start(listener *StatListener) {
-	sa.aggregatedStatMap = make(map[int64]map[string]*DKVMetrics, MAX_STAT_BUFFER)
+	sa.aggregatedStatMap = make(map[int64]map[string]*stats.DKVMetrics, MAX_STAT_BUFFER)
 
 	channels := make([]chan MetricEvent, 2)
 	for host, _ := range sa.hostMap {
@@ -93,7 +95,7 @@ func (sa *StatAggregator) Start(listener *StatListener) {
 					sa.outputChannel <- sa.aggregatedStatMap[index]
 					delete(sa.aggregatedStatMap, index)
 				}
-				sa.aggregatedStatMap[metric.TimeStamp] = make(map[string]*DKVMetrics)
+				sa.aggregatedStatMap[metric.TimeStamp] = make(map[string]*stats.DKVMetrics)
 			}
 
 			/* merging metrics*/
@@ -126,7 +128,7 @@ func (sa *StatAggregator) Stop() {
 	sa.cancelFunc()
 }
 
-func getStatCount(metricMap map[string]*DKVMetrics) int {
+func getStatCount(metricMap map[string]*stats.DKVMetrics) int {
 	count := 0
 	for _, metric := range metricMap {
 		count = count + int(metric.Count)
@@ -134,7 +136,7 @@ func getStatCount(metricMap map[string]*DKVMetrics) int {
 	return count
 }
 
-func getMinIndex(m map[int64]map[string]*DKVMetrics) int64 {
+func getMinIndex(m map[int64]map[string]*stats.DKVMetrics) int64 {
 	var min int64
 	for index, _ := range m {
 		if min == 0 || min > index {
@@ -144,8 +146,8 @@ func getMinIndex(m map[int64]map[string]*DKVMetrics) int64 {
 	return min
 }
 
-func populateConsolidatedStat(m map[string]*DKVMetrics) {
-	dkvMetrics := newDKVMetric()
+func populateConsolidatedStat(m map[string]*stats.DKVMetrics) {
+	dkvMetrics := stats.NewDKVMetric()
 	for _, dm := range m {
 		/* it should contain ts of the metric that it is combining */
 		dkvMetrics.TimeStamp = dm.TimeStamp

@@ -1,4 +1,4 @@
-package stats
+package aggregate
 
 import (
 	"bufio"
@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/flipkart-incubator/dkv/internal/stats"
 )
 
 type StatListener struct {
@@ -19,7 +21,7 @@ type StatListener struct {
 }
 
 type MetricEvent struct {
-	metric DKVMetrics
+	metric stats.DKVMetrics
 	host   string
 }
 
@@ -142,10 +144,10 @@ func parseEvent(response *http.Response, eventChannel chan MetricEvent, host str
 	}
 }
 
-func buildEvent(byts []byte) (*DKVMetrics, error) {
+func buildEvent(byts []byte) (*stats.DKVMetrics, error) {
 	splits := bytes.Split(byts, []byte{':', ' '})
 	if len(splits) == 2 {
-		dkvMetrics := &DKVMetrics{}
+		dkvMetrics := &stats.DKVMetrics{}
 		err := json.Unmarshal(splits[1], dkvMetrics)
 		return dkvMetrics, err
 	}

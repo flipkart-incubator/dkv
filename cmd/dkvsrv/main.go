@@ -27,6 +27,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/slave"
 	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/stats/aggregate"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
@@ -43,6 +44,7 @@ import (
 	"net/http/pprof"
 )
 
+//Config Variables
 var (
 	// region level configuration.
 	// TODO - move them to config file to setup multiple regions in a node
@@ -74,17 +76,21 @@ var (
 	// Logging vars
 	dbAccessLog    string
 	verboseLogging bool
-	accessLogger   *zap.Logger
-	dkvLogger      *zap.Logger
-	pprofEnable    bool
+
+	pprofEnable bool
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+)
 
-	statsCli       stats.Client
-	statsPublisher *stats.StatPublisher
+var (
+	accessLogger *zap.Logger
+	dkvLogger    *zap.Logger
+
+	statsCli      stats.Client
+	statsStreamer *stats.StatStreamer
 
 	discoveryClient        discovery.Client
-	statAggregatorRegistry *stats.StatAggregatorRegistry
+	statAggregatorRegistry *aggregate.StatAggregatorRegistry
 )
 
 func init() {
@@ -163,7 +169,6 @@ func main() {
 		StatsCli:                  statsCli,
 	}
 
-	var discoveryClient discovery.Client
 	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
 		discoveryClient, err = newDiscoveryClient()
@@ -433,9 +438,9 @@ func setupStats() {
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
-	statsPublisher = stats.NewStatPublisher()
-	statAggregatorRegistry = stats.NewStatAggregatorRegistry()
-	go statsPublisher.Run()
+	statsStreamer = stats.NewStatStreamer()
+	statAggregatorRegistry = aggregate.NewStatAggregatorRegistry()
+	go statsStreamer.Run()
 }
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
@@ -593,9 +598,12 @@ func setupHttpServer() {
 	router := mux.NewRouter()
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
+
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
-	// Should be enabled only for discovery server ?
-	router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
+	if dbRole == "discovery" {
+		// Should be enabled only for discovery server ?
+		router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
+	}
 
 	//Pprof
 	if pprofEnable {
@@ -630,7 +638,7 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 
 		statChannel := make(chan stats.DKVMetrics, 5)
-		channelId := statsPublisher.Register(statChannel)
+		channelId := statsStreamer.Register(statChannel)
 		defer func() {
 			ioutil.ReadAll(r.Body)
 			r.Body.Close()
@@ -644,7 +652,7 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "data: %s\n\n", statJson)
 				f.Flush()
 			case <-notify:
-				statsPublisher.DeRegister(channelId)
+				statsStreamer.DeRegister(channelId)
 				return
 			}
 		}

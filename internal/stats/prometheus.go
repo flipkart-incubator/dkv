@@ -1,8 +1,9 @@
 package stats
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func MeasureLatency(observer prometheus.Observer, startTime time.Time) {
@@ -10,7 +11,7 @@ func MeasureLatency(observer prometheus.Observer, startTime time.Time) {
 }
 
 func GetMetrics() (*DKVMetrics, error) {
-	dkvMetrics := newDKVMetric()
+	dkvMetrics := NewDKVMetric()
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		return dkvMetrics, err
@@ -19,17 +20,17 @@ func GetMetrics() (*DKVMetrics, error) {
 		switch mf.GetName() {
 		case "storage_latency":
 			for _, m := range mf.GetMetric() {
-				dkvMetrics.StoreLatency[m.Label[0].GetValue()] = newPercentile(m.GetSummary().GetQuantile())
+				dkvMetrics.StoreLatency[m.Label[0].GetValue()] = NewPercentile(m.GetSummary().GetQuantile())
 				dkvMetrics.StorageOpsCount[m.Label[0].GetValue()] = m.GetSummary().GetSampleCount()
 			}
 		case "nexus_latency":
 			for _, m := range mf.GetMetric() {
-				dkvMetrics.NexusLatency[m.Label[0].GetValue()] = newPercentile(m.GetSummary().GetQuantile())
+				dkvMetrics.NexusLatency[m.Label[0].GetValue()] = NewPercentile(m.GetSummary().GetQuantile())
 				dkvMetrics.NexusOpsCount[m.Label[0].GetValue()] = m.GetSummary().GetSampleCount()
 			}
 		case "dkv_latency":
 			for _, m := range mf.GetMetric() {
-				dkvMetrics.DKVLatency[m.Label[0].GetValue()] = newPercentile(m.GetSummary().GetQuantile())
+				dkvMetrics.DKVLatency[m.Label[0].GetValue()] = NewPercentile(m.GetSummary().GetQuantile())
 				dkvMetrics.DKVReqCount[m.Label[0].GetValue()] = m.GetSummary().GetSampleCount()
 			}
 		case "storage_error":

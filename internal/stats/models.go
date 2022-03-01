@@ -1,8 +1,9 @@
 package stats
 
 import (
-	dto "github.com/prometheus/client_model/go"
 	"time"
+
+	dto "github.com/prometheus/client_model/go"
 )
 
 const (
@@ -84,7 +85,7 @@ type Percentile struct {
 	P99 float64 `json:"p99"`
 }
 
-func newDKVMetric() *DKVMetrics {
+func NewDKVMetric() *DKVMetrics {
 	return &DKVMetrics{
 		TimeStamp:            time.Now().Unix(),
 		StoreLatency:         make(map[string]*Percentile),
@@ -97,7 +98,7 @@ func newDKVMetric() *DKVMetrics {
 		Count:                1,
 	}
 }
-func newPercentile(quantile []*dto.Quantile) *Percentile {
+func NewPercentile(quantile []*dto.Quantile) *Percentile {
 	percentile := &Percentile{}
 	for _, q := range quantile {
 		switch *q.Quantile {

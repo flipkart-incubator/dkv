@@ -5,20 +5,20 @@ import (
 	"time"
 )
 
-type StatPublisher struct {
+type StatStreamer struct {
 	/* Time Stamp to Channel Map for Writing Output */
 	outputChannelMap map[int64]chan DKVMetrics
 	/* Mutex for Safe Access */
 	mapMutex sync.Mutex
 }
 
-func NewStatPublisher() *StatPublisher {
-	return &StatPublisher{
+func NewStatStreamer() *StatStreamer {
+	return &StatStreamer{
 		outputChannelMap: make(map[int64]chan DKVMetrics, 10),
 	}
 }
 
-func (sp *StatPublisher) Register(outputChannel chan DKVMetrics) int64 {
+func (sp *StatStreamer) Register(outputChannel chan DKVMetrics) int64 {
 	channelId := time.Now().UnixNano()
 	sp.mapMutex.Lock()
 	sp.outputChannelMap[channelId] = outputChannel
@@ -26,7 +26,7 @@ func (sp *StatPublisher) Register(outputChannel chan DKVMetrics) int64 {
 	return channelId
 }
 
-func (sp *StatPublisher) DeRegister(id int64) {
+func (sp *StatStreamer) DeRegister(id int64) {
 	sp.mapMutex.Lock()
 	if outputChannel, ok := sp.outputChannelMap[id]; ok {
 		sp.unsafeDeregister(outputChannel, id)
@@ -34,14 +34,14 @@ func (sp *StatPublisher) DeRegister(id int64) {
 	sp.mapMutex.Unlock()
 }
 
-func (sp *StatPublisher) unsafeDeregister(outputChannel chan DKVMetrics, id int64) {
+func (sp *StatStreamer) unsafeDeregister(outputChannel chan DKVMetrics, id int64) {
 	/* Close Channel */
 	close(outputChannel)
 	/* Delete current Channel from Broadcast Map */
 	delete(sp.outputChannelMap, id)
 }
 
-func (sp *StatPublisher) Run() {
+func (sp *StatStreamer) Run() {
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {
