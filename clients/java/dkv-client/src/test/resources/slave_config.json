@@ -1,0 +1,18 @@
+{
+    "authority": "",
+    "block-cache-size": 3221225472,
+    "db-engine": "badger",
+    "db-engine-ini": "",
+    "db-folder": "/tmp/dkvsrv",
+    "dc-id": "dc1",
+    "disable-auto-master-disc": false,
+    "discovery-service-config": "internal/discovery/discovery.ini",
+    "diskless": true,
+    "pprof": false,
+    "repl-master-addr": "",
+    "repl-poll-interval": "2s",
+    "role": "slave",
+    "statsd-addr": "",
+    "vbucket": "default",
+    "verbose": false
+  }

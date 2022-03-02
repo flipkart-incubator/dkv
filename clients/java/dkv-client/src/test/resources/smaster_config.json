@@ -1,0 +1,18 @@
+{
+    "authority": "",
+    "block-cache-size": 3221225472,
+    "db-engine": "rocksdb",
+    "db-engine-ini": "",
+    "db-folder": "/tmp/dkvsrv",
+    "dc-id": "dc1",
+    "disable-auto-master-disc": true,
+    "discovery-service-config": "internal/discovery/discovery.ini",
+    "diskless": false,
+    "pprof": false,
+    "repl-master-addr": "",
+    "repl-poll-interval": "5s",
+    "role": "master",
+    "statsd-addr": "",
+    "vbucket": "default",
+    "verbose": false
+}
