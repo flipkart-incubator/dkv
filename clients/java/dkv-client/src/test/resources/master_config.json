@@ -1,0 +1,28 @@
+{
+    "authority": "",
+    "block-cache-size": 3221225472,
+    "database": "d1",
+    "db-engine": "rocksdb",
+    "db-engine-ini": "",
+    "db-folder": "/tmp/dkvsrv",
+    "dc-id": "dc2",
+    "disable-auto-master-disc": true,
+    "discovery-service-config": "internal/discovery/discovery.ini",
+    "diskless": false,
+    "pprof": false,
+    "repl-master-addr": "",
+    "repl-poll-interval": "5s",
+    "role": "master",
+    "statsd-addr": "",
+    "vbucket": "default",
+    "verbose": false,
+    
+    "nexus-cluster-name": "",
+    "nexus-cluster-url": "http://127.0.0.1:8021,http://127.0.0.1:8022,http://127.0.0.1:8023",
+    "nexus-max-snapshots": 5,
+    "nexus-max-wals": 5,
+    "nexus-repl-timeout": 5,
+    "nexus-lease-based-reads": true,
+    "nexus-snapshot-count": 100,
+    "nexus-snapshot-catchup-entries": 5
+  }
