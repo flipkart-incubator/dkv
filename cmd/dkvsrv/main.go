@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -12,7 +11,6 @@ import (
 	"path"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/master"
@@ -29,7 +27,7 @@ import (
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
 
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
-	"github.com/spf13/viper"
+	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
@@ -39,122 +37,6 @@ import (
 	_ "net/http/pprof"
 )
 
-var (
-	// Logging vars
-	verboseLogging bool
-	accessLogger   *zap.Logger
-	dkvLogger      *zap.Logger
-	pprofEnable    bool
-
-	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
-
-	statsCli stats.Client
-
-	//Config file used for reading and using configs
-	cfgFile string
-
-	config Config
-)
-
-type Config struct {
-	// region level configuration.
-	DisklessMode           bool   `mapstructure:"diskless"`
-	NodeName               string `mapstructure:"node-name"`
-	DbEngine               string `mapstructure:"db-engine"`
-	DbEngineIni            string `mapstructure:"db-engine-ini"`
-	DbRole                 string `mapstructure:"role"`
-	ReplPollIntervalString string `mapstructure:"repl-poll-interval"`
-	BlockCacheSize         uint64 `mapstructure:"block-cache-size"`
-	DcID                   string `mapstructure:"dc-id"`
-	Database               string `mapstructure:"database"`
-	VBucket                string `mapstructure:"vbucket"`
-
-	// Node level configuration common for all regions in the node
-	DbFolder     string `mapstructure:"db-folder"`
-	DbListenAddr string `mapstructure:"listen-addr"`
-	StatsdAddr   string `mapstructure:"statsd-addr"`
-
-	//Service discovery related params
-	DiscoveryServiceConfig string `mapstructure:"discovery-service-config"`
-
-	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
-	// The above issue causes replication issues during master switch due to inconsistent change numbers
-	// Thus enabling hardcoded masters to not degrade current behaviour
-	ReplicationMasterAddr string `mapstructure:"repl-master-addr"`
-	DisableAutoMasterDisc bool   `mapstructure:"disable-auto-master-disc"`
-
-	// Logging vars
-	DbAccessLog string `mapstructure:"access-log"`
-
-	ReplPollInterval time.Duration
-}
-
-func init() {
-	initializeFlags()
-	readConfigDataWithViper()
-	overrideFlagsWithConfigData()
-	setDKVDefaultsForNexusDirs()
-}
-
-func initializeFlags() {
-	flag.StringVar(&cfgFile, "config", "", "config file (default is $HOME/dkvconfig.yaml)")
-	flag.StringVar(&config.NodeName, "node-name", "", "name of the server node")
-	flag.StringVar(&config.DbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
-	flag.StringVar(&config.Database, "database", "default", "Database identifier")
-	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
-	flag.Parse()
-}
-
-func readConfigDataWithViper() {
-	if cfgFile != "" {
-		fmt.Println("file used " + cfgFile)
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		if err != nil {
-			log.Panicf("Failed to read os variable %v.", err)
-		}
-		// Search config in home directory with name "dkvconfig.json"
-		viper.AddConfigPath(home)
-		viper.SetConfigType("json")
-		viper.SetConfigName("dkvconfig")
-	}
-	viper.AutomaticEnv()
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
-	unmarshallViper()
-}
-
-func unmarshallViper() {
-	viper.Unmarshal(&config)
-	//Handling time duration variable unmarshalling
-	if config.ReplPollIntervalString != "" {
-		replicationPollInterval, err := time.ParseDuration(config.ReplPollIntervalString)
-		if err != nil {
-			log.Panicf("Failed to read Replication poll iterval value from config %v", err)
-		}
-		config.ReplPollInterval = replicationPollInterval
-	}
-	//Append node name to default db folder location
-	if config.NodeName != "" {
-		config.DbFolder = path.Join(config.DbFolder, config.NodeName, "data")
-	}
-}
-
-func overrideFlagsWithConfigData() {
-	flag.VisitAll(func(f *flag.Flag) {
-		// Apply the viper config value to the flag when the flag is not set and viper has a value
-		if viper.IsSet(f.Name) {
-			val := viper.Get(f.Name)
-			flag.Set(f.Name, fmt.Sprintf("%v", val))
-		}
-	})
-}
-
 type dkvSrvrRole string
 
 const (
@@ -162,23 +44,57 @@ const (
 	masterRole    dkvSrvrRole = "master"
 	slaveRole     dkvSrvrRole = "slave"
 	discoveryRole dkvSrvrRole = "discovery"
-)
 
-const defBlockCacheSize = 3 << 30
-
-const (
+	defBlockCacheSize     = 3 << 30
 	discoveryServerConfig = "serverConfig"
 	discoveryClientConfig = "clientConfig"
 )
 
+var (
+	//Config file used for reading and using configs
+	cfgFile string
+
+	//appConfig
+	config opts.Config
+
+	//nexus flags
+	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+
+	// Logging vars
+	verboseLogging bool
+	accessLogger   *zap.Logger
+	dkvLogger      *zap.Logger
+	pprofEnable    bool
+
+	// Other vars
+	statsCli stats.Client
+)
+
+func init() {
+	initializeFlags()
+}
+
+func initializeFlags() {
+	flag.CommandLine.ParseErrorsWhitelist = flag.ParseErrorsWhitelist{UnknownFlags: true}
+	flag.StringVar(&cfgFile, "config", "", "config file (default is $HOME/dkvconfig.yaml)")
+	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
+	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
+}
+
 func main() {
+
+	//load config
 	flag.Parse()
+	opts.LoadConfigFile(cfgFile)
+	opts.ApplyConfigOverrides()
+	config.ParseConfig()
+	config.Print()
 	validateFlags()
+
 	setupDKVLogger()
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
-	printFlagsWithoutPrefix()
 
 	if pprofEnable {
 		go func() {
@@ -285,8 +201,8 @@ func main() {
 }
 
 func validateFlags() {
-	if config.DbListenAddr != "" && strings.IndexRune(config.DbListenAddr, ':') < 0 {
-		log.Panicf("given listen address: %s is invalid, must be in host:port format", config.DbListenAddr)
+	if config.ListenAddr != "" && strings.IndexRune(config.ListenAddr, ':') < 0 {
+		log.Panicf("given listen address: %s is invalid, must be in host:port format", config.ListenAddr)
 	}
 	if config.StatsdAddr != "" && strings.IndexRune(config.StatsdAddr, ':') < 0 {
 		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", config.StatsdAddr)
@@ -311,7 +227,7 @@ func validateFlags() {
 
 func setupAccessLogger() {
 	accessLogger = zap.NewNop()
-	if config.DbAccessLog != "" {
+	if config.AccessLog != "" {
 		accessLoggerConfig := zap.Config{
 			Level:         zap.NewAtomicLevelAt(zap.InfoLevel),
 			Development:   false,
@@ -332,8 +248,8 @@ func setupAccessLogger() {
 				EncodeCaller:   zapcore.ShortCallerEncoder,
 			},
 
-			OutputPaths:      []string{config.DbAccessLog},
-			ErrorOutputPaths: []string{config.DbAccessLog},
+			OutputPaths:      []string{config.AccessLog},
+			ErrorOutputPaths: []string{config.AccessLog},
 		}
 		if lg, err := accessLoggerConfig.Build(); err != nil {
 			log.Printf("[WARN] Unable to configure access logger. Error: %v\n", err)
@@ -391,7 +307,7 @@ func newGrpcServerListener() (*grpc.Server, net.Listener) {
 
 func newListener() (lis net.Listener) {
 	var err error
-	if lis, err = net.Listen("tcp", config.DbListenAddr); err != nil {
+	if lis, err = net.Listen("tcp", config.ListenAddr); err != nil {
 		log.Panicf("failed to listen: %v", err)
 		return
 	}
@@ -415,61 +331,13 @@ func haveFlagsWithPrefix(prefix string) bool {
 	return res
 }
 
-func printFlagsWithoutPrefix(prefixes ...string) {
-	flag.VisitAll(func(f *flag.Flag) {
-		shouldPrint := true
-		for _, pf := range prefixes {
-			if strings.HasPrefix(f.Name, pf) {
-				shouldPrint = false
-				break
-			}
-		}
-		if shouldPrint {
-			log.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
-		}
-	})
-}
-
-func printFlagsWithPrefix(prefixes ...string) {
-	flag.VisitAll(func(f *flag.Flag) {
-		for _, pf := range prefixes {
-			if strings.HasPrefix(f.Name, pf) {
-				log.Printf("%s (%s): %v\n", f.Name, f.Usage, f.Value)
-			}
-		}
-	})
-}
-
 func toDKVSrvrRole(role string) dkvSrvrRole {
 	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(role)))
 }
 
-func (role dkvSrvrRole) printFlags() {
-	log.Println("Launching DKV server with following flags:")
-	switch role {
-	case noRole:
-		printFlagsWithPrefix("db")
-	case masterRole, discoveryRole:
-		if haveFlagsWithPrefix("nexus") {
-			printFlagsWithPrefix("db", "nexus")
-		} else {
-			printFlagsWithPrefix("db")
-		}
-	case slaveRole:
-		printFlagsWithPrefix("db", "repl")
-	}
-	printFlagsWithoutPrefix("db", "repl", "nexus")
-}
-
-func setDKVDefaultsForNexusDirs() {
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
-	dbPath := config.DbFolder
-	nexusLogDirFlag.DefValue, nexusSnapDirFlag.DefValue = path.Join(dbPath, "logs"), path.Join(dbPath, "snap")
-	nexusLogDirFlag.Value.Set("")
-	nexusSnapDirFlag.Value.Set("")
-}
-
 func setFlagsForNexusDirs() {
+
+	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
 	if nexusLogDirFlag.Value.String() == "" {
 		nexusLogDirFlag.Value.Set(path.Join(config.DbFolder, "logs"))
 	}
@@ -610,7 +478,7 @@ func newDiscoveryClient() (discovery.Client, error) {
 }
 
 func nodeAddress() (*url.URL, error) {
-	ip, port, err := net.SplitHostPort(config.DbListenAddr)
+	ip, port, err := net.SplitHostPort(config.ListenAddr)
 	if err != nil {
 		return nil, err
 	}

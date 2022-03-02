@@ -11,7 +11,7 @@ require (
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4
-	github.com/flipkart-incubator/nexus v0.0.0-20211201090909-724b3e4d3805
+	github.com/flipkart-incubator/nexus v0.0.0-20220302084910-91e6f794284b
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2 // indirect
@@ -22,6 +22,7 @@ require (
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
 	github.com/smira/go-statsd v1.3.1
+	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/vmihailenco/msgpack/v5 v5.3.4
 	go.uber.org/zap v1.17.0
@@ -34,6 +35,7 @@ require (
 replace (
 	cloud.google.com/go => github.com/googleapis/google-cloud-go v0.26.0
 	github.com/Jille/grpc-multi-resolver => github.com/mqy/grpc-multi-resolver v1.0.1-0.20211016000115-097a4c652dad
+	github.com/spf13/pflag => github.com/TiboStev/pflag v1.0.6-0.20200918204434-33dec6aac494
 	go.uber.org/atomic => github.com/uber-go/atomic v1.6.0
 	go.uber.org/multierr => github.com/uber-go/multierr v1.5.0
 	go.uber.org/tools => github.com/uber-go/tools v0.0.0-20190618225709-2cfd321de3ee
