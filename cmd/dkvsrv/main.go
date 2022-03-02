@@ -85,11 +85,8 @@ func main() {
 
 	//load config
 	flag.Parse()
-	opts.LoadConfigFile(cfgFile)
-	opts.ApplyConfigOverrides()
-	config.ParseConfig()
+	config.Init(cfgFile)
 	config.Print()
-	validateFlags()
 
 	setupDKVLogger()
 	setupAccessLogger()
@@ -198,31 +195,6 @@ func main() {
 	go grpcSrvr.Serve(lstnr)
 	sig := <-setupSignalHandler()
 	log.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
-}
-
-func validateFlags() {
-	if config.ListenAddr != "" && strings.IndexRune(config.ListenAddr, ':') < 0 {
-		log.Panicf("given listen address: %s is invalid, must be in host:port format", config.ListenAddr)
-	}
-	if config.StatsdAddr != "" && strings.IndexRune(config.StatsdAddr, ':') < 0 {
-		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", config.StatsdAddr)
-	}
-
-	if config.DisklessMode && strings.ToLower(config.DbEngine) == "rocksdb" {
-		log.Panicf("diskless is available only on Badger storage")
-	}
-
-	if config.DbEngineIni != "" {
-		if _, err := os.Stat(config.DbEngineIni); err != nil && os.IsNotExist(err) {
-			log.Panicf("given storage configuration file: %s does not exist", config.DbEngineIni)
-		}
-	}
-
-	if config.DbRole == "slave" && config.DisableAutoMasterDisc {
-		if config.ReplicationMasterAddr == "" || strings.IndexRune(config.ReplicationMasterAddr, ':') < 0 {
-			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", config.ReplicationMasterAddr)
-		}
-	}
 }
 
 func setupAccessLogger() {

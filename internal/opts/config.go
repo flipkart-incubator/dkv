@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	flag "github.com/spf13/pflag"
@@ -64,7 +65,7 @@ type Config struct {
 	NexusSnapshotCount          int    `mapstructure:"nexus-snapshot-count" desc:"Number of committed transactions to trigger a snapshot to disk"`
 }
 
-func (c *Config) ParseConfig() {
+func (c *Config) parseConfig() {
 	viper.Unmarshal(c)
 	//Handling time duration variable unmarshalling
 	if c.ReplPollIntervalString != "" {
@@ -86,6 +87,33 @@ func (c *Config) ParseConfig() {
 	if c.NexusSnapDir == "" {
 		c.NexusSnapDir = path.Join(c.RootFolder, c.NodeName, "snap")
 	}
+
+	c.validateFlags()
+}
+
+func (c *Config) validateFlags() {
+	if c.ListenAddr != "" && strings.IndexRune(c.ListenAddr, ':') < 0 {
+		log.Panicf("given listen address: %s is invalid, must be in host:port format", c.ListenAddr)
+	}
+	if c.StatsdAddr != "" && strings.IndexRune(c.StatsdAddr, ':') < 0 {
+		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", c.StatsdAddr)
+	}
+
+	if c.DisklessMode && strings.ToLower(c.DbEngine) == "rocksdb" {
+		log.Panicf("diskless is available only on Badger storage")
+	}
+
+	if c.DbEngineIni != "" {
+		if _, err := os.Stat(c.DbEngineIni); err != nil && os.IsNotExist(err) {
+			log.Panicf("given storage configuration file: %s does not exist", c.DbEngineIni)
+		}
+	}
+
+	if c.DbRole == "slave" && c.DisableAutoMasterDisc {
+		if c.ReplicationMasterAddr == "" || strings.IndexRune(c.ReplicationMasterAddr, ':') < 0 {
+			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", c.ReplicationMasterAddr)
+		}
+	}
 }
 
 func (c *Config) Print() {
@@ -102,7 +130,13 @@ func (c *Config) Print() {
 	}
 }
 
-func LoadConfigFile(cfgFile string) {
+func (c *Config) Init(cfgFile string) {
+	loadConfigFile(cfgFile)
+	applyConfigOverrides()
+	c.parseConfig()
+}
+
+func loadConfigFile(cfgFile string) {
 	if cfgFile != "" {
 		absPath, err := filepath.Abs(cfgFile)
 		if err != nil {
@@ -112,7 +146,7 @@ func LoadConfigFile(cfgFile string) {
 	} else {
 		// Search config in home directory with name "dkvconfig.json"
 		viper.AddConfigPath("/etc/default")
-		viper.SetConfigType("json")
+		viper.SetConfigType("yaml")
 		viper.SetConfigName("dkvconfig")
 	}
 	viper.AutomaticEnv()
@@ -125,7 +159,7 @@ func LoadConfigFile(cfgFile string) {
 	}
 }
 
-func ApplyConfigOverrides() {
+func applyConfigOverrides() {
 	flag.CommandLine.VisitUnknowns(func(f *flag.Flag) {
 		// Apply the viper config value to the flag when the flag is not set and viper has a value
 		val := fmt.Sprintf("%v", f.Value.String())
