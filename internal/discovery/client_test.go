@@ -22,6 +22,7 @@ var (
 		Logger:                    lgr,
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 	}
 )
 
@@ -29,7 +30,7 @@ func TestDiscoveryClient(t *testing.T) {
 	dkvSvc, grpcSrvr := serveStandaloneDKVWithDiscovery(discoverySvcPort, &serverpb.RegionInfo{}, dbFolder+"_DC")
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
-
+	<-time.After(time.Duration(10) * time.Second)
 	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 
@@ -117,6 +118,6 @@ func TestDiscoveryClient(t *testing.T) {
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
 	dbDir := fmt.Sprintf("%s_%d", dbFolder, id)
 	kvs, cp, ba := newKVStore(dbDir)
-	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts, master.NewNoopStat())
+	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts)
 	return dkvSvc
 }

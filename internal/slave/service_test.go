@@ -59,17 +59,19 @@ var (
 	masterGrpcSrvr *grpc.Server
 	slaveCli       *ctl.DKVClient
 	slaveSvc       DKVService
-	healthCheckCli *HealthCheckClient
 	slaveGrpcSrvr  *grpc.Server
-	lgr, _         = zap.NewDevelopment()
-	serverOpts     = &opts.ServerOpts{
+	healthCheckCli *HealthCheckClient
+
+	lgr, _     = zap.NewDevelopment()
+	serverOpts = &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 	}
 
 	// for creating a distribute server cluster
-	dkvPorts        = map[int]int{1: 9091, 2: 9092, 3: 9093, 4: 9094, 5: 9095}
+	dkvPorts        = map[int]int{1: 9981, 2: 9982, 3: 9983, 4: 9984, 5: 9985}
 	grpcSrvs        = make(map[int]*grpc.Server)
 	dkvClis         = make(map[int]*ctl.DKVClient)
 	dkvSvcs         = make(map[int]DKVService)
@@ -258,7 +260,7 @@ func registerDkvServerWithDiscovery() {
 func startDiscoveryServer() {
 	//todo check why does this need a kv store?
 	discoverykvs, discoverycp, discoveryba := newKVStore(masterDBFolder + "_DC")
-	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, serverOpts, master.NewNoopStat())
+	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, serverOpts)
 	grpcSrvr := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
@@ -400,7 +402,7 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	dkvRepl.Start()
 	regionInfo := &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
-	distSrv := master.NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, serverOpts, master.NewNoopStat())
+	distSrv := master.NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, serverOpts)
 	grpcSrv := grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
@@ -875,7 +877,7 @@ func newBadgerDBStore(dbFolder string) badger.DB {
 
 func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
 	// No need to set the storage.Backupable instance since its not needed here
-	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, serverOpts, master.NewNoopStat())
+	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, serverOpts)
 	masterGrpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
 	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
@@ -886,6 +888,7 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 }
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, disableAutoMasterDisc bool, discoveryClient discovery.Client) {
+	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
 		MaxNumChngs:           2,
 		ReplPollInterval:      5 * time.Second,
@@ -893,12 +896,15 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 		MaxActiveReplElapsed:  5,
 		DisableAutoMasterDisc: disableAutoMasterDisc,
 	}
+
 	specialOpts := &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		HealthCheckTickerInterval: uint(1),
 	}
-	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: "default", VBucket: "default"}, &replConf, discoveryClient, specialOpts, NoOpStat()); err != nil {
+
+	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, &replConf, discoveryClient, specialOpts); err != nil {
 		panic(err)
 	} else {
 		slaveSvc = ss

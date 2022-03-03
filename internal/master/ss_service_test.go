@@ -32,6 +32,7 @@ var (
 	serverOpts = &opts.ServerOpts{
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		Logger:                    lgr,
 	}
 )
@@ -380,7 +381,7 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 
 func serveStandaloneDKV() {
 	kvs, cp, ba := newKVStore(dbFolder)
-	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, serverOpts, NewNoopStat())
+	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, serverOpts)
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)

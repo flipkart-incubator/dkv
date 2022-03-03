@@ -18,6 +18,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/ini.v1"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/slave"
 	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/stats/aggregate"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
@@ -40,9 +42,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	_ "net/http/pprof"
+	"net/http/pprof"
 )
 
+//Config Variables
 var (
 	// region level configuration.
 	// TODO - move them to config file to setup multiple regions in a node
@@ -60,7 +63,7 @@ var (
 	dbFolder       string
 	dbListenAddr   string
 	statsdAddr     string
-	httpServerAddr string
+	httpListenAddr string
 
 	// Service discovery related params
 	discoveryConf string
@@ -74,25 +77,30 @@ var (
 	// Logging vars
 	dbAccessLog    string
 	verboseLogging bool
-	accessLogger   *zap.Logger
-	dkvLogger      *zap.Logger
-	pprofEnable    bool
+
+	pprofEnable bool
 
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+)
 
-	statsCli       stats.Client
-	statsPublisher *stats.StatPublisher
+var (
+	accessLogger *zap.Logger
+	dkvLogger    *zap.Logger
+
+	statsCli      stats.Client
+	promRegistry  prometheus.Registerer
+	statsStreamer *stats.StatStreamer
 	maxReplHis     int
 
 	discoveryClient        discovery.Client
-	statAggregatorRegistry *stats.StatAggregatorRegistry
+	statAggregatorRegistry *aggregate.StatAggregatorRegistry
 )
 
 func init() {
 	flag.BoolVar(&disklessMode, "diskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
 	flag.StringVar(&dbFolder, "db-folder", "/tmp/dkvsrv", "DB folder path for storing data files")
 	flag.StringVar(&dbListenAddr, "listen-addr", "0.0.0.0:8080", "Address on which the DKV service binds")
-	flag.StringVar(&httpServerAddr, "http-server-addr", "0.0.0.0:8181", "Address on which the http service binds")
+	flag.StringVar(&httpListenAddr, "http-listen-addr", "0.0.0.0:8081", "Address on which the http service binds")
 	flag.StringVar(&dbEngine, "db-engine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
 	flag.StringVar(&dbEngineIni, "db-engine-ini", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
 	flag.StringVar(&dbRole, "role", "none", "DB role of this node - none|master|slave|discovery")
@@ -137,13 +145,6 @@ func main() {
 	setupStats()
 	go setupHttpServer()
 
-	if pprofEnable {
-		go func() {
-			log.Printf("[INFO] Starting pprof on port 6060\n")
-			log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-		}()
-	}
-
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
@@ -158,7 +159,7 @@ func main() {
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            dcID,
 		NodeAddress:     nodeAddr.Host,
-		HttpAddress:     httpServerAddr,
+		HttpAddress:     httpListenAddr,
 		Database:        database,
 		VBucket:         vBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -170,9 +171,9 @@ func main() {
 		Logger:                    dkvLogger,
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
+		PrometheusRegistry:        promRegistry,
 	}
 
-	var discoveryClient discovery.Client
 	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
 		discoveryClient, err = newDiscoveryClient()
@@ -186,7 +187,7 @@ func main() {
 
 	switch srvrRole {
 	case noRole:
-		dkvSvc := master.NewStandaloneService(kvs, nil, br, regionInfo, serveropts, master.NewDKVServiceStat())
+		dkvSvc := master.NewStandaloneService(kvs, nil, br, regionInfo, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
@@ -197,10 +198,10 @@ func main() {
 		}
 		var dkvSvc master.DKVService
 		if haveFlagsWithPrefix("nexus") {
-			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), regionInfo, serveropts, master.NewDKVServiceStat())
+			dkvSvc = master.NewDistributedService(kvs, cp, br, newDKVReplicator(kvs), regionInfo, serveropts)
 			serverpb.RegisterDKVClusterServer(grpcSrvr, dkvSvc.(master.DKVClusterService))
 		} else {
-			dkvSvc = master.NewStandaloneService(kvs, cp, br, regionInfo, serveropts, master.NewDKVServiceStat())
+			dkvSvc = master.NewStandaloneService(kvs, cp, br, regionInfo, serveropts)
 			serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 		}
 		defer dkvSvc.Close()
@@ -230,7 +231,7 @@ func main() {
 			ReplMasterAddr:        replMasterAddr,
 			MaxReplHis:            maxReplHis,
 		}
-		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts, slave.NewStat())
+		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts)
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 		health.RegisterHealthServer(grpcSrvr, dkvSvc)
@@ -443,9 +444,10 @@ func setupStats() {
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
-	statsPublisher = stats.NewStatPublisher()
-	statAggregatorRegistry = stats.NewStatAggregatorRegistry()
-	go statsPublisher.Run()
+	promRegistry = stats.NewPromethousRegistry()
+	statsStreamer = stats.NewStatStreamer()
+	statAggregatorRegistry = aggregate.NewStatAggregatorRegistry()
+	go statsStreamer.Run()
 }
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
@@ -473,7 +475,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			rocksdb.WithRocksDBConfig(dbEngineIni),
 			rocksdb.WithLogger(dkvLogger),
 			rocksdb.WithStats(statsCli),
-			rocksdb.WithPromStats(storage.NewStat()))
+			rocksdb.WithPromStats(promRegistry))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
@@ -488,7 +490,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			badger.WithBadgerConfig(dbEngineIni),
 			badger.WithLogger(dkvLogger),
 			badger.WithStats(statsCli),
-			badger.WithPromStats(storage.NewStat()),
+			badger.WithPromStats(promRegistry),
 		}
 		if disklessMode {
 			bdbOpts = append(bdbOpts, badger.WithInMemory())
@@ -603,11 +605,25 @@ func setupHttpServer() {
 	router := mux.NewRouter()
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
+
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
-	// Should be enabled only for discovery server ?
-	router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
+	if dbRole == "discovery" {
+		// Should be enabled only for discovery server ?
+		router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
+	}
+
+	//Pprof
+	if pprofEnable {
+		log.Printf("[INFO] Enabling pprof...\n")
+		router.HandleFunc("/debug/pprof/", pprof.Index)
+		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
+
 	http.Handle("/", router)
-	http.ListenAndServe(httpServerAddr, nil)
+	http.ListenAndServe(httpListenAddr, nil)
 }
 
 func jsonMetricHandler(w http.ResponseWriter, r *http.Request) {
@@ -629,7 +645,7 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 
 		statChannel := make(chan stats.DKVMetrics, 5)
-		channelId := statsPublisher.Register(statChannel)
+		channelId := statsStreamer.Register(statChannel)
 		defer func() {
 			ioutil.ReadAll(r.Body)
 			r.Body.Close()
@@ -643,7 +659,7 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "data: %s\n\n", statJson)
 				f.Flush()
 			case <-notify:
-				statsPublisher.DeRegister(channelId)
+				statsStreamer.DeRegister(channelId)
 				return
 			}
 		}

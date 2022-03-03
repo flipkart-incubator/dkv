@@ -84,11 +84,7 @@ type stat struct {
 	ReplicationDelay prometheus.Gauge
 }
 
-func NoOpStat() *stat {
-	return nil
-}
-
-func NewStat() *stat {
+func newStat(registry prometheus.Registerer) *stat {
 	replicationLag := prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "slave",
 		Name:      "replication_lag",
@@ -99,8 +95,7 @@ func NewStat() *stat {
 		Name:      "replication_delay",
 		Help:      "replication delay of the slave",
 	})
-	prometheus.MustRegister(replicationLag)
-	prometheus.MustRegister(replicationDelay)
+	registry.MustRegister(replicationLag, replicationDelay)
 	return &stat{
 		ReplicationLag:   replicationLag,
 		ReplicationDelay: replicationDelay,
@@ -113,17 +108,17 @@ func NewStat() *stat {
 // through any of the other key value mutators.
 func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *serverpb.RegionInfo,
 	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter,
-	serveropts *opts.ServerOpts, stat *stat) (DKVService, error) {
+	serveropts *opts.ServerOpts) (DKVService, error) {
 	if store == nil || ca == nil {
 		return nil, errors.New("invalid args - params `store`, `ca` and `replPollInterval` are all mandatory")
 	}
-	return newSlaveService(store, ca, regionInfo, replConf, clusterInfo, serveropts, stat), nil
+	return newSlaveService(store, ca, regionInfo, replConf, clusterInfo, serveropts), nil
 }
 
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
-	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *opts.ServerOpts, stat *stat) *slaveService {
+	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *opts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts, stat: stat}
+	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts, stat: newStat(serveropts.PrometheusRegistry)}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
