@@ -250,12 +250,15 @@ func (ss *slaveService) pollAndApplyChanges() {
 			ss.stat.ReplicationLag.Set(float64(ss.replInfo.replLag))
 			ss.stat.ReplicationDelay.Set(float64(ss.replInfo.replDelay))
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
+				ss.stat.ReplicationStatus.WithLabelValues("no-master").Set(0)
 				ss.serveropts.Logger.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
 					ss.serveropts.Logger.Error("Unable to replace master", zap.Error(err))
 				}
 			}
+			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Set(1)
 		case <-ss.replInfo.replStop:
+			ss.stat.ReplicationStatus.WithLabelValues("no-master").Set(0)
 			ss.serveropts.Logger.Info("Stopping the change poller")
 			break
 		}
@@ -388,7 +391,6 @@ func (ss *slaveService) reconnectMaster() error {
 	// which could otherwise result in slave marking itself active if no errors in replication
 	ss.replInfo.replConfig.ReplMasterAddr = ""
 	ss.replInfo.replActive = false
-	ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Set(0)
 	return ss.findAndConnectToMaster()
 }
 
@@ -401,7 +403,6 @@ func (ss *slaveService) findAndConnectToMaster() error {
 			}
 			ss.replInfo.replCli = replCli
 			ss.replInfo.replConfig.ReplMasterAddr = *master
-			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Set(1)
 			ss.replInfo.replActive = true
 		} else {
 			ss.serveropts.Logger.Warn("Unable to create a replication client", zap.Error(err))
