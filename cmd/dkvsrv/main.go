@@ -76,9 +76,9 @@ func init() {
 
 func initializeFlags() {
 	flag.CommandLine.ParseErrorsWhitelist = flag.ParseErrorsWhitelist{UnknownFlags: true}
-	flag.StringVar(&cfgFile, "config", "", "config file (default is $HOME/dkvconfig.yaml)")
-	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
+	flag.StringVarP(&cfgFile, "config", "c", "", "config file (default is /etc/default/dkvsrv.yaml)")
+	flag.BoolVarP(&verboseLogging, "verbose", "v", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
+	flag.BoolVarP(&pprofEnable, "pprof", "p", false, "Enable pprof profiling")
 }
 
 func main() {

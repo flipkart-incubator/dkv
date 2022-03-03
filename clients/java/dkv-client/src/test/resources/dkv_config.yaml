@@ -1,9 +1,8 @@
 access-logs : ""
-authority : ""
-block-cache-size : 3221225472
 database : "default"
 db-engine : "rocksdb"
 db-engine-ini : ""
+block-cache-size : 3221225472
 root-folder : "/tmp/dkvsrv"
 dc-id : "default"
 disable-auto-master-disc : false

@@ -144,10 +144,10 @@ func loadConfigFile(cfgFile string) {
 		}
 		viper.SetConfigFile(absPath)
 	} else {
-		// Search config in home directory with name "dkvconfig.json"
+		// Search config in /etc/default directory with name "dkvsrv.yaml"
 		viper.AddConfigPath("/etc/default")
 		viper.SetConfigType("yaml")
-		viper.SetConfigName("dkvconfig")
+		viper.SetConfigName("dkvsrv")
 	}
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err == nil {

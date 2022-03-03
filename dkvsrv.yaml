@@ -1,18 +1,15 @@
 node-name : ""
 listen-addr : ""
-
 role : "discovery"
-authority : ""
-block-cache-size : 3221225472
+pprof : false
+statsd-addr : ""
 
 db-engine : "rocksdb"
 db-engine-ini : "rocksdb.ini"
+block-cache-size : 3221225472
 root-folder : "/tmp/dkvsrv"
 db-folder : ""
 diskless : false
-
-pprof : false
-statsd-addr : ""
 
 dc-id : "default"
 vbucket : "default"

@@ -1,7 +1,6 @@
-authority : ""
-block-cache-size : 3221225472
 db-engine : "rocksdb"
 db-engine-ini : ""
+block-cache-size : 3221225472
 root-folder : "/tmp/dkvsrv"
 dc-id : "dc1"
 disable-auto-master-disc : false
