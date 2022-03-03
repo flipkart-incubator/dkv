@@ -90,7 +90,6 @@ var (
 	statsCli      stats.Client
 	promRegistry  prometheus.Registerer
 	statsStreamer *stats.StatStreamer
-	maxReplHis     int
 
 	discoveryClient        discovery.Client
 	statAggregatorRegistry *aggregate.StatAggregatorRegistry
@@ -116,7 +115,6 @@ func init() {
 	flag.StringVar(&replMasterAddr, "repl-master-addr", "", "Service address of DKV master node for replication")
 	flag.BoolVar(&disableAutoMasterDisc, "disable-auto-master-disc", true, "Disable automated master discovery. Suggested to set to true until https://github.com/flipkart-incubator/dkv/issues/82 is fixed")
 	flag.BoolVar(&pprofEnable, "pprof", false, "Enable pprof profiling")
-	flag.IntVar(&maxReplHis, "max-repl-his", 10, "Max replication speed entries to keep in memory. Replication lag will be estimated based on the average of entries present in the history")
 	setDKVDefaultsForNexusDirs()
 }
 
@@ -229,7 +227,6 @@ func main() {
 			MaxActiveReplElapsed:  uint64(replPollInterval.Seconds()) * 10,
 			DisableAutoMasterDisc: disableAutoMasterDisc,
 			ReplMasterAddr:        replMasterAddr,
-			MaxReplHis:            maxReplHis,
 		}
 		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts)
 		defer dkvSvc.Close()

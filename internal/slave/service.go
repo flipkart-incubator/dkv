@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	dto "github.com/prometheus/client_model/go"
 	"io"
 	"math/rand"
 	"strings"
@@ -45,7 +46,6 @@ type ReplicationConfig struct {
 	// Temporary flag to disable automatic master discovery until https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
 	DisableAutoMasterDisc bool
-	MaxReplHis            int
 }
 
 type replInfo struct {
@@ -63,9 +63,6 @@ type replInfo struct {
 	//replDelay is an approximation of the delay in time units of the changes seen
 	// in the master and the same changes seen in the slave
 	replDelay    float64
-	replSpeedHis chan float64
-
-	replSpeedSum float64
 	replSpeedAvg float64
 }
 
@@ -82,6 +79,7 @@ type slaveService struct {
 type stat struct {
 	ReplicationLag   prometheus.Gauge
 	ReplicationDelay prometheus.Gauge
+	ReplicationSpeed prometheus.Histogram
 }
 
 func newStat(registry prometheus.Registerer) *stat {
@@ -95,10 +93,16 @@ func newStat(registry prometheus.Registerer) *stat {
 		Name:      "replication_delay",
 		Help:      "replication delay of the slave",
 	})
-	registry.MustRegister(replicationLag, replicationDelay)
+	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "slave",
+		Name: "replication_speed",
+		Help:      "replication speed of the slave",
+	})
+	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed)
 	return &stat{
 		ReplicationLag:   replicationLag,
 		ReplicationDelay: replicationDelay,
+		ReplicationSpeed: replicationSpeed,
 	}
 }
 
@@ -231,7 +235,6 @@ func (ss *slaveService) startReplication() {
 	latestChngNum, _ := ss.ca.GetLatestAppliedChangeNumber()
 	ss.replInfo.fromChngNum = 1 + latestChngNum
 	ss.replInfo.replStop = make(chan struct{})
-	ss.replInfo.replSpeedHis = make(chan float64, ss.replInfo.replConfig.MaxReplHis)
 	slg := ss.serveropts.Logger.Sugar()
 	slg.Infof("Replicating changes from change number: %d and polling interval: %s", ss.replInfo.fromChngNum, ss.replInfo.replConfig.ReplPollInterval.String())
 	slg.Sync()
@@ -309,15 +312,16 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
-		if len(ss.replInfo.replSpeedHis) == ss.replInfo.replConfig.MaxReplHis {
-			earliestReplSpeed := <-ss.replInfo.replSpeedHis
-			ss.replInfo.replSpeedSum -= earliestReplSpeed
-		}
 		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 {
 			currentReplSpeed := (float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl))
-			ss.replInfo.replSpeedHis <- currentReplSpeed
-			ss.replInfo.replSpeedSum += currentReplSpeed
-			ss.replInfo.replSpeedAvg = ss.replInfo.replSpeedSum / float64(len(ss.replInfo.replSpeedHis))
+			ss.stat.ReplicationSpeed.Observe(currentReplSpeed)
+			metric := &dto.Metric{}
+			if err := ss.stat.ReplicationSpeed.Write(metric); err != nil {
+				ss.serveropts.Logger.Warn("Error while writing out %s metric", zap.String("Metric", "ReplicationSpeed"))
+			}
+			if cnt := metric.Histogram.GetSampleCount(); cnt != 0 {
+				ss.replInfo.replSpeedAvg = metric.Histogram.GetSampleSum() / float64(cnt)
+			}
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
