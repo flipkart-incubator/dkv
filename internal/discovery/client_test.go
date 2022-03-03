@@ -30,6 +30,7 @@ func TestDiscoveryClient(t *testing.T) {
 	dkvSvc, grpcSrvr := serveStandaloneDKVWithDiscovery(discoverySvcPort, &serverpb.RegionInfo{}, dbFolder+"_DC")
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
+	<-time.After(time.Duration(10) * time.Second)
 	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 

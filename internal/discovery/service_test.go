@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
-	"sync"
 	"testing"
 	"time"
 
@@ -167,20 +166,17 @@ func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFold
 	discoverServiceConf := &DiscoveryConfig{StatusTTl: 5, HeartbeatTimeout: 2}
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go listenAndServe(grpcSrvr, port, wg)
-	wg.Wait()
+
+	go listenAndServe(grpcSrvr, port)
 	return dkvSvc, grpcSrvr
 }
 
-func listenAndServe(grpcSrvr *grpc.Server, port int, wg sync.WaitGroup) {
+func listenAndServe(grpcSrvr *grpc.Server, port int) {
 	if lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port)); err != nil {
 		panic(fmt.Sprintf("failed to listen: %v", err))
 	} else {
 		grpcSrvr.Serve(lis)
 	}
-	wg.Done()
 }
 
 func newKVStore(dbDir string) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
