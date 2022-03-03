@@ -95,7 +95,7 @@ func newStat(registry prometheus.Registerer) *stat {
 	})
 	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "slave",
-		Name: "replication_speed",
+		Name:      "replication_speed",
 		Help:      "replication speed of the slave",
 	})
 	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed)
