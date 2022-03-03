@@ -115,7 +115,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *ser
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
 	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *opts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts}
+	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts, stat: newStat(serveropts.PrometheusRegistry)}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
