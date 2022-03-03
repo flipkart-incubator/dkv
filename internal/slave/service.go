@@ -77,8 +77,9 @@ type slaveService struct {
 	stat        *stat
 }
 type stat struct {
-	ReplicationLag   prometheus.Gauge
-	ReplicationDelay prometheus.Gauge
+	ReplicationLag    prometheus.Gauge
+	ReplicationDelay  prometheus.Gauge
+	ReplicationStatus *prometheus.GaugeVec
 }
 
 func newStat(registry prometheus.Registerer) *stat {
@@ -92,10 +93,16 @@ func newStat(registry prometheus.Registerer) *stat {
 		Name:      "replication_delay",
 		Help:      "replication delay of the slave",
 	})
-	registry.MustRegister(replicationLag, replicationDelay)
+	replicationStatus := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "slave",
+		Name:      "replication_status",
+		Help:      "replication status of the slave",
+	}, []string{"masterAddr"})
+	registry.MustRegister(replicationLag, replicationDelay, replicationStatus)
 	return &stat{
 		ReplicationLag:   replicationLag,
 		ReplicationDelay: replicationDelay,
+		ReplicationStatus: replicationStatus,
 	}
 }
 
@@ -381,6 +388,7 @@ func (ss *slaveService) reconnectMaster() error {
 	// which could otherwise result in slave marking itself active if no errors in replication
 	ss.replInfo.replConfig.ReplMasterAddr = ""
 	ss.replInfo.replActive = false
+	ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Set(0)
 	return ss.findAndConnectToMaster()
 }
 
@@ -393,6 +401,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 			}
 			ss.replInfo.replCli = replCli
 			ss.replInfo.replConfig.ReplMasterAddr = *master
+			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Set(1)
 			ss.replInfo.replActive = true
 		} else {
 			ss.serveropts.Logger.Warn("Unable to create a replication client", zap.Error(err))
