@@ -87,7 +87,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency_count{role=\"slave\", ops=\"saveChange\"}",
@@ -148,7 +148,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency_count{role=\"slave\", ops=\"get\"}",
@@ -209,7 +209,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "rate(storage_latency_count{role=\"slave\", ops=\"get\"}[1m])",
@@ -220,7 +220,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "rate(storage_latency_count{role=\"slave\", ops=\"saveChange\"}[1m])",
@@ -276,90 +276,94 @@
       "type": "row"
     },
     {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
+          "unit": "s"
         },
         "overrides": []
       },
+      "fill": 1,
+      "fillGradient": 0,
       "gridPos": {
         "h": 9,
         "w": 12,
         "x": 0,
         "y": 10
       },
+      "hiddenSeries": false,
       "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
       },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
       "pluginVersion": "8.4.0",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "slave_replication_lag",
+          "expr": "slave_replication_delay",
           "interval": "",
           "legendFormat": "ip: {{instance}}",
           "refId": "A"
         }
       ],
+      "thresholds": [],
+      "timeRegions": [],
       "title": "Slave Replication Lag",
-      "type": "timeseries"
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:96",
+          "format": "s",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:97",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
     },
     {
       "fieldConfig": {
@@ -434,7 +438,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_error",
@@ -534,7 +538,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency{ops=\"get\",role=\"slave\"}",
@@ -622,7 +626,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency{ops=\"saveChange\", role=\"slave\"}",
@@ -635,7 +639,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "1s",
+  "refresh": "5s",
   "schemaVersion": 35,
   "style": "dark",
   "tags": [],
@@ -643,7 +647,7 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -664,6 +668,6 @@
   "timezone": "",
   "title": "Dkv Slave Dashboard",
   "uid": "lFpIV2fnk",
-  "version": 14,
+  "version": 1,
   "weekStart": ""
 }

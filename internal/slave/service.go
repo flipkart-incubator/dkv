@@ -310,7 +310,11 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
-		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		if chngsRes.MasterChangeNumber >= actChngNum {
+			ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		} else {
+			ss.replInfo.replLag = 0 //replication lag can be negative when master has returned every change that was available to it
+		}
 		if ss.replInfo.replSpeed-0 > float64(1e-9) {
 			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeed
 		}
