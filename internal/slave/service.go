@@ -315,24 +315,29 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 {
 			currentReplSpeed := (float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl))
 			ss.stat.ReplicationSpeed.Observe(currentReplSpeed)
-			metric := &dto.Metric{}
-			if err := ss.stat.ReplicationSpeed.Write(metric); err != nil {
-				ss.serveropts.Logger.Warn("Error while writing out %s metric", zap.String("Metric", "ReplicationSpeed"))
-			}
-			if cnt := metric.Histogram.GetSampleCount(); cnt != 0 {
-				ss.replInfo.replSpeedAvg = metric.Histogram.GetSampleSum() / float64(cnt)
-			}
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
 		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
-		if ss.replInfo.replSpeedAvg > float64(1e-9) {
-			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeedAvg
+		metric := getReplicationSpeed(ss)
+		if cnt := metric.Histogram.GetSampleCount(); cnt != 0 {
+			ss.replInfo.replSpeedAvg = metric.Histogram.GetSampleSum() / float64(cnt)
+			if ss.replInfo.replSpeedAvg > float64(1e-9) {
+				ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeedAvg
+			}
 		}
 	} else {
 		ss.serveropts.Logger.Info("Not received any changes from master")
 	}
 	return nil
+}
+
+func getReplicationSpeed(ss *slaveService) *dto.Metric {
+	metric := &dto.Metric{}
+	if err := ss.stat.ReplicationSpeed.Write(metric); err != nil {
+		ss.serveropts.Logger.Warn("Error while writing out %s metric", zap.String("Metric", "ReplicationSpeed"))
+	}
+	return metric
 }
 
 func newErrorStatus(err error) *serverpb.Status {
