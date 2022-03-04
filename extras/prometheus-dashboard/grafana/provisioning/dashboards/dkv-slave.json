@@ -56,6 +56,8 @@
       "legend": {
         "avg": false,
         "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
         "max": false,
         "min": false,
         "show": true,
@@ -83,10 +85,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "exemplar": true,
-          "expr": "rate(slave_replication_status_count{role=\"slave\"}[1m])",
+          "exemplar": false,
+          "expr": "rate(slave_replication_status_count{role=\"slave\",masterAddr!=\"no-master\"}[1m])",
+          "hide": false,
           "instant": false,
           "interval": "",
+          "intervalFactor": 10,
           "legendFormat": "Master: {{masterAddr}}",
           "refId": "A"
         }
@@ -240,10 +244,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           }
@@ -746,7 +746,7 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
