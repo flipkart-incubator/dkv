@@ -554,12 +554,10 @@ func (ds *distributedService) GetStatus(context context.Context, request *emptyp
 			regionInfo.Status = serverpb.RegionStatus_PRIMARY_FOLLOWER
 		}
 	}
-	ds.opts.Logger.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
 	return regionInfo, nil
 }
 
 func (ds *distributedService) Check(ctx context.Context, healthCheckReq *health.HealthCheckRequest) (*health.HealthCheckResponse, error) {
-	regionInfo := ds.DKVService.(*standaloneService).regionInfo
 	if ds.isClosed {
 		return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 	} else {
@@ -572,7 +570,6 @@ func (ds *distributedService) Check(ctx context.Context, healthCheckReq *health.
 			return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 		}
 	}
-	ds.opts.Logger.Debug("Current Info", zap.String("Status", regionInfo.Status.String()))
 	return &health.HealthCheckResponse{Status: health.HealthCheckResponse_NOT_SERVING}, nil
 }
 
