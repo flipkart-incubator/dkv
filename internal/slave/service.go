@@ -62,8 +62,6 @@ type replInfo struct {
 	//replDelay is an approximation of the delay in time units of the changes seen
 	// in the master and the same changes seen in the slave
 	replDelay float64
-	//replSpeed is an approximation of the rate at which the slave applies the changes
-	replSpeed float64
 }
 
 type slaveService struct {
@@ -316,8 +314,9 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
+		replSpeed := float64(0)
 		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 {
-			ss.replInfo.replSpeed = float64(actChngNum-ss.replInfo.fromChngNum) / float64((hlc.UnixNow() - ss.replInfo.lastReplTime))
+			replSpeed = float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl)
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
@@ -326,8 +325,8 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		} else {
 			ss.replInfo.replLag = 0 //replication lag can be negative when master has returned every change that was available to it
 		}
-		if ss.replInfo.replSpeed-0 > float64(1e-9) {
-			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeed
+		if replSpeed > float64(1e-9) {
+			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / replSpeed
 		}
 	} else {
 		ss.serveropts.Logger.Info("Not received any changes from master")
