@@ -1,6 +1,6 @@
 node-name : ""
 listen-addr : ""
-role : "discovery"
+role : "master"
 pprof : false
 statsd-addr : ""
 

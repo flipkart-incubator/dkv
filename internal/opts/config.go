@@ -65,8 +65,6 @@ type Config struct {
 	NexusSnapshotCount          int    `mapstructure:"nexus-snapshot-count" desc:"Number of committed transactions to trigger a snapshot to disk"`
 }
 
-var AppRole string
-
 func (c *Config) parseConfig() {
 	viper.Unmarshal(c)
 	//Handling time duration variable unmarshalling
