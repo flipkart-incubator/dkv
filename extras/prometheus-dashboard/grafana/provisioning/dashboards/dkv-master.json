@@ -21,7 +21,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 5,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -110,7 +109,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency{role=\"master\", Ops=\"put\",quantile=\"0.5\"}",
@@ -121,7 +120,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency{role=\"master\", Ops=\"put\",quantile=\"0.9\"}",
@@ -133,7 +132,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency{role=\"master\", Ops=\"put\",quantile=\"0.99\"}",
@@ -220,7 +219,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency{role=\"master\", Ops=\"iter\",quantile=\"0.5\"}",
@@ -231,7 +230,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency{role=\"master\", Ops=\"iter\",quantile=\"0.9\"}",
@@ -243,7 +242,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency{role=\"master\", Ops=\"iter\",quantile=\"0.99\"}",
@@ -314,7 +313,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency_count{role=\"master\", Ops=\"put\"}",
@@ -371,7 +370,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "dkv_latency_count{role=\"master\", Ops=\"iter\"}",
@@ -453,7 +452,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "rate(dkv_latency_count{role=\"master\", Ops=\"put\"}[1m])",
@@ -535,7 +534,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "rate(dkv_latency_count{role=\"master\", Ops=\"iter\"}[1m])",
@@ -548,7 +547,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "1s",
+  "refresh": "5s",
   "schemaVersion": 35,
   "style": "dark",
   "tags": [],
@@ -577,6 +576,6 @@
   "timezone": "",
   "title": "DKV Master Dashboard",
   "uid": "k1FFJEBnk",
-  "version": 4,
+  "version": 1,
   "weekStart": ""
 }

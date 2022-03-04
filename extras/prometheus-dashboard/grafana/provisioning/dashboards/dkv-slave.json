@@ -32,6 +32,199 @@
         "x": 0,
         "y": 0
       },
+      "id": 24,
+      "panels": [],
+      "title": "Replication Details",
+      "type": "row"
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "description": "Replication Status of the Slave",
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "hiddenSeries": false,
+      "id": 22,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.4.3",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": false,
+          "expr": "rate(slave_replication_status_count{role=\"slave\",masterAddr!=\"no-master\"}[1m])",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 10,
+          "legendFormat": "Master: {{masterAddr}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Replication Status",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:47",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:48",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "hiddenSeries": false,
+      "id": 2,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "alertThreshold": true
+      },
+      "percentage": false,
+      "pluginVersion": "8.4.3",
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "exemplar": true,
+          "expr": "slave_replication_delay",
+          "interval": "",
+          "legendFormat": "ip: {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeRegions": [],
+      "title": "Slave Replication Lag",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "mode": "time",
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:96",
+          "format": "s",
+          "logBase": 1,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:97",
+          "format": "short",
+          "logBase": 1,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
       "id": 14,
       "panels": [],
       "title": "Count Metrics",
@@ -51,10 +244,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           }
@@ -65,7 +254,7 @@
         "h": 8,
         "w": 9,
         "x": 0,
-        "y": 1
+        "y": 10
       },
       "id": 20,
       "options": {
@@ -82,12 +271,12 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency_count{role=\"slave\", ops=\"saveChange\"}",
@@ -126,7 +315,7 @@
         "h": 8,
         "w": 7,
         "x": 9,
-        "y": 1
+        "y": 10
       },
       "id": 12,
       "options": {
@@ -143,12 +332,12 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency_count{role=\"slave\", ops=\"get\"}",
@@ -177,7 +366,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 1
+        "y": 10
       },
       "hiddenSeries": false,
       "id": 8,
@@ -197,7 +386,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -209,7 +398,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "rate(storage_latency_count{role=\"slave\", ops=\"get\"}[1m])",
@@ -220,7 +409,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "rate(storage_latency_count{role=\"slave\", ops=\"saveChange\"}[1m])",
@@ -268,7 +457,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 18
       },
       "id": 18,
       "panels": [],
@@ -330,93 +519,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 10
-      },
-      "id": 2,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "8.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "cOmdlDB7z"
-          },
-          "exemplar": true,
-          "expr": "slave_replication_lag",
-          "interval": "",
-          "legendFormat": "ip: {{instance}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Slave Replication Lag",
-      "type": "timeseries"
-    },
-    {
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 10
+        "y": 19
       },
       "id": 10,
       "options": {
@@ -434,7 +537,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_error",
@@ -452,7 +555,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 28
       },
       "id": 16,
       "panels": [],
@@ -515,7 +618,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 29
       },
       "id": 4,
       "options": {
@@ -534,7 +637,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency{ops=\"get\",role=\"slave\"}",
@@ -603,7 +706,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 29
       },
       "id": 6,
       "options": {
@@ -622,7 +725,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "cOmdlDB7z"
+            "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
           "expr": "storage_latency{ops=\"saveChange\", role=\"slave\"}",
@@ -635,7 +738,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "1s",
+  "refresh": "5s",
   "schemaVersion": 35,
   "style": "dark",
   "tags": [],
@@ -643,7 +746,7 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
@@ -664,6 +767,6 @@
   "timezone": "",
   "title": "Dkv Slave Dashboard",
   "uid": "lFpIV2fnk",
-  "version": 14,
+  "version": 2,
   "weekStart": ""
 }

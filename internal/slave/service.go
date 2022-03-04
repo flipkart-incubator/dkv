@@ -63,7 +63,6 @@ type replInfo struct {
 	//replDelay is an approximation of the delay in time units of the changes seen
 	// in the master and the same changes seen in the slave
 	replDelay    float64
-	replSpeedAvg float64
 }
 
 type slaveService struct {
@@ -77,8 +76,9 @@ type slaveService struct {
 	stat        *stat
 }
 type stat struct {
-	ReplicationLag   prometheus.Gauge
-	ReplicationDelay prometheus.Gauge
+	ReplicationLag    prometheus.Gauge
+	ReplicationDelay  prometheus.Gauge
+	ReplicationStatus *prometheus.SummaryVec
 	ReplicationSpeed prometheus.Histogram
 }
 
@@ -93,15 +93,22 @@ func newStat(registry prometheus.Registerer) *stat {
 		Name:      "replication_delay",
 		Help:      "replication delay of the slave",
 	})
+	replicationStatus := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace: "slave",
+		Name:      "replication_status",
+		Help:      "replication status of the slave",
+		MaxAge:    5 * time.Second,
+	}, []string{"masterAddr"})
 	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "slave",
 		Name:      "replication_speed",
 		Help:      "replication speed of the slave",
 	})
-	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed)
+	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed, replicationStatus)
 	return &stat{
 		ReplicationLag:   replicationLag,
 		ReplicationDelay: replicationDelay,
+		ReplicationStatus: replicationStatus,
 		ReplicationSpeed: replicationSpeed,
 	}
 }
@@ -248,14 +255,17 @@ func (ss *slaveService) pollAndApplyChanges() {
 			ss.serveropts.Logger.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
 			ss.serveropts.StatsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
 			ss.stat.ReplicationLag.Set(float64(ss.replInfo.replLag))
-			ss.stat.ReplicationDelay.Set(float64(ss.replInfo.replDelay))
+			ss.stat.ReplicationDelay.Set(ss.replInfo.replDelay)
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
+				ss.stat.ReplicationStatus.WithLabelValues("no-master").Observe(1)
 				ss.serveropts.Logger.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
 					ss.serveropts.Logger.Error("Unable to replace master", zap.Error(err))
 				}
 			}
+			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Observe(1)
 		case <-ss.replInfo.replStop:
+			ss.stat.ReplicationStatus.WithLabelValues("no-master").Observe(0)
 			ss.serveropts.Logger.Info("Stopping the change poller")
 			break
 		}
@@ -318,12 +328,16 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
-		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		if chngsRes.MasterChangeNumber >= actChngNum {
+			ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		} else {
+			ss.replInfo.replLag = 0 //replication lag can be negative when master has returned every change that was available to it
+		}
 		metric := getReplicationSpeed(ss)
 		if cnt := metric.Histogram.GetSampleCount(); cnt != 0 {
-			ss.replInfo.replSpeedAvg = metric.Histogram.GetSampleSum() / float64(cnt)
-			if ss.replInfo.replSpeedAvg > float64(1e-9) {
-				ss.replInfo.replDelay = float64(ss.replInfo.replLag) / ss.replInfo.replSpeedAvg
+			replSpeedAvg := metric.Histogram.GetSampleSum() / float64(cnt)
+			if replSpeedAvg > float64(1e-9) {
+				ss.replInfo.replDelay = float64(ss.replInfo.replLag) / replSpeedAvg
 			}
 		}
 	} else {
