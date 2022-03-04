@@ -1,33 +1,36 @@
-node-name : ""
-listen-addr : ""
-role : "master"
-pprof : false
-statsd-addr : ""
 
-db-engine : "rocksdb"
-db-engine-ini : "rocksdb.ini"
-block-cache-size : 3221225472
-root-folder : "/tmp/dkvsrv"
-db-folder : ""
-diskless : false
+node-name : ""                  #Name of the current Node Name
+listen-addr : "0.0.0.0:8080"    #listen address
+role : "master"                 #Role of the node - master|slave|standalone
+pprof : false                   #Enable profiling
+statsd-addr : ""                #StatsdD Address
+verbose : false                 # Enable verbose logging. By default, only warnings and errors are logged.
 
-dc-id : "default"
-vbucket : "default"
-database : "default"
-verbose : false
+db-engine : "rocksdb"           #Underlying DB engine for storing data - badger|rocksdb
+db-engine-ini : "rocksdb.ini"   #An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.
+block-cache-size : 3221225472   #Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.
+root-folder : "/tmp/dkvsrv"     #Root Dir (optional) used to derive db-folder if db folder is not defined
+db-folder : ""                  # DB folder path for storing data files
+diskless : false                # Enables badger diskless mode where data is stored entirely in memory.
+
+dc-id : "default"     # DC / Availability zone identifier
+vbucket : "default"   # Database identifier
+database : "default"  # vBucket identifier
+
 
 disable-auto-master-disc : false
 discovery-service-config : "internal/discovery/discovery.ini"
-repl-master-addr : ""
-repl-poll-interval : "5s"
+repl-master-addr : ""         #Service address of DKV master node for replication
+repl-poll-interval : "5s"     #Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.
 
-nexus-cluster-name : ""
-nexus-cluster-url : ""
-nexus-log-dir : ""
-nexus-snap-dir : ""
-nexus-max-snapshots : 5
-nexus-max-wals : 5
-nexus-repl-timeout : 5
-nexus-lease-based-reads : true
-nexus-snapshot-count : 100000
-nexus-snapshot-catchup-entries : 10000
+nexus-cluster-name : ""                   # Nexus Cluster Name
+nexus-node-url : ""                       # Node url (optional), will be auto derived from cluster-url
+nexus-cluster-url : ""                    # Comma separated list of Nexus URLs of other nodes in the cluster
+nexus-log-dir : ""                        # Dir for storing RAFT logs
+nexus-snap-dir : ""                       # Dir for storing RAFT snapshots
+nexus-max-snapshots : 5                   # Maximum number of snapshot files to retain (0 is unlimited)
+nexus-max-wals : 5                        # Maximum number of WAL files to retain (0 is unlimited)
+nexus-repl-timeout : 5                    # Replication timeout in seconds
+nexus-lease-based-reads : true            # Perform reads using RAFT leader leases
+nexus-snapshot-count : 100000             # Number of committed transactions to trigger a snapshot to disk
+nexus-snapshot-catchup-entries : 10000    # Number of entries for a slow follower to catch-up after compacting the raft storage entries
