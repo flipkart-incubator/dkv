@@ -69,7 +69,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -84,10 +84,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "slave_replication_status{role=\"slave\"}",
+          "expr": "rate(slave_replication_status_count{role=\"slave\"}[1m])",
           "instant": false,
           "interval": "",
-          "legendFormat": "Replication Address: {{masterAddr}}",
+          "legendFormat": "Master: {{masterAddr}}",
           "refId": "A"
         }
       ],
@@ -160,7 +160,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -271,7 +271,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "targets": [
         {
           "datasource": {
@@ -332,7 +332,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "targets": [
         {
           "datasource": {
@@ -386,7 +386,7 @@
         "alertThreshold": true
       },
       "percentage": false,
-      "pluginVersion": "8.4.0",
+      "pluginVersion": "8.4.3",
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
@@ -767,6 +767,6 @@
   "timezone": "",
   "title": "Dkv Slave Dashboard",
   "uid": "lFpIV2fnk",
-  "version": 4,
+  "version": 2,
   "weekStart": ""
 }
