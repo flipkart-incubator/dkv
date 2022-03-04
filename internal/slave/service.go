@@ -79,7 +79,7 @@ type slaveService struct {
 type stat struct {
 	ReplicationLag    prometheus.Gauge
 	ReplicationDelay  prometheus.Gauge
-	ReplicationStatus *prometheus.GaugeVec
+	ReplicationStatus *prometheus.SummaryVec
 }
 
 func newStat(registry prometheus.Registerer) *stat {
@@ -93,10 +93,11 @@ func newStat(registry prometheus.Registerer) *stat {
 		Name:      "replication_delay",
 		Help:      "replication delay of the slave",
 	})
-	replicationStatus := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	replicationStatus := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: "slave",
 		Name:      "replication_status",
 		Help:      "replication status of the slave",
+		MaxAge: 	5*time.Second,
 	}, []string{"masterAddr"})
 	registry.MustRegister(replicationLag, replicationDelay, replicationStatus)
 	return &stat{
@@ -248,17 +249,17 @@ func (ss *slaveService) pollAndApplyChanges() {
 			ss.serveropts.Logger.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
 			ss.serveropts.StatsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
 			ss.stat.ReplicationLag.Set(float64(ss.replInfo.replLag))
-			ss.stat.ReplicationDelay.Set(float64(ss.replInfo.replDelay))
+			ss.stat.ReplicationDelay.Set(ss.replInfo.replDelay)
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
-				ss.stat.ReplicationStatus.WithLabelValues("no-master").Set(0)
+				ss.stat.ReplicationStatus.WithLabelValues("no-master").Observe(1)
 				ss.serveropts.Logger.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
 					ss.serveropts.Logger.Error("Unable to replace master", zap.Error(err))
 				}
 			}
-			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Set(1)
+			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Observe(1)
 		case <-ss.replInfo.replStop:
-			ss.stat.ReplicationStatus.WithLabelValues("no-master").Set(0)
+			ss.stat.ReplicationStatus.WithLabelValues("no-master").Observe(0)
 			ss.serveropts.Logger.Info("Stopping the change poller")
 			break
 		}
