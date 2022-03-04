@@ -62,7 +62,7 @@ type replInfo struct {
 	fromChngNum  uint64
 	//replDelay is an approximation of the delay in time units of the changes seen
 	// in the master and the same changes seen in the slave
-	replDelay    float64
+	replDelay float64
 }
 
 type slaveService struct {
@@ -79,7 +79,7 @@ type stat struct {
 	ReplicationLag    prometheus.Gauge
 	ReplicationDelay  prometheus.Gauge
 	ReplicationStatus *prometheus.SummaryVec
-	ReplicationSpeed prometheus.Histogram
+	ReplicationSpeed  prometheus.Histogram
 }
 
 func newStat(registry prometheus.Registerer) *stat {
@@ -106,10 +106,10 @@ func newStat(registry prometheus.Registerer) *stat {
 	})
 	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed, replicationStatus)
 	return &stat{
-		ReplicationLag:   replicationLag,
-		ReplicationDelay: replicationDelay,
+		ReplicationLag:    replicationLag,
+		ReplicationDelay:  replicationDelay,
 		ReplicationStatus: replicationStatus,
-		ReplicationSpeed: replicationSpeed,
+		ReplicationSpeed:  replicationSpeed,
 	}
 }
 
