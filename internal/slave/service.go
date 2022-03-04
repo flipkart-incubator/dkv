@@ -97,12 +97,12 @@ func newStat(registry prometheus.Registerer) *stat {
 		Namespace: "slave",
 		Name:      "replication_status",
 		Help:      "replication status of the slave",
-		MaxAge: 	5*time.Second,
+		MaxAge:    5 * time.Second,
 	}, []string{"masterAddr"})
 	registry.MustRegister(replicationLag, replicationDelay, replicationStatus)
 	return &stat{
-		ReplicationLag:   replicationLag,
-		ReplicationDelay: replicationDelay,
+		ReplicationLag:    replicationLag,
+		ReplicationDelay:  replicationDelay,
 		ReplicationStatus: replicationStatus,
 	}
 }
