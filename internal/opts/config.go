@@ -65,6 +65,8 @@ type Config struct {
 	NexusSnapshotCount          int    `mapstructure:"nexus-snapshot-count" desc:"Number of committed transactions to trigger a snapshot to disk"`
 }
 
+var AppRole string
+
 func (c *Config) parseConfig() {
 	viper.Unmarshal(c)
 	//Handling time duration variable unmarshalling
@@ -161,7 +163,7 @@ func loadConfigFile(cfgFile string) {
 
 func applyConfigOverrides() {
 	flag.CommandLine.VisitUnknowns(func(f *flag.Flag) {
-		// Apply the viper config value to the flag when the flag is not set and viper has a value
+		// Apply the flag override value to viper config
 		val := fmt.Sprintf("%v", f.Value.String())
 		viper.Set(f.Name, val)
 	})
