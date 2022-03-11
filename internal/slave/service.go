@@ -333,9 +333,9 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		} else {
 			ss.replInfo.replLag = 0 //replication lag can be negative when master has returned every change that was available to it
 		}
-		metric := getReplicationSpeed(ss)
-		if cnt := metric.Histogram.GetSampleCount(); cnt != 0 {
-			replSpeedAvg := metric.Histogram.GetSampleSum() / float64(cnt)
+		replicationSpeedMetric := getReplicationSpeed(ss)
+		if cnt := replicationSpeedMetric.Histogram.GetSampleCount(); cnt != 0 {
+			replSpeedAvg := replicationSpeedMetric.Histogram.GetSampleSum() / float64(cnt)
 			if replSpeedAvg > float64(1e-9) {
 				ss.replInfo.replDelay = float64(ss.replInfo.replLag) / replSpeedAvg
 			}
