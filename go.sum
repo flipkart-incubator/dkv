@@ -145,8 +145,8 @@ github.com/golang/protobuf v1.5.2/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiu
 github.com/golang/snappy v0.0.3 h1:fHPg5GQYlCeLIPB9BZqMVR5nR9A+IM5zcgeTdjMYmLA=
 github.com/golang/snappy v0.0.3/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/golang/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
-github.com/golang/sys v0.0.0-20200317113312-5766fd39f98d h1:8zzUweJJxbKvLGxvjbyJsIimIUysmU3Xa27wwAG04s0=
-github.com/golang/sys v0.0.0-20200317113312-5766fd39f98d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+github.com/golang/sys v0.0.0-20220310020820-b874c991c1a5 h1:BJEhJHdNKl0UDOK9HTOhDHmPmAV3CvB+mfsh+OygQ/4=
+github.com/golang/sys v0.0.0-20220310020820-b874c991c1a5/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 github.com/golang/text v0.3.2 h1:vDAeTQXl8YUdGoj2vMsMnzHi1xMJJ9S7iwnTBFL/pkA=
 github.com/golang/text v0.3.2/go.mod h1:bEr9sfX3Q8Zfm5fL9x+3itogRgK3+ptLWKqgva+5dAk=
 github.com/golang/time v0.0.0-20191024005414-555d28b269f0 h1:8LAe3AOjYRZ+rwtmaFpElkTVP8B2lJoz6ciN97t0u+A=
