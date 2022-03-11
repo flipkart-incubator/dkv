@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	dto "github.com/prometheus/client_model/go"
 	"io"
 	"math/rand"
 	"strings"
@@ -78,6 +79,7 @@ type stat struct {
 	ReplicationLag    prometheus.Gauge
 	ReplicationDelay  prometheus.Gauge
 	ReplicationStatus *prometheus.SummaryVec
+	ReplicationSpeed  prometheus.Histogram
 }
 
 func newStat(registry prometheus.Registerer) *stat {
@@ -97,11 +99,17 @@ func newStat(registry prometheus.Registerer) *stat {
 		Help:      "replication status of the slave",
 		MaxAge:    5 * time.Second,
 	}, []string{"masterAddr"})
-	registry.MustRegister(replicationLag, replicationDelay, replicationStatus)
+	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "slave",
+		Name:      "replication_speed",
+		Help:      "replication speed of the slave",
+	})
+	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed, replicationStatus)
 	return &stat{
 		ReplicationLag:    replicationLag,
 		ReplicationDelay:  replicationDelay,
 		ReplicationStatus: replicationStatus,
+		ReplicationSpeed:  replicationSpeed,
 	}
 }
 
@@ -314,9 +322,9 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
-		replSpeed := float64(0)
 		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 {
-			replSpeed = float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl)
+			currentReplSpeed := (float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl))
+			ss.stat.ReplicationSpeed.Observe(currentReplSpeed)
 		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
@@ -325,13 +333,25 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		} else {
 			ss.replInfo.replLag = 0 //replication lag can be negative when master has returned every change that was available to it
 		}
-		if replSpeed > float64(1e-9) {
-			ss.replInfo.replDelay = float64(ss.replInfo.replLag) / replSpeed
+		metric := getReplicationSpeed(ss)
+		if cnt := metric.Histogram.GetSampleCount(); cnt != 0 {
+			replSpeedAvg := metric.Histogram.GetSampleSum() / float64(cnt)
+			if replSpeedAvg > float64(1e-9) {
+				ss.replInfo.replDelay = float64(ss.replInfo.replLag) / replSpeedAvg
+			}
 		}
 	} else {
 		ss.serveropts.Logger.Info("Not received any changes from master")
 	}
 	return nil
+}
+
+func getReplicationSpeed(ss *slaveService) *dto.Metric {
+	metric := &dto.Metric{}
+	if err := ss.stat.ReplicationSpeed.Write(metric); err != nil {
+		ss.serveropts.Logger.Warn("Error while writing out %s metric", zap.String("Metric", "ReplicationSpeed"))
+	}
+	return metric
 }
 
 func newErrorStatus(err error) *serverpb.Status {
