@@ -1,7 +1,7 @@
 
 node-name : ""                  #Name of the current Node Name
 listen-addr : "0.0.0.0:8080"    #listen address
-role : "none"                 #Role of the node - master|slave|standalone
+role : "none"                   #Role of the node - master|slave|standalone
 pprof : false                   #Enable profiling
 statsd-addr : ""                #StatsdD Address
 verbose : false                 # Enable verbose logging. By default, only warnings and errors are logged.
