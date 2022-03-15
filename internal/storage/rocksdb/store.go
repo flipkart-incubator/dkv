@@ -380,6 +380,10 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
+func (rdb *rocksDB) DBSize() (int64, error) {
+	return 0, nil
+}
+
 const (
 	sstPrefix               = "rocksdb-sstfile-"
 	sstDefaultCF            = "/default.cf"
