@@ -429,6 +429,7 @@ func (rdb *rocksDB) generateSST(snap *gorocksdb.Snapshot, cf *gorocksdb.ColumnFa
 type checkPointSnapshot struct {
 	tar *utils.StreamingTar
 	dir string
+	lgr *zap.Logger
 }
 
 func (r *checkPointSnapshot) Read(p []byte) (n int, err error) {
@@ -436,6 +437,7 @@ func (r *checkPointSnapshot) Read(p []byte) (n int, err error) {
 }
 
 func (r *checkPointSnapshot) Close() error {
+	r.lgr.Info(fmt.Sprintf("GetSnapshot: Closing snapshot, will delete folder %s", r.dir))
 	r.tar.Close()
 	return os.RemoveAll(r.dir)
 }
@@ -497,7 +499,7 @@ func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 		rdb.opts.lgr.Error("GetSnapshot: Failed to archive checkpoint files", zap.Error(err))
 		return nil, err
 	}
-	return &checkPointSnapshot{tar: tarF, dir: sstDir}, nil
+	return &checkPointSnapshot{tar: tarF, dir: sstDir, lgr: rdb.opts.lgr}, nil
 }
 
 func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {

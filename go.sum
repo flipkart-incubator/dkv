@@ -92,8 +92,8 @@ github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4 h1:9zPLm5QKcBp5xUOBMWhRZPU+iwfl6xJtbSmbazmgy2g=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
-github.com/flipkart-incubator/nexus v0.0.0-20220303113731-529d5203982c h1:jTj5fpxO7d5O4k5Kq0svH4DFUQP1nDLSzRTJt7Aiuek=
-github.com/flipkart-incubator/nexus v0.0.0-20220303113731-529d5203982c/go.mod h1:B85NLNwdayqmodWfNcJXZEBelZ7LXHee6jyRDdrfoyY=
+github.com/flipkart-incubator/nexus v0.0.0-20220316072727-c44c4b25144a h1:PrHQUQEqNV0tP8j9yvJWJkOwVLTwcsxqvt33dpWxt4Q=
+github.com/flipkart-incubator/nexus v0.0.0-20220316072727-c44c4b25144a/go.mod h1:eEnRO5Yjl4OgxHbLjtmGdx/iQSgUqtLEOEGEGhka8Wo=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.5.1 h1:mZcQUHVQUQWoPXXtuf9yuEXKudkV2sx1E06UadKWpgI=
 github.com/fsnotify/fsnotify v1.5.1/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5Ai1i3InKU=
@@ -144,6 +144,7 @@ github.com/golang/protobuf v1.5.2 h1:ROPKBNFfQgOUMifHyP+KYbvpjbdoFNs+aK7DXlji0Tw
 github.com/golang/protobuf v1.5.2/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiuN0vRsmY=
 github.com/golang/snappy v0.0.3 h1:fHPg5GQYlCeLIPB9BZqMVR5nR9A+IM5zcgeTdjMYmLA=
 github.com/golang/snappy v0.0.3/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
+github.com/golang/sync v0.0.0-20190911185100-cd5d95a43a6e h1:Wi0y4ZAnk+WvzvZ26frs641N6DpG0e5Se3whDjLs9zU=
 github.com/golang/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 github.com/golang/sys v0.0.0-20220310020820-b874c991c1a5 h1:BJEhJHdNKl0UDOK9HTOhDHmPmAV3CvB+mfsh+OygQ/4=
 github.com/golang/sys v0.0.0-20220310020820-b874c991c1a5/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
