@@ -11,7 +11,7 @@ require (
 	github.com/dgraph-io/ristretto v0.0.3 // indirect
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4
-	github.com/flipkart-incubator/nexus v0.0.0-20220303113731-529d5203982c
+	github.com/flipkart-incubator/nexus v0.0.0-20220316072727-c44c4b25144a
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2 // indirect
