@@ -26,6 +26,7 @@ var cmds = []*cmd{
 	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
 	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
 	{"keys", "\"*\" | <prefix> [<startKey>]", "Get keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).keys, "", false},
+	{"dbsize", "", "Get DBSize", (*cmd).size, "", true},
 	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
 	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
@@ -169,6 +170,10 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 			fmt.Printf("Unable to remove node with URL: %s. Error: %v\n", nodeURL, err)
 		}
 	}
+}
+
+func (c *cmd) size(client *ctl.DKVClient, args ...string) {
+	fmt.Printf("Not Implemented\n")
 }
 
 func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
