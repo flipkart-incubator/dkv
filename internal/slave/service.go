@@ -109,8 +109,13 @@ func (ss *slaveService) CompareAndSet(_ context.Context, _ *serverpb.CompareAndS
 }
 
 func (ss *slaveService) GetKeySpaceSize(ctx context.Context, empty *emptypb.Empty) (*serverpb.KeySpaceSizeResponse, error) {
-	//TODO implement me
-	panic("implement me")
+	dbSizeResults, err := ss.store.GetKeySpaceSize()
+	res := &serverpb.KeySpaceSizeResponse{Status: newEmptyStatus(), DbSize: dbSizeResults}
+	if err != nil {
+		res.Status = newErrorStatus(err)
+	}
+	res.DbSize = dbSizeResults
+	return res, err
 }
 
 func (ss *slaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
