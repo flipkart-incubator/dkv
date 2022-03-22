@@ -174,6 +174,20 @@ func (ss *standaloneService) CompareAndSet(ctx context.Context, casReq *serverpb
 	return res, err
 }
 
+func (ss *standaloneService) GetKeySpaceSize(ctx context.Context, e *emptypb.Empty) (*serverpb.KeySpaceSizeResponse, error) {
+	ss.rwl.RLock()
+	defer ss.rwl.RUnlock()
+
+	dbSizeResults, err := ss.store.GetKeySpaceSize()
+	res := &serverpb.KeySpaceSizeResponse{Status: newEmptyStatus(), DbSize: dbSizeResults}
+	if err != nil {
+		ss.opts.Logger.Error("Unable to fetch DBKeySpaceSize", zap.Error(err))
+		res.Status = newErrorStatus(err)
+	}
+	res.DbSize = dbSizeResults
+	return res, err
+}
+
 func (ss *standaloneService) GetChanges(ctx context.Context, getChngsReq *serverpb.GetChangesRequest) (*serverpb.GetChangesResponse, error) {
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
@@ -415,6 +429,10 @@ func (ds *distributedService) CompareAndSet(ctx context.Context, casReq *serverp
 	// '0' indicates CAS update was successful
 	res.Updated = casRes[0] == 0
 	return res, err
+}
+
+func (ds *distributedService) GetKeySpaceSize(ctx context.Context, req *emptypb.Empty) (*serverpb.KeySpaceSizeResponse, error) {
+	return nil, nil
 }
 
 func (ds *distributedService) Delete(ctx context.Context, delReq *serverpb.DeleteRequest) (*serverpb.DeleteResponse, error) {

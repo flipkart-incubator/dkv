@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -378,6 +379,17 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+func (rdb *rocksDB) GetKeySpaceSize() (int64, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.property.latency.dbSize", time.Now())
+	keySize := rdb.db.GetProperty("rocksdb.estimate-num-keys")
+	dbKeySize, err := strconv.ParseInt(keySize, 10, 64)
+	if err != nil {
+		rdb.opts.statsCli.Incr("rocksdb.property.latency.dbSize", 1)
+		return 0, err
+	}
+	return dbKeySize, nil
 }
 
 const (

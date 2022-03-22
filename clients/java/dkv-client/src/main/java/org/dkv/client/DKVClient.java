@@ -280,6 +280,12 @@ public interface DKVClient extends Closeable {
      */
     Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref);
 
+    /**
+     * This methods returns the approximate count of keys in the DKV database
+     * @return retunrn the count of keys
+     */
+    long getDbSize();
+
     @Override
     void close();
 }

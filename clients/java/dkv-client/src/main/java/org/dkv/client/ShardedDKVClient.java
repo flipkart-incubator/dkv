@@ -261,6 +261,12 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
+    public long getDbSize() {
+        //TODO: implement this behaviour
+        return 0;
+    }
+
+    @Override
     public void close() {
         pool.close();
     }

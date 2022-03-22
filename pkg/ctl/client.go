@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/nexus/models"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"time"
 
@@ -260,6 +261,13 @@ func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, e
 		}
 	}()
 	return ch, nil
+}
+
+// GetDbSize returns the approximate count of the number of the keys in the db
+func (dkvClnt *DKVClient) GetDbSize() (*serverpb.KeySpaceSizeResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	defer cancel()
+	return dkvClnt.dkvCli.GetKeySpaceSize(ctx, &emptypb.Empty{})
 }
 
 // Close closes the underlying GRPC client connection to DKV service

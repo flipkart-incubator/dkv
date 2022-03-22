@@ -205,6 +205,10 @@ func (ms *memStore) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return true, nil
 }
 
+func (ms *memStore) GetKeySpaceSize() (int64, error) {
+	return 0, nil
+}
+
 func (ms *memStore) Close() error {
 	ms.store = nil
 	return nil
