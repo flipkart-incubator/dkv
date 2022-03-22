@@ -42,6 +42,8 @@ type KVStore interface {
 	// If the expected value is `nil`, then the key is created and
 	// initialized with the given value, atomically.
 	CompareAndSet(key, expect, update []byte) (bool, error)
+	//GetKeySpaceSize returns the estimated number of keys the db
+	GetKeySpaceSize() (int64, error)
 }
 
 // A Backupable represents the capability of the underlying store

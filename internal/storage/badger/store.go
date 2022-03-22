@@ -285,6 +285,10 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
+func (bdb *badgerDB) GetKeySpaceSize() (int64, error) {
+	return 0, nil
+}
+
 const (
 	badgerSSTPrefix = "badger-snapshot-"
 )

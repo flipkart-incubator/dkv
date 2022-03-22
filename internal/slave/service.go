@@ -108,6 +108,11 @@ func (ss *slaveService) CompareAndSet(_ context.Context, _ *serverpb.CompareAndS
 	return nil, errors.New("DKV slave service does not support keyspace mutations")
 }
 
+func (ss *slaveService) GetKeySpaceSize(ctx context.Context, empty *emptypb.Empty) (*serverpb.KeySpaceSizeResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (ss *slaveService) Get(ctx context.Context, getReq *serverpb.GetRequest) (*serverpb.GetResponse, error) {
 	readResults, err := ss.store.Get(getReq.Key)
 	res := &serverpb.GetResponse{Status: newEmptyStatus()}

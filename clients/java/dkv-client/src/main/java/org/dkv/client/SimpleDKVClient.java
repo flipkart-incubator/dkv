@@ -3,6 +3,7 @@ package org.dkv.client;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jmx.JmxReporter;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import dkv.serverpb.Api;
 import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
@@ -270,6 +271,17 @@ public class SimpleDKVClient implements DKVClient {
     @Override
     public Iterator<DKVEntry> iterate(byte[] startKey, byte[] keyPref) {
         return iterate(copyFrom(startKey), copyFrom(keyPref));
+    }
+
+    @Override
+    public long getDbSize() {
+        Empty emptyReq = Empty.newBuilder().build();
+        Api.KeySpaceSizeResponse res = blockingStub.getKeySpaceSize(emptyReq);
+        Api.Status status = res.getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "getDbSize", new Object[]{});
+        }
+        return res.getDbSize();
     }
 
     @Override

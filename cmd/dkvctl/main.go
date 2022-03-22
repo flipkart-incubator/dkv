@@ -32,6 +32,7 @@ var cmds = []*cmd{
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
 	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
 	{"getClusterInfo", "<dcId> <database> <vBucket>", "Gets the latest cluster info", (*cmd).getStatus, "", true},
+	{"getDbSize", "", "Fetched the approximate count of keys in the db", (*cmd).getDbSize, "", true},
 }
 
 func (c *cmd) usage() {
@@ -218,6 +219,15 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 			}
 		}
 	}
+}
+
+func (c *cmd) getDbSize(client *ctl.DKVClient, args ...string) {
+	dbSize, err := client.GetDbSize()
+	if err != nil {
+		fmt.Println("Unable to perform getDbSize. Error: %v\n", err)
+	}
+	fmt.Printf("%d\n", dbSize.DbSize)
+
 }
 
 var dkvAddr, dkvAuthority string

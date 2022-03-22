@@ -1,5 +1,5 @@
 syntax = "proto3";
-
+import "google/protobuf/empty.proto";
 package dkv.serverpb;
 option go_package = "github.com/flipkart-incubator/dkv/pkg/serverpb";
 
@@ -26,6 +26,9 @@ service DKV {
   // CompareAndSet offers the standard CAS style transaction over a given
   // key. Intended to be used in concurrent workloads with less contention.
   rpc CompareAndSet (CompareAndSetRequest) returns (CompareAndSetResponse);
+
+  //GetKeySpaceSize returns the estimated number of keys the db
+  rpc GetKeySpaceSize (google.protobuf.Empty) returns (KeySpaceSizeResponse);
 }
 
 message KVPair {
@@ -142,4 +145,11 @@ message IterateResponse {
   bytes key = 2;
   // Value of the current iteration.
   bytes value = 3;
+}
+
+message KeySpaceSizeResponse {
+  // Status indicates the result of the Get operation
+  Status status = 1;
+  //Estimated number of keys in the db
+  int64 dbSize = 2;
 }
