@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/spf13/viper"
@@ -28,13 +29,9 @@ type DiscoveryConfig struct {
 }
 
 func NewDiscoverConfigFromYaml() (*DiscoveryConfig, error) {
-	viper.SetConfigName("dkv_config")     // name of config file (without extension)
-	viper.SetConfigType("yaml")           // REQUIRED if the config file does not have the extension in the name
-	viper.AddConfigPath("./opts")
-	err := viper.ReadInConfig()           // Find and read the config file
-	if err != nil {                       // Handle errors reading the config file
-		fmt.Println("Fatal error config file: %w \n", err)
-	}
+
+	opts.LoadConfigFile("dkv_config.yaml")
+
 	var DiscoveryConfig DiscoveryConfig
 	if err := viper.Unmarshal(&DiscoveryConfig); err != nil {
 		fmt.Println(err)

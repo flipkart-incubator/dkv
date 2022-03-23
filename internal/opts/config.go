@@ -128,12 +128,12 @@ func (c *Config) Print() {
 }
 
 func (c *Config) Init(cfgFile string) {
-	loadConfigFile(cfgFile)
+	LoadConfigFile(cfgFile)
 	applyConfigOverrides()
 	c.parseConfig()
 }
 
-func loadConfigFile(cfgFile string) {
+func LoadConfigFile(cfgFile string) {
 	if cfgFile != "" {
 		absPath, err := filepath.Abs(cfgFile)
 		if err != nil {

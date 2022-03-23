@@ -11,6 +11,7 @@ import (
 
 	_ "github.com/Jille/grpc-multi-resolver"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -27,13 +28,9 @@ type DiscoveryClientConfig struct {
 }
 
 func NewDiscoveryClientConfigFromYaml() (*DiscoveryClientConfig, error) {
-	viper.SetConfigName("dkv_config") // name of config file (without extension)
-	viper.SetConfigType("yaml")       // REQUIRED if the config file does not have the extension in the name
-	viper.AddConfigPath("./opts")
-	err := viper.ReadInConfig() // Find and read the config file
-	if err != nil {             // Handle errors reading the config file
-		fmt.Println("Fatal error config file: %w \n", err)
-	}
+
+	opts.LoadConfigFile("dkv_config.yaml")
+
 	var DiscoveryClientConfig DiscoveryClientConfig
 	if err := viper.Unmarshal(&DiscoveryClientConfig); err != nil {
 		fmt.Println(err)
