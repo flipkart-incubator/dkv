@@ -5,13 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"gopkg.in/ini.v1"
-	"io"
-	"strconv"
 )
 
 /*
@@ -21,20 +21,25 @@ and providing the latest cluster info of active master / followers / slave of a 
 
 type DiscoveryConfig struct {
 	// time in seconds after which the status entry of the region & node combination can be purged
-	StatusTTl uint64
+	StatusTTl uint64 `mapstructure:"status-ttl"`
 	// maximum time in seconds for the last status update to be considered valid
 	// after exceeding this time the region & node combination can be marked invalid
-	HeartbeatTimeout uint64
+	HeartbeatTimeout uint64 `mapstructure:"heartbeat-timeout"`
 }
 
-func NewDiscoverConfigFromIni(sect *ini.Section) (*DiscoveryConfig, error) {
-	sectConf := sect.KeysHash()
-	if statusTTL, err := strconv.ParseUint(sectConf["statusTTL"], 10, 64); err == nil {
-		if heartbeatTimeout, err := strconv.ParseUint(sectConf["heartbeatTimeout"], 10, 64); err == nil {
-			return &DiscoveryConfig{statusTTL, heartbeatTimeout}, nil
-		}
+func NewDiscoverConfigFromYaml() (*DiscoveryConfig, error) {
+	viper.SetConfigName("dkv_config")     // name of config file (without extension)
+	viper.SetConfigType("yaml")           // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath("./opts")
+	err := viper.ReadInConfig()           // Find and read the config file
+	if err != nil {                       // Handle errors reading the config file
+		fmt.Println("Fatal error config file: %w \n", err)
 	}
-	return nil, fmt.Errorf("Invalid discovery server configuration. Check section %s", sect.Name())
+	var DiscoveryConfig DiscoveryConfig
+	if err := viper.Unmarshal(&DiscoveryConfig); err != nil {
+		fmt.Println(err)
+	}
+	return &DiscoveryConfig, nil
 }
 
 type discoverService struct {

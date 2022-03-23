@@ -19,7 +19,7 @@ database : "default"  # vBucket identifier
 
 
 disable-auto-master-disc : false
-discovery-service-config : "internal/discovery/discovery.ini"
+-service-config : "internal//.ini"
 repl-master-addr : ""         #Service address of DKV master node for replication
 repl-poll-interval : "5s"     #Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.
 

@@ -37,9 +37,6 @@ type Config struct {
 	ListenAddr string `mapstructure:"listen-addr" desc:"Address on which the DKV service binds"`
 	StatsdAddr string `mapstructure:"statsd-addr" desc:"StatsD service address in host:port format"`
 
-	//Service discovery related params
-	DiscoveryServiceConfig string `mapstructure:"discovery-service-config" desc:"A .ini file for configuring discovery service parameters"`
-
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
 	// Thus enabling hardcoded masters to not degrade current behaviour

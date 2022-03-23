@@ -32,7 +32,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"gopkg.in/ini.v1"
 
 	_ "net/http/pprof"
 )
@@ -405,48 +404,30 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 }
 
 func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
-	iniConfig, err := ini.Load(config.DiscoveryServiceConfig)
+
+	discoverySrvConfig, err := discovery.NewDiscoverConfigFromYaml()
 	if err != nil {
-		return fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", config.DiscoveryServiceConfig, err)
+		return err
 	}
-	if discoveryServerSection, err := iniConfig.GetSection(discoveryServerConfig); err == nil {
-		discoverySrvConfig, err := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
-		if err != nil {
-			return err
-		}
-		discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, discoverySrvConfig)
-		if err != nil {
-			return err
-		}
-		serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
-		return nil
-	} else {
-		return fmt.Errorf("started as discovery server but can't load the section %s in file %s, error: %v",
-			discoveryServerConfig, config.DiscoveryServiceConfig, err)
+	discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, discoverySrvConfig)
+	if err != nil {
+		return err
 	}
+	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
+	return nil
 }
 
 func newDiscoveryClient() (discovery.Client, error) {
-	iniConfig, err := ini.Load(config.DiscoveryServiceConfig)
+
+	clientConfig, err := discovery.NewDiscoveryClientConfigFroYaml()
 	if err != nil {
-		return nil, fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", config.DiscoveryServiceConfig, err)
+		return nil, err
 	}
-
-	if discoveryClientSection, err := iniConfig.GetSection(discoveryClientConfig); err == nil {
-		clientConfig, err := discovery.NewDiscoveryClientConfigFromIni(discoveryClientSection)
-		if err != nil {
-			return nil, err
-		}
-		client, err := discovery.NewDiscoveryClient(clientConfig, dkvLogger)
-		if err != nil {
-			return nil, err
-		}
-		return client, nil
-	} else {
-		return nil, fmt.Errorf("can't load discovery client configuration from section %s in file %s, error: %v",
-			discoveryClientConfig, config.DiscoveryServiceConfig, err)
+	client, err := discovery.NewDiscoveryClient(clientConfig, dkvLogger)
+	if err != nil {
+		return nil, err
 	}
-
+	return client, nil
 }
 
 func nodeAddress() (*url.URL, error) {
