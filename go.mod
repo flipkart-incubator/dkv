@@ -23,7 +23,7 @@ require (
 	github.com/spf13/viper v1.10.1
 	github.com/vmihailenco/msgpack/v5 v5.3.4
 	go.uber.org/zap v1.17.0
-	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
+	golang.org/x/sys v0.0.0-20220405210540-1e041c57c461 // indirect
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.66.2
