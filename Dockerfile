@@ -16,8 +16,8 @@ RUN curl -fsSL https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.
     && cd zstd-1.4.4 && make install
 
 # Install RocksDB v6.5.3
-RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v6.5.3.tar.gz | tar xz \
-    && cd rocksdb-6.5.3 && make install
+RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v6.22.1.tar.gz | tar xz \
+    && cd rocksdb-6.22.1 && make install
 
 # Install GoLang
 RUN curl -fsSL https://dl.google.com/go/go1.16.6.linux-amd64.tar.gz | tar xz \
@@ -30,10 +30,12 @@ RUN curl -fsSL -O https://github.com/protocolbuffers/protobuf/releases/download/
     && rm protoc-3.15.8-linux-x86_64.zip
 ENV PATH="/usr/local/protoc/bin:${PATH}"
 
-# Install DKV
-RUN git clone https://github.com/flipkart-incubator/dkv.git \
+# Install DKV (Skipped for CI Pipelines)
+ARG CI
+RUN if [ -z "$CI" ] ; then git clone --depth=1 https://github.com/flipkart-incubator/dkv.git \
     && cd dkv && GOOS=linux GOARCH=amd64 make build \
-    && mv ./bin /usr/local/dkv && chown -R root:root /usr/local/dkv
+    && mv ./bin /usr/local/dkv && chown -R root:root /usr/local/dkv; fi
+
 ENV PATH="/usr/local/dkv:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
 

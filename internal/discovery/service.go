@@ -1,17 +1,17 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"go.uber.org/zap"
 	"gopkg.in/ini.v1"
 	"io"
 	"strconv"
-
-	"encoding/json"
-	"go.uber.org/zap"
 )
 
 /*
@@ -74,7 +74,6 @@ func (d *discoverService) UpdateStatus(ctx context.Context, request *serverpb.Up
 		return newErrorStatus(err), err
 	}
 
-	// TODO - check if expiry TTL is working
 	putRequest := serverpb.PutRequest{Key: createKeyToInsert(request.GetRegionInfo()), Value: val, ExpireTS: hlc.GetUnixTimeFromNow(d.config.StatusTTl)}
 	if _, err = d.dkvCli.Put(ctx, &putRequest); err != nil {
 		return newErrorStatus(err), err
@@ -99,6 +98,8 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 			// Better to return error rather than partial results as incomplete results could cause client misbehaviour
 			d.logger.Error("Partial failure in getting cluster info", zap.Error(err))
 			return nil, err
+		} else if bytes.Contains(itRes.Key, []byte("dkv_meta")) {
+			continue
 		} else {
 			clusterInfo = append(clusterInfo, serverpb.KVPair{
 				Key:   itRes.Key,
@@ -111,7 +112,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 	for _, serializedStatusUpdate := range clusterInfo {
 		statusUpdate := serverpb.UpdateStatusRequest{}
 		if err = json.Unmarshal(serializedStatusUpdate.Value, &statusUpdate); err != nil {
-			d.logger.Error("Unable to unmarshal status request", zap.Error(err))
+			d.logger.Error("Unable to unmarshal status request", zap.Error(err), zap.String("json", string(serializedStatusUpdate.Value)))
 			continue
 		}
 		// Filter regions outside the requested DC (if provided)

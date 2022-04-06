@@ -21,8 +21,8 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 
 ## Dependencies
 - Go version 1.16+
-- [RocksDB](https://github.com/facebook/rocksdb) v6.5.3 as a storage engine
-- [GoRocksDB](https://github.com/tecbot/gorocksdb) provides the CGo bindings with RocksDB
+- [RocksDB](https://github.com/facebook/rocksdb) v6.22.1 as a storage engine
+- [GoRocksDB](https://github.com/flipkart-incubator/gorocksdb) provides the CGo bindings with RocksDB
 - [Badger](https://github.com/dgraph-io/badger) v1.6 as a storage engine
 - [Nexus](https://github.com/flipkart-incubator/nexus) for sync replication over [Raft](https://raft.github.io/) consensus
 
@@ -41,7 +41,6 @@ $ docker run -it dkv/dkv-deb9-amd64:latest dkvsrv --help
 DKV depends on RocksDB, and its CGo bindings, so we need to install rocksdb along with its dependecies.
 
 - Ensure [HomeBrew](https://brew.sh/) is installed
-- `brew install gcc49`
 - `brew install rocksdb zstd`
 
 
@@ -55,7 +54,7 @@ $ cd dkv
 $ make build
 ```
 
-If you want to build for other platform, set `GOOS`, `GOARCH` environment variables. For example, build for macOS like following:
+If you want to build for other platform, set `GOOS`, `GOARCH` environment variables. For example, build on macOS for linux like following:
 
 ```bash
 $ make GOOS=linux build
@@ -72,10 +71,7 @@ Once DKV is built, the `<PROJECT_ROOT>/bin` folder should contain the following 
 A single DKV instance can be launched using the following command:
 
 ```bash
-$ ./bin/dkvsrv \
-    -db-folder <folder_name> \
-    -listen-addr <host:port> \
-    -db-engine <rocksdb|badger>
+$ ./bin/dkvsrv --config dkvsrv.yaml  --db-folder <folder_name>  --listen-addr <host:port>
 ```
 
 ```bash
@@ -85,7 +81,7 @@ $ ./bin/dkvctl -dkvAddr <host:port> -get <key>
 
 Example session:
 ```bash
-$ ./bin/dkvsrv -db-folder /tmp/db -listen-addr 127.0.0.1:8080 -db-engine rocksdb
+$ ./bin/dkvsrv --config dkvsrv.yaml --db-folder /tmp/db --listen-addr 127.0.0.1:8080
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo bar
 $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
 bar
@@ -97,184 +93,9 @@ $ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -iter "*"
 hello => world
 ```
 
-### Launching the DKV server for synchronous replication
+### Launching the DKV server for synchronous/asynchronous replication
 
-This launch configuration allows for synchronously replicating changes to DKV keyspace
-on multiple instances spread across independently failing regions or availability
-zones. Typically such configurations are deployed over WANs so as to ensure better
-read & write availability in the face of individual cluster failures and disasters.
-
-Under the hood, we use [Nexus](https://github.com/flipkart-incubator/nexus) to replicate
-keyspace mutations across multiple DKV instances using the RAFT consensus protocol.
-Currently, the `put` API automatically replicates changes when the request is handled
-by given DKV instance started in a special distributed mode (see below). However, `get`
-and `multiget` APIs targetting such an instance serve the data either from its own local store 
-or from the current raft leader based on the `consistency` factor.
-
-Assuming you have 3 availability zones, run the following 3 commands one in every zone
-in order to setup these instances for synchronous replication.
-```bash
-$ ./bin/dkvsrv \
-    -db-folder <folder_path> \
-    -listen-addr <host:port> \
-    -role master \
-    -nexus-node-url http://<host:port> \ #optional when running on separete nodes.
-    -nexus-cluster-url <cluster_url>
-```
-
-All these 3 DKV instances form a database cluster each listening on separate ports for
-Nexus & client communications. One can now construct the value for `nexusClusterUrl` param
-in the above command using this example setup below:
-
-|NexusNodeId|Hostname|NexusPort|
-|-|-|-|
-|1|dkv.az1|9020|
-|2|dkv.az2|9020|
-|3|dkv.az3|9020|
-
-Then the value for `nexusClusterUrl` must be:
-```bash
-"http://dkv.az1:9020,http://dkv.az2:9020,http://dkv.az3:9020"
-```
-
-Note that same value must be used in each of the 3 commands used to launch the DKV cluster.
-Subsequently, `dkvctl` utility can be used to perform keyspace mutations against any one
-of the DKV instances which are then automatically replicated to the other 2 instances.
-
-Example session on local machine:
-
-Launch Node 1:
-```bash
-$ ./bin/dkvsrv \
-    -db-folder /tmp/dkvsrv/n1 \
-    -listen-addr 127.0.0.1:9081 \
-    -role master \
-    -nexus-node-url http://127.0.0.1:9021 \
-    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
-```
-
-Launch Node 2:
-```bash
-$ ./bin/dkvsrv \
-    -db-folder /tmp/dkvsrv/n2 \
-    -listen-addr 127.0.0.1:9082 \
-    -role master \
-    -nexus-node-url http://127.0.0.1:9022 \
-    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
-```
-
-Launch Node 3:
-```bash
-$ ./bin/dkvsrv \
-    -db-folder /tmp/dkvsrv/n3 \
-    -listen-addr 127.0.0.1:9083 \
-    -role master \
-    -nexus-node-url http://127.0.0.1:9023 \
-    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023"
-```
-
-Launch Node 4, not yet part of the cluster:
-```bash
-$ ./bin/dkvsrv \
-    -db-folder /tmp/dkvsrv/n4 \
-    -listen-addr 127.0.0.1:9084 \
-    -role master \
-    -nexus-node-url http://127.0.0.1:9024 \
-    -nexus-cluster-url "http://127.0.0.1:9021,http://127.0.0.1:9022,http://127.0.0.1:9023" \
-    -nexusJoin
-```
-
-Add this node to the existing 3 node cluster:
-```bash
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:9081 -addNode "http://127.0.0.1:9024"
-```
-
-List members of the cluster from any member:
-```bash
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:9082 -listNodes
-Connecting to DKV service at 127.0.0.1:9082...DONE
-Current DKV cluster members:
-6ab6bfdf9f29bd1a => http://127.0.0.1:9094 (leader)
-619f1e32973e3e7a => http://127.0.0.1:9092
-785bb0a54cd7f8d5 => http://127.0.0.1:9093
-c63380dd0a493345 => http://127.0.0.1:9091
-```
-
-Remove a node from the cluster:
-```bash
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:9082 -removeNode http://127.0.0.1:9091
-Connecting to DKV service at 127.0.0.1:9082...DONE
-```
-
-Confirm node removal from the cluster:
-```bash
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:9082 -listNodes
-Connecting to DKV service at 127.0.0.1:9082...DONE
-Current DKV cluster members:
-6ab6bfdf9f29bd1a => http://127.0.0.1:9094 (leader)
-619f1e32973e3e7a => http://127.0.0.1:9092
-785bb0a54cd7f8d5 => http://127.0.0.1:9093
-```
-
-### Launching the DKV server for asynchronous replication
-
-This launch configuration allows for DKV instances to be started either as a master
-node or a slave node. All mutations are permitted only on the master node while
-one or more slave nodes asynchronously replicate the changes received from master
-and make them available for reads. In other words, no keyspace mutations are
-permitted on the slave nodes, except by the replication stream received from
-master node.
-
-The built-in replication mechanism guarantees _sequential consistency_ for reads
-executed from the slave nodes. Moreover, all slave nodes will eventually converge
-to an identical state which is often referred to as _strong eventual consistency_.
-
-Such a configuration is typically deployed on applications where the typical number
-of reads far exceed the number of writes.
-
-First launch the DKV master node using the RocksDB engine with this command:
-```bash
-$ ./bin/dkvsrv \
-    -db-folder <folder_name> \
-    -listen-addr <host:port> \
-    -role master
-```
-
-Then launch the DKV slave node using either RocksDB or Badger engine with this command:
-```bash
-$ ./bin/dkvsrv \
-    -db-folder <folder_name> \
-    -listen-addr <host:port> \
-    -db-engine <rocksdb|badger> \
-    -role slave \
-    -repl-master-addr <dkv_master_listen_addr>
-```
-
-Subsequently, any mutations performed on the master node's keyspace using `dkvctl`
-will be applied automatically onto the slave node's keyspace. By default, a given
-slave node polls for changes from its master node once every _5 seconds_. This can
-be changed through the `replPollInterval` flag while launching the slave node.
-
-Note that only **rocksdb** engine is supported on the DKV master node while the slave
-node can be launched with either *rocksdb* or *badger* storage engines.
-
-#### In memory mode for Badger based slaves
-
-For slave nodes using the Badger storage engine, we also support an in-memory mode
-where the entire dataset is stored in RAM without any writes to disk whatsoever.
-This can be achieved by using the `-dbDiskless` option during launch as shown here.
-
-```bash
-$ ./bin/dkvsrv \
-    -diskless \
-    -listen-addr <host:port> \
-    -db-engine badger \
-    -role slave \
-    -repl-master-addr <dkv_master_listen_addr>
-```
-
-This mode may provide better performance for reads and is also useful for deployments
-that are cache-like having optional durability requirements.
+Please refer to the [wiki instructions](https://github.com/flipkart-incubator/dkv/wiki/Running-dkv#launching-the-dkv-server-for-synchronous-replication) on how to run DKV in cluster mode.
 
 ## Documentation
 Detailed documentation on specific features, design principles, data guarantees etc. can be found in the [dkv Wiki](https://github.com/flipkart-incubator/dkv/wiki)
