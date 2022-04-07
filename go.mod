@@ -3,23 +3,20 @@ module github.com/flipkart-incubator/dkv
 go 1.15
 
 require (
-	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/Jille/grpc-multi-resolver v1.0.0
 	github.com/coreos/etcd v3.3.19+incompatible // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
-	github.com/dgraph-io/badger/v2 v2.2007.2
-	github.com/dgraph-io/ristretto v0.0.3 // indirect
+	github.com/dgraph-io/badger/v3 v3.2103.1
+	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
 	github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4
 	github.com/flipkart-incubator/nexus v0.0.0-20220316072727-c44c4b25144a
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
-	github.com/golang/snappy v0.0.2 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/kpango/fastime v1.0.16
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.0.10 // indirect
@@ -28,6 +25,7 @@ require (
 	github.com/spf13/viper v1.10.1
 	github.com/vmihailenco/msgpack/v5 v5.3.4
 	go.uber.org/zap v1.17.0
+	golang.org/x/sys v0.0.0-20220310020820-b874c991c1a5 // indirect
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.66.2
@@ -49,7 +47,7 @@ replace (
 	golang.org/x/net => github.com/golang/net v0.0.0-20200301022130-244492dfa37a
 	golang.org/x/oauth2 => github.com/golang/oauth2 v0.0.0-20180821212333-d2e6202438be
 	golang.org/x/sync => github.com/golang/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys => github.com/golang/sys v0.0.0-20200317113312-5766fd39f98d
+	golang.org/x/sys => github.com/golang/sys v0.0.0-20220310020820-b874c991c1a5
 	golang.org/x/text => github.com/golang/text v0.3.2
 	golang.org/x/time => github.com/golang/time v0.0.0-20191024005414-555d28b269f0
 	golang.org/x/tools => github.com/golang/tools v0.0.0-20200318150045-ba25ddc85566

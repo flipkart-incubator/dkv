@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dgraph-io/ristretto/z"
 	"io"
 	"os"
 	"path"
@@ -18,14 +19,13 @@ import (
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/dgraph-io/badger/v2"
-	badger_pb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	ini "gopkg.in/ini.v1"
+	"gopkg.in/ini.v1"
 )
 
 // DB interface represents the capabilities exposed
@@ -107,24 +107,6 @@ func WithoutSyncWrites() DBOption {
 	}
 }
 
-// WithKeepL0InMemory configures Badger to place
-// the L0 SSTable in memory for better write performance.
-// However, replaying the value log during startup
-// can take longer with this option set. This is
-// enabled by default in DKV.
-func WithKeepL0InMemory() DBOption {
-	return func(opts *bdgrOpts) {
-		opts.opts = opts.opts.WithKeepL0InMemory(true)
-	}
-}
-
-// WithoutKeepL0InMemory configures Badger to prevent
-// placing L0 SSTable in memory.
-func WithoutKeepL0InMemory() DBOption {
-	return func(opts *bdgrOpts) {
-		opts.opts = opts.opts.WithKeepL0InMemory(false)
-	}
-}
 
 // WithCacheSize sets the value in bytes the amount of
 // cache used for data blocks.
@@ -174,6 +156,14 @@ func WithInMemory() DBOption {
 		opts.opts = opts.opts.WithInMemory(true)
 	}
 }
+
+// WithMemTableSize sets Badger storage to use the desired mem table size.
+func WithMemTableSize(size int64) DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts = opts.opts.WithMemTableSize(size)
+	}
+}
+
 
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options.
@@ -329,7 +319,11 @@ func (bdb *badgerDB) GetSnapshot() (io.ReadCloser, error) {
 	strm := bdb.db.NewStream()
 	w := bufio.NewWriter(sstFile)
 
-	strm.Send = func(list *badger_pb.KVList) error {
+	strm.Send = func(buf *z.Buffer) error {
+		list, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
 		for _, kv := range list.Kv {
 			entry := serverpb.PutRequest{Key: kv.Key, Value: kv.Value, ExpireTS: kv.ExpiresAt}
 			_, err := pbutil.WriteDelimited(w, &entry)
