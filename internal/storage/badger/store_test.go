@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dgraph-io/ristretto/z"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,8 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	badger_pb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
@@ -427,7 +427,11 @@ func TestIterationUsingStream(t *testing.T) {
 
 	actCnt := 0
 	strm := store.db.NewStream()
-	strm.Send = func(list *badger_pb.KVList) error {
+	strm.Send = func(buf *z.Buffer) error {
+		list, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
 		for _, kv := range list.Kv {
 			k, v := string(kv.Key), string(kv.Value)
 			if strings.HasPrefix(k, keyPrefix) && strings.HasPrefix(v, valPrefix) {
@@ -757,7 +761,11 @@ func BenchmarkStreamBasedIteration(b *testing.B) {
 
 	actCnt := 0
 	strm := store.db.NewStream()
-	strm.Send = func(list *badger_pb.KVList) error {
+	strm.Send = func(buf *z.Buffer) error {
+		list, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
 		for _, kv := range list.Kv {
 			k, v := string(kv.Key), string(kv.Value)
 			if expVal, present := data[k]; present && expVal == v {
