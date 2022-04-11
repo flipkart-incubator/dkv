@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -15,13 +14,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/ini.v1"
-
-	"github.com/flipkart-incubator/dkv/pkg/health"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/master"
@@ -44,7 +40,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"gopkg.in/ini.v1"
 
 	"net/http/pprof"
 )
@@ -74,14 +69,12 @@ var (
 
 	// Logging vars
 	verboseLogging bool
+	accessLogger   *zap.Logger
+	dkvLogger      *zap.Logger
 
 	pprofEnable bool
-)
 
-var (
-	accessLogger *zap.Logger
-	dkvLogger    *zap.Logger
-
+	// Other vars
 	statsCli      stats.Client
 	promRegistry  prometheus.Registerer
 	statsStreamer *stats.StatStreamer
