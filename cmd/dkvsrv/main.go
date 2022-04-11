@@ -115,14 +115,21 @@ func main() {
 	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
-	nodeAddr, err := nodeAddress()
+	nodeAddr, err := nodeAddress(config.ListenAddr)
 	if err != nil {
-		log.Panicf("Failed to detect IP Address %v.", err)
+		log.Panicf("Failed to parse GRPC Listen Address %v.", err)
 	}
+
+	//HTTP listen Address
+	nodeHTTPAddr, err := nodeAddress(config.HttpListenAddr)
+	if err != nil {
+		log.Panicf("Failed to parse HTTP Listen Address %v.", err)
+	}
+
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            config.DcID,
 		NodeAddress:     nodeAddr.Host,
-		HttpAddress:     config.HttpListenAddr,
+		HttpAddress:     nodeHTTPAddr.Host,
 		Database:        config.Database,
 		VBucket:         config.VBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -464,8 +471,8 @@ func newDiscoveryClient() (discovery.Client, error) {
 
 }
 
-func nodeAddress() (*url.URL, error) {
-	ip, port, err := net.SplitHostPort(config.ListenAddr)
+func nodeAddress(listenAddress string) (*url.URL, error) {
+	ip, port, err := net.SplitHostPort(listenAddress)
 	if err != nil {
 		return nil, err
 	}
