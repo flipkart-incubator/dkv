@@ -34,8 +34,9 @@ type Config struct {
 	DbFolder   string `mapstructure:"db-folder" desc:"DB folder path for storing data files"`
 
 	// Server Configuration
-	ListenAddr string `mapstructure:"listen-addr" desc:"Address on which the DKV service binds"`
-	StatsdAddr string `mapstructure:"statsd-addr" desc:"StatsD service address in host:port format"`
+	ListenAddr     string `mapstructure:"listen-addr" desc:"Address on which the DKV service binds"`
+	HttpListenAddr string `mapstructure:"http-listen-addr" desc:"Address on which the DKV service binds for http"`
+	StatsdAddr     string `mapstructure:"statsd-addr" desc:"StatsD service address in host:port format"`
 
 	//Service discovery related params
 	DiscoveryServiceConfig string `mapstructure:"discovery-service-config" desc:"A .ini file for configuring discovery service parameters"`

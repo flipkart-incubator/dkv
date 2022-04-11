@@ -121,7 +121,7 @@ func main() {
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            config.DcID,
 		NodeAddress:     nodeAddr.Host,
-		HttpAddress:     httpListenAddr,
+		HttpAddress:     config.HttpListenAddr,
 		Database:        config.Database,
 		VBucket:         config.VBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -495,7 +495,7 @@ func setupHttpServer() {
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
 
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
-	if dbRole == "discovery" {
+	if config.DbRole == "discovery" {
 		// Should be enabled only for discovery server ?
 		router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
 	}
@@ -511,7 +511,7 @@ func setupHttpServer() {
 	}
 
 	http.Handle("/", router)
-	http.ListenAndServe(httpListenAddr, nil)
+	http.ListenAndServe(config.HttpListenAddr, nil)
 }
 
 func jsonMetricHandler(w http.ResponseWriter, r *http.Request) {

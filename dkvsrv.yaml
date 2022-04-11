@@ -1,10 +1,11 @@
 
-node-name : ""                  #Name of the current Node Name
-listen-addr : "0.0.0.0:8080"    #listen address
-role : "none"                   #Role of the node - master|slave|standalone
-pprof : false                   #Enable profiling
-statsd-addr : ""                #StatsdD Address
-verbose : false                 # Enable verbose logging. By default, only warnings and errors are logged.
+node-name : ""                    #Name of the current Node Name
+listen-addr : "0.0.0.0:8080"      #listen address
+http-listen-addr : "0.0.0.0:8081" # http listen address
+role : "none"                     #Role of the node - master|slave|standalone
+pprof : false                     #Enable profiling
+statsd-addr : ""                  #StatsdD Address
+verbose : false                   # Enable verbose logging. By default, only warnings and errors are logged.
 
 db-engine : "rocksdb"           #Underlying DB engine for storing data - badger|rocksdb
 db-engine-ini : "rocksdb.ini"   #An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.
