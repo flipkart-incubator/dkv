@@ -7,14 +7,15 @@ This class contains the behaviour of propagating a nodes status updates to disco
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
+
 	_ "github.com/Jille/grpc-multi-resolver"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"gopkg.in/ini.v1"
-	"strconv"
-	"time"
 )
 
 type DiscoveryClientConfig struct {
@@ -85,6 +86,7 @@ func getDiscoveryClient(discoveryServiceAddr string) (*grpc.ClientConn, error) {
 	defer cancel()
 	return grpc.DialContext(ctx, discoveryServiceAddr,
 		grpc.WithInsecure(),
+		grpc.WithBlock(),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)),
 		grpc.WithReadBufferSize(readBufSize),
 		grpc.WithWriteBufferSize(writeBufSize),
