@@ -73,9 +73,8 @@ var (
 	accessLogger   *zap.Logger
 	dkvLogger      *zap.Logger
 
-	pprofEnable bool
-
 	// Other vars
+	pprofEnable   bool
 	statsCli      stats.Client
 	promRegistry  prometheus.Registerer
 	statsStreamer *stats.StatStreamer
