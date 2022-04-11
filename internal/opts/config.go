@@ -22,7 +22,7 @@ type Config struct {
 	NodeName               string `mapstructure:"node-name" desc:"Node Name"`
 	DbEngine               string `mapstructure:"db-engine" desc:"Underlying DB engine for storing data - badger|rocksdb"`
 	DbEngineIni            string `mapstructure:"db-engine-ini" desc:"An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details."`
-	DbRole                 string `mapstructure:"role" desc:"Role of the node - master|slave|standalone"`
+	DbRole                 string `mapstructure:"role" desc:"Role of the node - master|slave|standalone|discovery"`
 	ReplPollIntervalString string `mapstructure:"repl-poll-interval" desc:"Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc."`
 	BlockCacheSize         uint64 `mapstructure:"block-cache-size" desc:"Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether."`
 	DcID                   string `mapstructure:"dc-id" desc:"DC / Availability zone identifier"`

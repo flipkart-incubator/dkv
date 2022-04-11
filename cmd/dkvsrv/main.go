@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -495,7 +496,7 @@ func setupHttpServer() {
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
 
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
-	if config.DbRole == "discovery" {
+	if toDKVSrvrRole(config.DbRole) == masterRole {
 		// Should be enabled only for discovery server ?
 		router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
 	}
@@ -535,19 +536,20 @@ func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
 		statChannel := make(chan stats.DKVMetrics, 5)
 		channelId := statsStreamer.Register(statChannel)
 		defer func() {
-			ioutil.ReadAll(r.Body)
+			io.Copy(ioutil.Discard, r.Body)
 			r.Body.Close()
 		}()
 		// Listen to the closing of the http connection via the CloseNotifier
-		notify := w.(http.CloseNotifier).CloseNotify()
+		log.Printf("[INFO] Starting Metrics Stream %v\n", channelId)
 		for {
 			select {
 			case stat := <-statChannel:
 				statJson, _ := json.Marshal(stat)
 				fmt.Fprintf(w, "data: %s\n\n", statJson)
 				f.Flush()
-			case <-notify:
+			case <-r.Context().Done():
 				statsStreamer.DeRegister(channelId)
+				log.Printf("[INFO] Closing Metics Stream %v\n", channelId)
 				return
 			}
 		}
@@ -574,19 +576,20 @@ func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
 		statChannel := make(chan map[string]*stats.DKVMetrics, 5)
 		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string { return region.Database }, statChannel)
 		defer func() {
-			ioutil.ReadAll(r.Body)
+			io.Copy(ioutil.Discard, r.Body)
 			r.Body.Close()
 		}()
+
 		// Listen to the closing of the http connection via the CloseNotifier
-		notify := w.(http.CloseNotifier).CloseNotify()
+		log.Printf("[INFO] Starting ClusterMetics Stream %v\n", channelId)
 		for {
 			select {
 			case stat := <-statChannel:
 				statJson, _ := json.Marshal(stat)
 				fmt.Fprintf(w, "data: %s\n\n", statJson)
 				f.Flush()
-			case <-notify:
-				fmt.Println("http request closed")
+			case <-r.Context().Done():
+				log.Printf("[INFO] Closing ClusterMetics Stream %v\n", channelId)
 				statAggregatorRegistry.DeRegister(channelId)
 				return
 			}
