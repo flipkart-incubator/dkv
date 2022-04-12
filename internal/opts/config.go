@@ -108,6 +108,11 @@ func (c *Config) validateFlags() {
 		}
 	}
 
+	if c.DbRole == "slave" {
+		if c.ReplicationMasterAddr != "" && strings.IndexRune(c.ReplicationMasterAddr, ':') < 0 {
+			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", c.ReplicationMasterAddr)
+		}
+	}
 }
 
 func (c *Config) Print() {
