@@ -350,6 +350,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 			ss.replInfo.replCli = replCli
 			ss.replInfo.replConfig.ReplMasterAddr = *master
 			ss.replInfo.replActive = true
+			ss.serveropts.Logger.Info("Started replication client with master", zap.String("MasterIP", *master))
 		} else {
 			ss.serveropts.Logger.Warn("Unable to create a replication client", zap.Error(err))
 			return err
