@@ -13,3 +13,4 @@ role : "master"
 statsd-addr : ""
 vbucket : "default"
 verbose : false
+log-level : "warn"
