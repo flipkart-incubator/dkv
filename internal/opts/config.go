@@ -44,7 +44,6 @@ type Config struct {
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
 	// Thus enabling hardcoded masters to not degrade current behaviour
 	ReplicationMasterAddr string `mapstructure:"repl-master-addr" desc:"Service address of DKV master node for replication"`
-	DisableAutoMasterDisc bool   `mapstructure:"disable-auto-master-disc"`
 
 	// Logging vars
 	AccessLog string `mapstructure:"access-log" desc:"File for logging DKV accesses eg., stdout, stderr, /tmp/access.log"`
@@ -109,11 +108,6 @@ func (c *Config) validateFlags() {
 		}
 	}
 
-	if c.DbRole == "slave" && c.DisableAutoMasterDisc {
-		if c.ReplicationMasterAddr == "" || strings.IndexRune(c.ReplicationMasterAddr, ':') < 0 {
-			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", c.ReplicationMasterAddr)
-		}
-	}
 }
 
 func (c *Config) Print() {
