@@ -9,7 +9,6 @@ import (
 const (
 	Ops           = "ops"
 	Put           = "put"
-	PutTTL        = "pTtl"
 	Get           = "get"
 	MultiGet      = "mget"
 	Delete        = "del"
