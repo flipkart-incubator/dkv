@@ -258,7 +258,9 @@ func setupDKVLogger() {
 		dkvLoggerConfig.EncoderConfig.StacktraceKey = "stacktrace"
 	} else {
 		logLevel := zap.WarnLevel
-		logLevel.Set(config.LogLevel)
+		if config.LogLevel != "" {
+			logLevel.Set(config.LogLevel)
+		}
 		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(logLevel)
 	}
 
