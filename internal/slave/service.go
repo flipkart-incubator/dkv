@@ -41,9 +41,6 @@ type ReplicationConfig struct {
 	MaxActiveReplElapsed uint64
 	// Listener address of the master node
 	ReplMasterAddr string
-	// Temporary flag to disable automatic master discovery until https://github.com/flipkart-incubator/dkv/issues/82 is fixed
-	// The above issue causes replication issues during master switch due to inconsistent change numbers
-	DisableAutoMasterDisc bool
 }
 
 type replInfo struct {
@@ -308,8 +305,8 @@ func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empt
 }
 
 func (ss *slaveService) replaceMasterIfInactive() error {
-	if ss.replInfo.replConfig.DisableAutoMasterDisc {
-		return nil
+	if ss.replInfo.replConfig.ReplMasterAddr != "" {
+		return ss.reconnectMaster() // reconnect to the existing master
 	}
 	if regions, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
 		var currentMaster *serverpb.RegionInfo = nil
@@ -353,6 +350,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 			ss.replInfo.replCli = replCli
 			ss.replInfo.replConfig.ReplMasterAddr = *master
 			ss.replInfo.replActive = true
+			ss.serveropts.Logger.Warn("Started replication client with master", zap.String("MasterIP", *master))
 		} else {
 			ss.serveropts.Logger.Warn("Unable to create a replication client", zap.Error(err))
 			return err
@@ -369,7 +367,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 // followed by followers outside DC, followed by master outside DC
 // TODO - rather than randomly selecting a master from applicable followers, load balance to distribute better
 func (ss *slaveService) findNewMaster() (*string, error) {
-	if ss.replInfo.replConfig.DisableAutoMasterDisc {
+	if ss.replInfo.replConfig.ReplMasterAddr != "" {
 		return &ss.replInfo.replConfig.ReplMasterAddr, nil
 	}
 	// Get all active regions

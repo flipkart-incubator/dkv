@@ -3,7 +3,6 @@ db-engine-ini : ""
 block-cache-size : 3221225472
 root-folder : "/tmp/dkvsrv"
 dc-id : "dc1"
-disable-auto-master-disc : false
 discovery-service-config : "internal/discovery/discovery.ini"
 diskless : false
 pprof : false

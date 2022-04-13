@@ -281,7 +281,7 @@ func startSlaveAndAttachToMaster(client *ctl.DKVClient) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	rdbStore := newRocksDBStore(dbFolderSlave)
-	go serveStandaloneDKVSlave(&wg, rdbStore, rdbStore, client, false, discoveryCli)
+	go serveStandaloneDKVSlave(&wg, rdbStore, rdbStore, client, discoveryCli)
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -458,7 +458,7 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	defer masterGrpcSrvr.GracefulStop()
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli, false, testingClusterInfo{})
+	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -516,7 +516,7 @@ func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.Cha
 	masterCli = newDKVClient(masterSvcPort)
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, false, testingClusterInfo{})
+	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -886,14 +886,13 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 	masterGrpcSrvr.Serve(lis)
 }
 
-func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, disableAutoMasterDisc bool, discoveryClient discovery.Client) {
+func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, discoveryClient discovery.Client) {
 	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
-		MaxNumChngs:           2,
-		ReplPollInterval:      5 * time.Second,
-		MaxActiveReplLag:      10,
-		MaxActiveReplElapsed:  5,
-		DisableAutoMasterDisc: disableAutoMasterDisc,
+		MaxNumChngs:          2,
+		ReplPollInterval:     5 * time.Second,
+		MaxActiveReplLag:     10,
+		MaxActiveReplElapsed: 5,
 	}
 
 	specialOpts := &opts.ServerOpts{
