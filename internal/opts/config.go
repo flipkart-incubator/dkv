@@ -47,6 +47,7 @@ type Config struct {
 
 	// Logging vars
 	AccessLog string `mapstructure:"access-log" desc:"File for logging DKV accesses eg., stdout, stderr, /tmp/access.log"`
+	LogLevel  string `mapstructure:"log-level" desc:"Log level for logging info|warn|debug|error"`
 
 	ReplPollInterval time.Duration
 

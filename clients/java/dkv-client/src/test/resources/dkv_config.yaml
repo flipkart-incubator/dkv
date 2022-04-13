@@ -13,6 +13,7 @@ repl-poll-interval : "2s"
 role : ""
 statsd-addr : ""
 vbucket : "default"
+log-level : "warn"
 verbose : false
 nexus-cluster-name : "default"
 nexus-cluster-url : ""
