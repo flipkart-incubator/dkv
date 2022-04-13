@@ -192,12 +192,11 @@ func main() {
 		// TODO - construct replConfig from region level config described in LLD
 		maxNumChanges := uint32(10000)
 		replConfig := &slave.ReplicationConfig{
-			MaxNumChngs:           maxNumChanges,
-			ReplPollInterval:      config.ReplPollInterval,
-			MaxActiveReplLag:      uint64(maxNumChanges * 10),
-			MaxActiveReplElapsed:  uint64(config.ReplPollInterval.Seconds()) * 10,
-			DisableAutoMasterDisc: config.DisableAutoMasterDisc,
-			ReplMasterAddr:        config.ReplicationMasterAddr,
+			MaxNumChngs:          maxNumChanges,
+			ReplPollInterval:     config.ReplPollInterval,
+			MaxActiveReplLag:     uint64(maxNumChanges * 10),
+			MaxActiveReplElapsed: uint64(config.ReplPollInterval.Seconds()) * 10,
+			ReplMasterAddr:       config.ReplicationMasterAddr,
 		}
 		dkvSvc, _ := slave.NewService(kvs, ca, regionInfo, replConfig, discoveryClient, serveropts)
 		defer dkvSvc.Close()
@@ -272,7 +271,11 @@ func setupDKVLogger() {
 		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 		dkvLoggerConfig.EncoderConfig.StacktraceKey = "stacktrace"
 	} else {
-		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(zap.WarnLevel)
+		logLevel := zap.WarnLevel
+		if config.LogLevel != "" {
+			logLevel.Set(config.LogLevel)
+		}
+		dkvLoggerConfig.Level = zap.NewAtomicLevelAt(logLevel)
 	}
 
 	if lg, err := dkvLoggerConfig.Build(); err != nil {
