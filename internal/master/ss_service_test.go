@@ -32,6 +32,7 @@ var (
 	serverOpts = &opts.ServerOpts{
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		Logger:                    lgr,
 	}
 )

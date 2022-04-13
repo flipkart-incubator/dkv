@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -12,11 +15,17 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/ini.v1"
+
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/slave"
 	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/stats/aggregate"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
@@ -32,9 +41,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"gopkg.in/ini.v1"
 
-	_ "net/http/pprof"
+	"net/http/pprof"
 )
 
 type dkvSrvrRole string
@@ -64,10 +72,15 @@ var (
 	verboseLogging bool
 	accessLogger   *zap.Logger
 	dkvLogger      *zap.Logger
-	pprofEnable    bool
 
 	// Other vars
-	statsCli stats.Client
+	pprofEnable   bool
+	statsCli      stats.Client
+	promRegistry  prometheus.Registerer
+	statsStreamer *stats.StatStreamer
+
+	discoveryClient        discovery.Client
+	statAggregatorRegistry *aggregate.StatAggregatorRegistry
 )
 
 func init() {
@@ -92,13 +105,7 @@ func main() {
 	setupAccessLogger()
 	setFlagsForNexusDirs()
 	setupStats()
-
-	if pprofEnable {
-		go func() {
-			log.Printf("[INFO] Starting pprof on port 6060\n")
-			log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-		}()
-	}
+	go setupHttpServer()
 
 	kvs, cp, ca, br := newKVStore()
 	grpcSrvr, lstnr := newGrpcServerListener()
@@ -107,13 +114,21 @@ func main() {
 	//srvrRole.printFlags()
 
 	// Create the region info which is passed to DKVServer
-	nodeAddr, err := nodeAddress()
+	nodeAddr, err := nodeAddress(config.ListenAddr)
 	if err != nil {
-		log.Panicf("Failed to detect IP Address %v.", err)
+		log.Panicf("Failed to parse GRPC Listen Address %v.", err)
 	}
+
+	//HTTP listen Address
+	nodeHTTPAddr, err := nodeAddress(config.HttpListenAddr)
+	if err != nil {
+		log.Panicf("Failed to parse HTTP Listen Address %v.", err)
+	}
+
 	regionInfo := &serverpb.RegionInfo{
 		DcID:            config.DcID,
 		NodeAddress:     nodeAddr.Host,
+		HttpAddress:     nodeHTTPAddr.Host,
 		Database:        config.Database,
 		VBucket:         config.VBucket,
 		Status:          serverpb.RegionStatus_INACTIVE,
@@ -125,9 +140,9 @@ func main() {
 		Logger:                    dkvLogger,
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
+		PrometheusRegistry:        promRegistry,
 	}
 
-	var discoveryClient discovery.Client
 	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
 		discoveryClient, err = newDiscoveryClient()
@@ -327,6 +342,10 @@ func setupStats() {
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
+	promRegistry = stats.NewPromethousRegistry()
+	statsStreamer = stats.NewStatStreamer()
+	statAggregatorRegistry = aggregate.NewStatAggregatorRegistry()
+	go statsStreamer.Run()
 }
 
 func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeApplier, storage.Backupable) {
@@ -353,7 +372,8 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			rocksdb.WithCacheSize(config.BlockCacheSize),
 			rocksdb.WithRocksDBConfig(config.DbEngineIni),
 			rocksdb.WithLogger(dkvLogger),
-			rocksdb.WithStats(statsCli))
+			rocksdb.WithStats(statsCli),
+			rocksdb.WithPromStats(promRegistry))
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
@@ -368,6 +388,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 			badger.WithBadgerConfig(config.DbEngineIni),
 			badger.WithLogger(dkvLogger),
 			badger.WithStats(statsCli),
+			badger.WithPromStats(promRegistry),
 		}
 		if config.DisklessMode {
 			bdbOpts = append(bdbOpts, badger.WithInMemory())
@@ -452,8 +473,8 @@ func newDiscoveryClient() (discovery.Client, error) {
 
 }
 
-func nodeAddress() (*url.URL, error) {
-	ip, port, err := net.SplitHostPort(config.ListenAddr)
+func nodeAddress(listenAddress string) (*url.URL, error) {
+	ip, port, err := net.SplitHostPort(listenAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -476,4 +497,111 @@ func nodeAddress() (*url.URL, error) {
 
 	ep := url.URL{Host: fmt.Sprintf("%s:%s", ip, port)}
 	return &ep, nil
+}
+
+func setupHttpServer() {
+	router := mux.NewRouter()
+	router.Handle("/metrics", promhttp.Handler())
+	router.HandleFunc("/metrics/json", jsonMetricHandler)
+
+	router.HandleFunc("/metrics/stream", statsStreamHandler)
+	if toDKVSrvrRole(config.DbRole) == masterRole {
+		// Should be enabled only for discovery server ?
+		router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
+	}
+
+	//Pprof
+	if pprofEnable {
+		log.Printf("[INFO] Enabling pprof...\n")
+		router.HandleFunc("/debug/pprof/", pprof.Index)
+		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
+
+	http.Handle("/", router)
+	http.ListenAndServe(config.HttpListenAddr, nil)
+}
+
+func jsonMetricHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	metrics, _ := stats.GetMetrics()
+	json.NewEncoder(w).Encode(metrics)
+}
+
+func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
+	if f, ok := w.(http.Flusher); !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	} else {
+		// Set the headers related to event streaming.
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+
+		statChannel := make(chan stats.DKVMetrics, 5)
+		channelId := statsStreamer.Register(statChannel)
+		defer func() {
+			io.Copy(ioutil.Discard, r.Body)
+			r.Body.Close()
+		}()
+		// Listen to the closing of the http connection via the CloseNotifier
+		log.Printf("[INFO] Starting Metrics Stream %v\n", channelId)
+		for {
+			select {
+			case stat := <-statChannel:
+				statJson, _ := json.Marshal(stat)
+				fmt.Fprintf(w, "data: %s\n\n", statJson)
+				f.Flush()
+			case <-r.Context().Done():
+				statsStreamer.DeRegister(channelId)
+				log.Printf("[INFO] Closing Metics Stream %v\n", channelId)
+				return
+			}
+		}
+	}
+}
+
+func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	regions, err := discoveryClient.GetClusterStatus("", "")
+	if err != nil {
+		http.Error(w, "Unable to discover peers!", http.StatusInternalServerError)
+		return
+	}
+	if f, ok := w.(http.Flusher); !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	} else {
+		// Set the headers related to event streaming.
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+
+		statChannel := make(chan map[string]*stats.DKVMetrics, 5)
+		channelId := statAggregatorRegistry.Register(regions, func(region *serverpb.RegionInfo) string { return region.Database }, statChannel)
+		defer func() {
+			io.Copy(ioutil.Discard, r.Body)
+			r.Body.Close()
+		}()
+
+		// Listen to the closing of the http connection via the CloseNotifier
+		log.Printf("[INFO] Starting ClusterMetics Stream %v\n", channelId)
+		for {
+			select {
+			case stat := <-statChannel:
+				statJson, _ := json.Marshal(stat)
+				fmt.Fprintf(w, "data: %s\n\n", statJson)
+				f.Flush()
+			case <-r.Context().Done():
+				log.Printf("[INFO] Closing ClusterMetics Stream %v\n", channelId)
+				statAggregatorRegistry.DeRegister(channelId)
+				return
+			}
+		}
+	}
 }

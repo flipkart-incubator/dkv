@@ -13,10 +13,12 @@ require (
 	github.com/flipkart-incubator/nexus v0.0.0-20220316072727-c44c4b25144a
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
+	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/kpango/fastime v1.0.16
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
-	github.com/prometheus/client_golang v1.5.1 // indirect
+	github.com/prometheus/client_golang v1.5.1
+	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.0.10 // indirect
 	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/pflag v1.0.5

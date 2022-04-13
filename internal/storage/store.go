@@ -6,8 +6,33 @@ import (
 	"os"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
+
+type Stat struct {
+	RequestLatency *prometheus.SummaryVec
+	ResponseError  *prometheus.CounterVec
+}
+
+func NewStat(registry prometheus.Registerer) *Stat {
+	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace:  "storage",
+		Name:       "latency",
+		Help:       "Latency statistics for storage operations",
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		MaxAge:     10 * time.Second,
+	}, []string{stats.Ops})
+	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "storage",
+		Name:      "error",
+		Help:      "Error count for storage operations",
+	}, []string{stats.Ops})
+	registry.MustRegister(RequestLatency, ResponseError)
+	return &Stat{RequestLatency, ResponseError}
+}
 
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various

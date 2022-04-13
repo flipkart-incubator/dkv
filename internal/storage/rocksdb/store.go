@@ -16,6 +16,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
 	"github.com/flipkart-incubator/dkv/internal/storage/utils"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -41,6 +42,7 @@ type rocksDB struct {
 	ttlCF       *gorocksdb.ColumnFamilyHandle
 	optimTrxnDB *gorocksdb.OptimisticTransactionDB
 	opts        *rocksDBOpts
+	stat        *storage.Stat
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
@@ -58,6 +60,7 @@ type rocksDBOpts struct {
 	lgr            *zap.Logger
 	statsCli       stats.Client
 	cfNames        []string
+	promRegistry   prometheus.Registerer
 }
 
 // DBOption is used to configure the RocksDB
@@ -71,6 +74,17 @@ func WithLogger(lgr *zap.Logger) DBOption {
 			opts.lgr = lgr
 		} else {
 			opts.lgr = zap.NewNop()
+		}
+	}
+}
+
+// WithPromStats is used to inject a prometheus stats instance
+func WithPromStats(registry prometheus.Registerer) DBOption {
+	return func(opts *rocksDBOpts) {
+		if registry != nil {
+			opts.promRegistry = registry
+		} else {
+			opts.promRegistry = stats.NewPromethousNoopRegistry()
 		}
 	}
 }
@@ -175,6 +189,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	opts.SetCreateIfMissingColumnFamilies(true)
+	opts.SetWALTtlSeconds(uint64(600))
 	opts.SetBlockBasedTableFactory(bbto)
 	rstOpts := gorocksdb.NewRestoreOptions()
 	wrOpts := gorocksdb.NewDefaultWriteOptions()
@@ -190,6 +205,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 		writeOpts:      wrOpts,
 		statsCli:       stats.NewNoOpClient(),
 		cfNames:        cfNames,
+		promRegistry:   stats.NewPromethousNoopRegistry(),
 	}
 }
 
@@ -221,6 +237,7 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 		optimTrxnDB:    optimTrxnDB,
 		opts:           opts,
 		globalMutation: 0,
+		stat:           storage.NewStat(opts.promRegistry),
 	}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	//go rocksdb.Compaction()
@@ -323,6 +340,8 @@ func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Delete), time.Now())
+
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	wb.DeleteCF(rdb.ttlCF, key)
@@ -330,6 +349,7 @@ func (rdb *rocksDB) Delete(key []byte) error {
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.Delete).Inc()
 	}
 	return err
 }
@@ -346,6 +366,8 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 
 func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.cas.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
+
 	ro := rdb.opts.readOpts
 	wo := rdb.opts.writeOpts
 	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
@@ -371,6 +393,7 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	err = txn.Put(key, update)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.cas.set.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	}
 	err = txn.Commit()
@@ -444,6 +467,7 @@ func (r *checkPointSnapshot) Close() error {
 
 func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.GetSnapShot), time.Now())
 
 	//Prevent any other backups or restores
 	err := rdb.beginGlobalMutation()
@@ -507,6 +531,7 @@ func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
 		return nil
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.PutSnapShot), time.Now())
 	defer snap.Close()
 
 	//Prevent any other backups or restores
@@ -616,6 +641,8 @@ func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.load.changes.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.LoadChange), time.Now())
+
 	chngIter, err := rdb.db.GetUpdatesSince(fromChangeNumber)
 	if err != nil {
 		return nil, err
@@ -638,6 +665,8 @@ func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.save.changes.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.SaveChange), time.Now())
+
 	appldChngNum := uint64(0)
 	for _, chng := range changes {
 		wb := gorocksdb.WriteBatchFrom(chng.SerialisedForm)
@@ -806,9 +835,12 @@ func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 
 func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Get), time.Now())
+
 	values, err := rdb.db.MultiGetCFMultiCF(ro, []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.Get).Inc()
 		return nil, err
 	}
 	value1, value2 := values[0], values[1]
@@ -851,6 +883,7 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.MultiGet), time.Now())
 
 	kl := len(keys)
 	reqCFs := make([]*gorocksdb.ColumnFamilyHandle, kl<<1)
@@ -862,6 +895,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	values, err := rdb.db.MultiGetCFMultiCF(ro, reqCFs, append(keys, keys...))
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.MultiGet).Inc()
 		return nil, err
 	}
 

@@ -66,6 +66,7 @@ var (
 	serverOpts = &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 	}
 
@@ -898,6 +899,7 @@ func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca stora
 	specialOpts := &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		HealthCheckTickerInterval: uint(1),
 	}
 
