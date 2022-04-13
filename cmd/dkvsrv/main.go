@@ -12,8 +12,11 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime"
 	"strings"
 	"syscall"
+
+	"github.com/flipkart-incubator/dkv/internal"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -519,6 +522,11 @@ func setupHttpServer() {
 		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	}
+
+	//Admin UI
+	liveMode := runtime.GOOS == "dawin"
+	fileSystem := internal.GetWWWFileSystem(liveMode)
+	router.PathPrefix("/admin/").Handler(http.StripPrefix("/admin/", internal.NoCache(http.FileServer(fileSystem))))
 
 	http.Handle("/", router)
 	http.ListenAndServe(config.HttpListenAddr, nil)

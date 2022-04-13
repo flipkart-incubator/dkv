@@ -1,6 +1,6 @@
 module github.com/flipkart-incubator/dkv
 
-go 1.15
+go 1.16
 
 require (
 	github.com/Jille/grpc-multi-resolver v1.0.0

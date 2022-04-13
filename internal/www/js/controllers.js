@@ -67,9 +67,9 @@
             function($location, $scope, $rootScope ,$timeout, $sce, DKVService) {
             /* discover master nodes from here*/
                 $scope.masters = {
-                    "m1":"http://127.0.0.1:7081",
-                    "m2":"http://127.0.0.1:7082",
-                    "m3":"http://127.0.0.1:7083",
+                    "m1":"http://127.0.0.1:8081",
+                    "m2":"http://127.0.0.1:8082",
+                    "m3":"http://127.0.0.1:8083",
                 }
 
                 $scope.througputParser = througputParser

@@ -1,9 +1,9 @@
 CONFIG={
     "router": {
         "Home":{
-            "path":"/",
+            "path":"/admin/",
             "controller":"HomeCtrl",
-            "templateUrl": "home.html",
+            "templateUrl": "/admin/home.html",
         },
     },
 };

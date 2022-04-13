@@ -11,7 +11,7 @@
                 });
             }
             $routeProvider.otherwise({
-                redirectTo: "/"
+                redirectTo: "/admin/"
             });
             $locationProvider.html5Mode(true);
         })
