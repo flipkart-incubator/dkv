@@ -59,7 +59,7 @@ func GetMetrics() (*DKVMetrics, error) {
 	}
 	for _, mf := range mfs {
 		switch mf.GetName() {
-		case "storage_latency":
+		case "dkv_storage_latency_rocksdb", "dkv_storage_latency_badger":
 			for _, m := range mf.GetMetric() {
 				dkvMetrics.StoreLatency[m.Label[0].GetValue()] = NewPercentile(m.GetSummary().GetQuantile())
 				dkvMetrics.StorageOpsCount[m.Label[0].GetValue()] = m.GetSummary().GetSampleCount()
@@ -74,7 +74,7 @@ func GetMetrics() (*DKVMetrics, error) {
 				dkvMetrics.DKVLatency[m.Label[0].GetValue()] = NewPercentile(m.GetSummary().GetQuantile())
 				dkvMetrics.DKVReqCount[m.Label[0].GetValue()] = m.GetSummary().GetSampleCount()
 			}
-		case "storage_error":
+		case "dkv_storage_error":
 			for _, m := range mf.GetMetric() {
 				dkvMetrics.StorageOpsErrorCount[m.Label[0].GetValue()] = m.GetCounter().GetValue()
 			}

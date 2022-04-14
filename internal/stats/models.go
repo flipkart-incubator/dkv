@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"strconv"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -67,12 +68,15 @@ func MergeMapFloat64(m1, m2 map[string]float64) map[string]float64 {
 	return m1
 }
 
+type jFloat64 float64
+
 func MergeMapPercentile(m1, m2 map[string]*Percentile, count float64) map[string]*Percentile {
+	var jCount jFloat64 = jFloat64(count)
 	for k, v := range m2 {
 		if _, exist := m1[k]; exist {
-			m1[k].P50 = (m1[k].P50*count + m2[k].P50) / (count + 1)
-			m1[k].P90 = (m1[k].P90*count + m2[k].P90) / (count + 1)
-			m1[k].P99 = (m1[k].P99*count + m2[k].P99) / (count + 1)
+			m1[k].P50 = (m1[k].P50*jCount + m2[k].P50) / (jCount + 1)
+			m1[k].P90 = (m1[k].P90*jCount + m2[k].P90) / (jCount + 1)
+			m1[k].P99 = (m1[k].P99*jCount + m2[k].P99) / (jCount + 1)
 		} else {
 			m1[k] = v
 		}
@@ -80,10 +84,26 @@ func MergeMapPercentile(m1, m2 map[string]*Percentile, count float64) map[string
 	return m1
 }
 
+// This is required because json doesnt allow NaN or Inf values
+// Based on https://stackoverflow.com/a/32085427
+func (fs jFloat64) MarshalJSON() ([]byte, error) {
+	vs := strconv.FormatFloat(float64(fs), 'f', 2, 64)
+	return []byte(`"` + vs + `"`), nil
+}
+
+func (fs *jFloat64) UnmarshalJSON(b []byte) error {
+	if b[0] == '"' {
+		b = b[1 : len(b)-1]
+	}
+	f, err := strconv.ParseFloat(string(b), 64)
+	*fs = jFloat64(f)
+	return err
+}
+
 type Percentile struct {
-	P50 float64 `json:"p50"`
-	P90 float64 `json:"p90"`
-	P99 float64 `json:"p99"`
+	P50 jFloat64 `json:"p50"`
+	P90 jFloat64 `json:"p90"`
+	P99 jFloat64 `json:"p99"`
 }
 
 func NewDKVMetric() *DKVMetrics {
@@ -104,11 +124,11 @@ func NewPercentile(quantile []*dto.Quantile) *Percentile {
 	for _, q := range quantile {
 		switch *q.Quantile {
 		case 0.5:
-			percentile.P50 = *q.Value
+			percentile.P50 = jFloat64(*q.Value)
 		case 0.9:
-			percentile.P90 = *q.Value
+			percentile.P90 = jFloat64(*q.Value)
 		case 0.99:
-			percentile.P99 = *q.Value
+			percentile.P99 = jFloat64(*q.Value)
 		}
 	}
 	return percentile

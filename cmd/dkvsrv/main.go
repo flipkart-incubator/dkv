@@ -525,9 +525,19 @@ func setupHttpServer() {
 }
 
 func jsonMetricHandler(w http.ResponseWriter, r *http.Request) {
+	metrics, err := stats.GetMetrics()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	metrics, _ := stats.GetMetrics()
-	json.NewEncoder(w).Encode(metrics)
+	err = json.NewEncoder(w).Encode(metrics)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 }
 
 func statsStreamHandler(w http.ResponseWriter, r *http.Request) {
