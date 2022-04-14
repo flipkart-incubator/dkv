@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dgraph-io/ristretto/z"
 	"io"
 	"os"
 	"path"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/dgraph-io/ristretto/z"
 
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/prometheus/client_golang/prometheus"
@@ -107,7 +108,6 @@ func WithoutSyncWrites() DBOption {
 	}
 }
 
-
 // WithCacheSize sets the value in bytes the amount of
 // cache used for data blocks.
 func WithCacheSize(size uint64) DBOption {
@@ -164,7 +164,6 @@ func WithMemTableSize(size int64) DBOption {
 	}
 }
 
-
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options.
 func OpenDB(dbOpts ...DBOption) (kvs DB, err error) {
@@ -186,7 +185,7 @@ func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts, storage.NewStat(bdbOpts.promRegistry), 0}, nil
+	return &badgerDB{db, bdbOpts, storage.NewStat(bdbOpts.promRegistry, "badger"), 0}, nil
 }
 
 func (bdb *badgerDB) Close() error {
@@ -197,10 +196,13 @@ func (bdb *badgerDB) Close() error {
 func (bdb *badgerDB) Put(pairs ...*serverpb.KVPair) error {
 	/* todo stat computation */
 	metricsPrefix := "badger.put.multi"
+	metricsLabel := stats.MultiPut
 	if len(pairs) == 1 {
 		metricsPrefix = "badger.put.single"
+		metricsLabel = stats.Put
 	}
 	defer bdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(metricsLabel), time.Now())
 
 	wb := bdb.db.NewWriteBatch()
 	defer wb.Cancel()

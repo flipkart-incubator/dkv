@@ -53,7 +53,7 @@ func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
 		Name:       "latency",
 		Help:       "Latency statistics for dkv service",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge:     10 * time.Second,
+		MaxAge:     30 * time.Second,
 	}, []string{"Ops"})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dkv",
@@ -128,6 +128,7 @@ func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutReques
 }
 
 func (ss *standaloneService) MultiPut(ctx context.Context, putReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	defer stats.MeasureLatency(ss.stat.Latency.WithLabelValues(stats.MultiPut), time.Now())
 	ss.rwl.RLock()
 	defer ss.rwl.RUnlock()
 	puts := make([]*serverpb.KVPair, len(putReq.PutRequest))

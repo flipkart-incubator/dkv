@@ -9,6 +9,7 @@ import (
 const (
 	Ops           = "ops"
 	Put           = "put"
+	MultiPut      = "mput"
 	Get           = "get"
 	MultiGet      = "mget"
 	Delete        = "del"
