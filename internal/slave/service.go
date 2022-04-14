@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	dto "github.com/prometheus/client_model/go"
 	"io"
 	"math/rand"
 	"strings"
 	"time"
+
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	opts "github.com/flipkart-incubator/dkv/internal/opts"
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -81,24 +83,24 @@ type stat struct {
 
 func newStat(registry prometheus.Registerer) *stat {
 	replicationLag := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "slave",
-		Name:      "replication_lag",
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_lag",
 		Help:      "replication lag of the slave",
 	})
 	replicationDelay := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "slave",
-		Name:      "replication_delay",
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_delay",
 		Help:      "replication delay of the slave",
 	})
 	replicationStatus := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "slave",
-		Name:      "replication_status",
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_status",
 		Help:      "replication status of the slave",
 		MaxAge:    5 * time.Second,
 	}, []string{"masterAddr"})
 	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "slave",
-		Name:      "replication_speed",
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_speed",
 		Help:      "replication speed of the slave",
 	})
 	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed, replicationStatus)

@@ -237,7 +237,7 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 		optimTrxnDB:    optimTrxnDB,
 		opts:           opts,
 		globalMutation: 0,
-		stat:           storage.NewStat(opts.promRegistry),
+		stat:           storage.NewStat(opts.promRegistry, "rocksdb"),
 	}
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	//go rocksdb.Compaction()
@@ -303,11 +303,15 @@ func (rdb *rocksDB) replaceDB(checkpointDir string) error {
 
 func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
 	metricsPrefix := "rocksdb.put.multi"
+	metricsLabel := stats.MultiPut
 	if len(pairs) == 1 {
 		metricsPrefix = "rocksdb.put.single"
+		metricsLabel = stats.Put
 	}
 
 	defer rdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(metricsLabel), time.Now())
+
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	for _, kv := range pairs {
