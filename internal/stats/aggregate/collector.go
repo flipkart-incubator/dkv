@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -101,10 +102,12 @@ func (li *ListenerInfo) BroadCast() {
 
 func getStreamChannel(host string, ctx context.Context) (<-chan MetricEvent, error) {
 
-	client := &http.Client{}
-	transport := &http.Transport{}
-	transport.DisableCompression = true
-	client.Transport = transport
+	transport := &http.Transport{
+		DisableCompression: true,
+	}
+	client := &http.Client{
+		Transport: transport,
+	}
 	request, err := http.NewRequest("GET", "http://"+host+"/metrics/stream", nil)
 	if err != nil {
 		return nil, err
@@ -138,7 +141,11 @@ func parseEvent(response *http.Response, eventChannel chan MetricEvent, host str
 			if readBytes, err := br.ReadBytes('\n'); err == nil {
 				if event, err := buildEvent(readBytes); err == nil {
 					eventChannel <- MetricEvent{metric: *event, host: host}
+				} else {
+					log.Printf("Error in parsing Event: %v \n", err)
 				}
+			} else {
+				log.Printf("Error in reading Stream: %v \n", err)
 			}
 		}
 	}
