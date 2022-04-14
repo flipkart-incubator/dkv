@@ -53,7 +53,7 @@ func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
 		Name:       "latency",
 		Help:       "Latency statistics for dkv service",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge:     30 * time.Second,
+		MaxAge:     10 * time.Second,
 	}, []string{"Ops"})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: stats.Namespace,
