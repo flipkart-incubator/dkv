@@ -86,7 +86,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": false,
-          "expr": "rate(slave_replication_status_count{role=\"slave\",masterAddr!=\"no-master\"}[1m])",
+          "expr": "rate(dkv_slave_replication_status_count{role=\"slave\",masterAddr!=\"no-master\"}[1m])",
           "hide": false,
           "instant": false,
           "interval": "",
@@ -179,7 +179,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "slave_replication_delay",
+          "expr": "dkv_slave_replication_delay",
           "interval": "",
           "legendFormat": "ip: {{instance}}",
           "refId": "A"
@@ -279,7 +279,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "storage_latency_count{role=\"slave\", ops=\"saveChange\"}",
+          "expr": "dkv_storage_latency_badger_count{role=\"slave\", ops=\"saveChange\"}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -340,7 +340,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "storage_latency_count{role=\"slave\", ops=\"get\"}",
+          "expr": "dkv_storage_latency_badger_count{role=\"slave\", ops=\"get\"}",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -401,7 +401,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "rate(storage_latency_count{role=\"slave\", ops=\"get\"}[1m])",
+          "expr": "rate(dkv_storage_latency_badger_count{role=\"slave\", ops=\"get\"}[1m])",
           "interval": "",
           "legendFormat": "GET",
           "refId": "A"
@@ -412,7 +412,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "rate(storage_latency_count{role=\"slave\", ops=\"saveChange\"}[1m])",
+          "expr": "rate(dkv_storage_latency_badger_count{role=\"slave\", ops=\"saveChange\"}[1m])",
           "hide": false,
           "interval": "",
           "legendFormat": "Save Change",
@@ -540,7 +540,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "storage_error",
+          "expr": "dkv_storage_error",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -640,7 +640,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "storage_latency{ops=\"get\",role=\"slave\"}",
+          "expr": "dkv_storage_latency_badger{ops=\"get\",role=\"slave\"}",
           "instant": false,
           "interval": "",
           "legendFormat": " {{quantile}}p",
@@ -728,7 +728,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "exemplar": true,
-          "expr": "storage_latency{ops=\"saveChange\", role=\"slave\"}",
+          "expr": "dkv_storage_latency_badger{ops=\"saveChange\", role=\"slave\"}",
           "interval": "",
           "legendFormat": "{{quantile}}",
           "refId": "A"

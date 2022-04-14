@@ -24,7 +24,7 @@ func NewStat(registry prometheus.Registerer, engine string) *Stat {
 		Name:       fmt.Sprintf("storage_latency_%s", engine),
 		Help:       fmt.Sprintf("Latency statistics for %s storage operations", engine),
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge:     30 * time.Second,
+		MaxAge:     10 * time.Second,
 	}, []string{stats.Ops})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "dkv",
