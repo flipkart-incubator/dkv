@@ -16,6 +16,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	opts "github.com/flipkart-incubator/dkv/internal/opts"
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -82,23 +83,23 @@ type stat struct {
 
 func newStat(registry prometheus.Registerer) *stat {
 	replicationLag := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "dkv",
+		Namespace: stats.Namespace,
 		Name:      "slave_replication_lag",
 		Help:      "replication lag of the slave",
 	})
 	replicationDelay := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "dkv",
+		Namespace: stats.Namespace,
 		Name:      "slave_replication_delay",
 		Help:      "replication delay of the slave",
 	})
 	replicationStatus := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "dkv",
+		Namespace: stats.Namespace,
 		Name:      "slave_replication_status",
 		Help:      "replication status of the slave",
 		MaxAge:    5 * time.Second,
 	}, []string{"masterAddr"})
 	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "dkv",
+		Namespace: stats.Namespace,
 		Name:      "slave_replication_speed",
 		Help:      "replication speed of the slave",
 	})

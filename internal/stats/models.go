@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	Namespace     = "dkv"
 	Ops           = "ops"
 	Put           = "put"
 	MultiPut      = "mput"
