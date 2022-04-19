@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -9,6 +8,8 @@ import (
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+
+	flag "github.com/spf13/pflag"
 )
 
 type cmd struct {
@@ -31,7 +32,7 @@ var cmds = []*cmd{
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
 	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
-	{"getClusterInfo", "<dcId> <database> <vBucket>", "Gets the latest cluster info", (*cmd).getStatus, "", true},
+	{"getClusterInfo", "[dcId] [database] [vBucket]", "Gets the latest cluster info", (*cmd).getStatus, "", true},
 }
 
 func (c *cmd) usage() {
@@ -223,7 +224,7 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 var dkvAddr, dkvAuthority string
 
 func init() {
-	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
+	flag.StringVarP(&dkvAddr, "dkvAddr", "addr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
 	for _, c := range cmds {
 		if c.argDesc == "" {
