@@ -314,7 +314,7 @@ func stopServers() {
 func initDKVClients(ids ...int) {
 	for id := 1; id <= clusterSize; id++ {
 		svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-		if client, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+		if client, err := ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
 			panic(err)
 		} else {
 			dkvClis[id] = client
@@ -324,7 +324,7 @@ func initDKVClients(ids ...int) {
 
 func initSingleDkvClient(id int) {
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-	if client, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	} else {
 		dkvClis[id] = client
@@ -831,7 +831,7 @@ func testDelete(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
 
 func newDKVClient(port int) *ctl.DKVClient {
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	} else {
 		return client

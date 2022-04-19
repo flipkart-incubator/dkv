@@ -34,7 +34,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 	defer grpcSvc.GracefulStop()
 
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if dkvCli, err = ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+	if dkvCli, err = ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	}
 	defer dkvCli.Close()
