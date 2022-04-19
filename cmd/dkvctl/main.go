@@ -224,7 +224,7 @@ func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
 var dkvAddr, dkvAuthority string
 
 func init() {
-	flag.StringVarP(&dkvAddr, "dkvAddr", "addr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
+	flag.StringVarP(&dkvAddr, "dkvAddr", "a", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
 	for _, c := range cmds {
 		if c.argDesc == "" {
@@ -232,18 +232,6 @@ func init() {
 		} else {
 			flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
 		}
-	}
-	flag.Usage = usage
-}
-
-func usage() {
-	fmt.Printf("Usage of %s:\n", os.Args[0])
-	for _, flagName := range []string{"dkvAddr", "authority"} {
-		dkvFlag := flag.Lookup(flagName)
-		fmt.Printf("  -%s %s (default: %s)\n", dkvFlag.Name, dkvFlag.Usage, dkvFlag.DefValue)
-	}
-	for _, cmd := range cmds {
-		cmd.usage()
 	}
 }
 
@@ -263,7 +251,7 @@ func isFlagPassed(name string) bool {
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
+		flag.Usage()
 		return
 	}
 
@@ -295,6 +283,6 @@ func main() {
 		}
 	}
 	if !validCmd {
-		usage()
+		flag.Usage()
 	}
 }
