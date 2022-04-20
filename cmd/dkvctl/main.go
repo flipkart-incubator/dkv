@@ -14,6 +14,7 @@ import (
 
 type cmd struct {
 	name       string
+	shorthand  string
 	argDesc    string
 	cmdDesc    string
 	fn         func(*cmd, *ctl.DKVClient, ...string)
@@ -22,17 +23,17 @@ type cmd struct {
 }
 
 var cmds = []*cmd{
-	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
-	{"del", "<key>", "Delete the given key", (*cmd).del, "", false},
-	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
-	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
-	{"keys", "\"*\" | <prefix> [<startKey>]", "Get keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).keys, "", false},
-	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
-	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
-	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
-	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
-	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
-	{"clusterInfo", "[dcId] [database] [vBucket]", "Lists the various members of the cluster", (*cmd).clusterInfo, "", true},
+	{"set", "s", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
+	{"del", "d", "<key>", "Delete the given key", (*cmd).del, "", false},
+	{"get", "g", "<key>", "Get value for the given key", (*cmd).get, "", false},
+	{"iter", "i", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
+	{"keys", "k", "\"*\" | <prefix> [<startKey>]", "Get keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).keys, "", false},
+	{"backup", "", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
+	{"restore", "", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
+	{"addNode", "", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
+	{"removeNode", "", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
+	{"listNodes", "", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
+	{"clusterInfo", "", "[dcId] [database] [vBucket]", "Lists the various members of the cluster", (*cmd).clusterInfo, "", true},
 }
 
 func (c *cmd) usage() {
@@ -230,7 +231,11 @@ func init() {
 		if c.argDesc == "" {
 			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
 		} else {
-			flag.StringVar(&c.value, c.name, c.value, fmt.Sprintf("%s \x00 \x00 %s", c.argDesc, c.cmdDesc))
+			if c.shorthand == "" {
+				flag.StringVar(&c.value, c.name, c.value, fmt.Sprintf("%s \x00 \x00 %s", c.argDesc, c.cmdDesc))
+			} else {
+				flag.StringVarP(&c.value, c.name, c.shorthand, c.value, fmt.Sprintf("%s \x00 \x00 %s", c.argDesc, c.cmdDesc))
+			}
 		}
 	}
 	flag.CommandLine.SortFlags = false
