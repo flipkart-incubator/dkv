@@ -32,7 +32,7 @@ var cmds = []*cmd{
 	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
 	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
 	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
-	{"getClusterInfo", "[dcId] [database] [vBucket]", "Gets the latest cluster info", (*cmd).getStatus, "", true},
+	{"clusterInfo", "[dcId] [database] [vBucket]", "Lists the various members of the cluster", (*cmd).clusterInfo, "", true},
 }
 
 func (c *cmd) usage() {
@@ -193,7 +193,7 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-func (c *cmd) getStatus(client *ctl.DKVClient, args ...string) {
+func (c *cmd) clusterInfo(client *ctl.DKVClient, args ...string) {
 	dcId := ""
 	database := ""
 	vBucket := ""
@@ -230,9 +230,10 @@ func init() {
 		if c.argDesc == "" {
 			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
 		} else {
-			flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
+			flag.StringVar(&c.value, c.name, c.value, fmt.Sprintf("%s \x00 \x00 %s", c.argDesc, c.cmdDesc))
 		}
 	}
+	flag.CommandLine.SortFlags = false
 }
 
 func trimLower(str string) string {
