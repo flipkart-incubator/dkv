@@ -37,11 +37,17 @@ var cmds = []*cmd{
 }
 
 func (c *cmd) usage() {
-	if c.argDesc == "" {
-		fmt.Printf("  -%s - %s\n", c.name, c.cmdDesc)
+	fmt.Fprintf(os.Stderr, "Error: Invalid Syntax. Usage of %s:\n", os.Args[0])
+	line := ""
+	if c.shorthand != "" {
+		line = fmt.Sprintf("  -%s, --%s", c.shorthand, c.name)
 	} else {
-		fmt.Printf("  -%s %s - %s\n", c.name, c.argDesc, c.cmdDesc)
+		line = fmt.Sprintf("      --%s", c.name)
 	}
+	if c.argDesc != "" {
+		line += fmt.Sprintf(" %s \t\t%s", c.argDesc, c.cmdDesc)
+	}
+	fmt.Fprintf(os.Stderr, "%s\n", line)
 }
 
 func (c *cmd) set(client *ctl.DKVClient, args ...string) {
@@ -239,10 +245,6 @@ func init() {
 		}
 	}
 	flag.CommandLine.SortFlags = false
-}
-
-func trimLower(str string) string {
-	return strings.ToLower(strings.TrimSpace(str))
 }
 
 func isFlagPassed(name string) bool {
