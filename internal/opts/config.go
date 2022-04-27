@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"github.com/flipkart-incubator/dkv/internal/discovery"
 
 	flag "github.com/spf13/pflag"
 
@@ -39,7 +40,7 @@ type Config struct {
 	StatsdAddr     string `mapstructure:"statsd-addr" desc:"StatsD service address in host:port format"`
 
 	//Service discovery related params
-	DiscoveryServiceConfig string `mapstructure:"discovery-service-config" desc:"A .ini file for configuring discovery service parameters"`
+	DiscoveryServiceConfig discovery.DiscoveryServiceConfigDto `mapstructure:"discovery-service" desc:"config for discovery server"`
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers

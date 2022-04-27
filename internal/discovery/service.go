@@ -9,7 +9,6 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
-	"gopkg.in/ini.v1"
 	"io"
 	"strconv"
 )
@@ -27,14 +26,20 @@ type DiscoveryConfig struct {
 	HeartbeatTimeout uint64
 }
 
-func NewDiscoverConfigFromIni(sect *ini.Section) (*DiscoveryConfig, error) {
-	sectConf := sect.KeysHash()
-	if statusTTL, err := strconv.ParseUint(sectConf["statusTTL"], 10, 64); err == nil {
-		if heartbeatTimeout, err := strconv.ParseUint(sectConf["heartbeatTimeout"], 10, 64); err == nil {
+type DiscoveryConfigDto struct {
+
+	StatusTTl string
+	HeartbeatTimeout string
+}
+
+func ValidateAndGetDiscoveryServerConfig(serverConfigDto DiscoveryConfigDto) (*DiscoveryConfig, error) {
+
+	if statusTTL, err := strconv.ParseUint(serverConfigDto.StatusTTl, 10, 64); err == nil {
+		if heartbeatTimeout, err := strconv.ParseUint(serverConfigDto.HeartbeatTimeout, 10, 64); err == nil {
 			return &DiscoveryConfig{statusTTL, heartbeatTimeout}, nil
 		}
 	}
-	return nil, fmt.Errorf("Invalid discovery server configuration. Check section %s", sect.Name())
+	return nil, fmt.Errorf("Invalid discovery server configuration")
 }
 
 type discoverService struct {

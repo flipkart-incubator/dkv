@@ -25,3 +25,16 @@ type Client interface {
 	StatusPropagator
 	ClusterInfoGetter
 }
+
+type DiscoveryServiceConfig struct {
+
+	ServiceConfig DiscoveryConfig
+
+	ClientConfig DiscoveryClientConfig
+}
+
+type DiscoveryServiceConfigDto struct {
+
+	ServiceConfig DiscoveryConfigDto
+	ClientConfig DiscoveryClientConfigDto
+}

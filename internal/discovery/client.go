@@ -15,7 +15,6 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"gopkg.in/ini.v1"
 )
 
 type DiscoveryClientConfig struct {
@@ -26,20 +25,27 @@ type DiscoveryClientConfig struct {
 	PollClusterInfoInterval time.Duration
 }
 
-func NewDiscoveryClientConfigFromIni(sect *ini.Section) (*DiscoveryClientConfig, error) {
-	sectConf := sect.KeysHash()
-	if discoveryServiceAddr, ok := sectConf["discoveryServiceAddr"]; ok {
-		if pushStatusInterval, err := strconv.Atoi(sectConf["pushStatusInterval"]); err == nil {
-			if pollClusterInfoInterval, err := strconv.Atoi(sectConf["pollClusterInfoInterval"]); err == nil {
+type DiscoveryClientConfigDto struct {
+
+	DiscoveryServiceAddr string
+	PushStatusInterval string
+	PollClusterInfoInterval string
+}
+
+func ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto DiscoveryClientConfigDto) (*DiscoveryClientConfig, error) {
+
+	if len(discoveryClientConfigDto.DiscoveryServiceAddr) > 0 {
+		if pushStatusInterval, err := strconv.Atoi(discoveryClientConfigDto.PushStatusInterval); err == nil {
+			if pollClusterInfoInterval, err := strconv.Atoi(discoveryClientConfigDto.PollClusterInfoInterval); err == nil {
 				return &DiscoveryClientConfig{
-					DiscoveryServiceAddr:    discoveryServiceAddr,
+					DiscoveryServiceAddr:    discoveryClientConfigDto.DiscoveryServiceAddr,
 					PushStatusInterval:      time.Duration(pushStatusInterval),
 					PollClusterInfoInterval: time.Duration(pollClusterInfoInterval),
 				}, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Invalid discovery client configuration. Check section %s", sect.Name())
+	return nil, fmt.Errorf("Invalid discovery client configuration")
 }
 
 type discoveryClient struct {
