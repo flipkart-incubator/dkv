@@ -272,7 +272,7 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority)
+	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority, ctl.DefaultConnectOpts)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
