@@ -15,6 +15,6 @@ type DiscoveryConfigDto struct {
 
 type DiscoveryServiceConfigDto struct {
 
-	ServiceConfig DiscoveryConfigDto
+	ServerConfig DiscoveryConfigDto
 	ClientConfig DiscoveryClientConfigDto
 }

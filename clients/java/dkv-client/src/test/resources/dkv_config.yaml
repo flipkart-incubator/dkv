@@ -23,7 +23,7 @@ nexus-lease-based-reads : true
 nexus-snapshot-count : 100
 nexus-snapshot-catchup-entries : 5
 discovery-service:
-  ServiceConfig:
+  ServerConfig:
     statusTTL: 300
     heartbeatTimeout: 60
   ClientConfig:

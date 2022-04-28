@@ -13,7 +13,7 @@ vbucket : "default"
 verbose : false
 log-level : "warn"
 discovery-service:
-  ServiceConfig:
+  ServerConfig:
     statusTTL: 300
     heartbeatTimeout: 60
   ClientConfig:

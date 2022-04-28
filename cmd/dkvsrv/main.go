@@ -428,7 +428,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 
 func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
 
-	discoverySrvConfig, err := discovery.ValidateAndGetDiscoveryServerConfig(config.DiscoveryServiceConfig.ServiceConfig)
+	discoverySrvConfig, err := discovery.ValidateAndGetDiscoveryServerConfig(config.DiscoveryServiceConfig.ServerConfig)
 	if err != nil {
 		return err
 	}
