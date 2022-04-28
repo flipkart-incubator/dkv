@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/dtos"
 	"net"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -51,6 +53,8 @@ const (
 	engine         = "rocksdb"
 	dbName         = "default"
 	vbucket        = "default"
+	heartBeatTimeOut = 2
+	statusTtl = 5
 )
 
 var (
@@ -266,7 +270,8 @@ func startDiscoveryServer() {
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, discoverydkvSvc)
 
-	discoverServiceConf := &discovery.DiscoveryConfig{StatusTTl: 5, HeartbeatTimeout: 2}
+	discoveryServConfigDto := dtos.DiscoveryConfigDto{strconv.Itoa(statusTtl), strconv.Itoa(heartBeatTimeOut)}
+	discoverServiceConf,_ := discovery.ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
 	discoveryService, _ := discovery.NewDiscoveryService(discoverydkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 	go grpcSrvr.Serve(newListener(discoveryPort))

@@ -2,8 +2,10 @@ package discovery
 
 import (
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/dtos"
 	"net"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -23,6 +25,8 @@ const (
 	dbFolder   = "/tmp/dkv_discovery_test_db"
 	cacheSize  = 3 << 30
 	engine     = "rocksdb"
+	heartBeatTimeOut = 2
+	statusTtl = 5
 )
 
 func TestDKVDiscoveryService(t *testing.T) {
@@ -136,7 +140,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 	}
 
 	// Test regions are marked inactive after heartbeat interval expired
-	time.Sleep(3 * time.Second)
+	time.Sleep((heartBeatTimeOut+1) * time.Second)
 	regionInfos, _ = dkvCli.GetClusterInfo("", "", "")
 	if len(regionInfos) != 0 {
 		t.Errorf("GET Cluster Info mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "All expired", 0, len(regionInfos))
@@ -145,13 +149,26 @@ func TestDKVDiscoveryService(t *testing.T) {
 	// Test keys are purged after status TTL expired
 	getResponse, _ := dkvCli.Get(serverpb.ReadConsistency_SEQUENTIAL, []byte("db1:vbucket1:host1:port"))
 	if getResponse.Value != nil {
-		time.Sleep(3 * time.Second)
+		time.Sleep((heartBeatTimeOut+1) * time.Second)
 		getResponse, _ = dkvCli.Get(serverpb.ReadConsistency_SEQUENTIAL, []byte("db1:vbucket1:host1:port"))
 		if getResponse.Value != nil {
 			t.Errorf("Key not expired")
 		}
 	} else {
 		t.Errorf("Key not found")
+	}
+}
+
+func TestValidateAndGetDiscoveryServerConfig(t *testing.T) {
+
+	discoveryServConfigDto := dtos.DiscoveryConfigDto{strconv.Itoa(statusTtl), strconv.Itoa(heartBeatTimeOut)}
+	discoveryServConfig,err := ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
+	if err != nil{
+		t.Errorf("Error while fetching discovery server config")
+	}
+
+	if (discoveryServConfig.HeartbeatTimeout != uint64(heartBeatTimeOut)) || (discoveryServConfig.StatusTTl != uint64(statusTtl)){
+		t.Errorf("Invalid discovery server config")
 	}
 }
 
@@ -163,7 +180,8 @@ func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFold
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 
-	discoverServiceConf := &DiscoveryConfig{StatusTTl: 5, HeartbeatTimeout: 2}
+	discoveryServConfigDto := dtos.DiscoveryConfigDto{strconv.Itoa(statusTtl), strconv.Itoa(heartBeatTimeOut)}
+	discoverServiceConf,_ := ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 

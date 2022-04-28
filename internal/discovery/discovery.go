@@ -32,9 +32,3 @@ type DiscoveryServiceConfig struct {
 
 	ClientConfig DiscoveryClientConfig
 }
-
-type DiscoveryServiceConfigDto struct {
-
-	ServiceConfig DiscoveryConfigDto
-	ClientConfig DiscoveryClientConfigDto
-}

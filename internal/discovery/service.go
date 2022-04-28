@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/dtos"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -26,13 +27,8 @@ type DiscoveryConfig struct {
 	HeartbeatTimeout uint64
 }
 
-type DiscoveryConfigDto struct {
 
-	StatusTTl string
-	HeartbeatTimeout string
-}
-
-func ValidateAndGetDiscoveryServerConfig(serverConfigDto DiscoveryConfigDto) (*DiscoveryConfig, error) {
+func ValidateAndGetDiscoveryServerConfig(serverConfigDto dtos.DiscoveryConfigDto) (*DiscoveryConfig, error) {
 
 	if statusTTL, err := strconv.ParseUint(serverConfigDto.StatusTTl, 10, 64); err == nil {
 		if heartbeatTimeout, err := strconv.ParseUint(serverConfigDto.HeartbeatTimeout, 10, 64); err == nil {

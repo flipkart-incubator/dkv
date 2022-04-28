@@ -7,6 +7,7 @@ This class contains the behaviour of propagating a nodes status updates to disco
 import (
 	"context"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/dtos"
 	"strconv"
 	"time"
 
@@ -25,14 +26,7 @@ type DiscoveryClientConfig struct {
 	PollClusterInfoInterval time.Duration
 }
 
-type DiscoveryClientConfigDto struct {
-
-	DiscoveryServiceAddr string
-	PushStatusInterval string
-	PollClusterInfoInterval string
-}
-
-func ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto DiscoveryClientConfigDto) (*DiscoveryClientConfig, error) {
+func ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto dtos.DiscoveryClientConfigDto) (*DiscoveryClientConfig, error) {
 
 	if len(discoveryClientConfigDto.DiscoveryServiceAddr) > 0 {
 		if pushStatusInterval, err := strconv.Atoi(discoveryClientConfigDto.PushStatusInterval); err == nil {

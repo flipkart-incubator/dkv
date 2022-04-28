@@ -2,6 +2,8 @@ package discovery
 
 import (
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/dtos"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +16,9 @@ import (
 
 const (
 	discoverySvcPort = 8070
+	pollClusterInfoInterval = "5"
+	pushStatusInterval = "5"
+
 )
 
 var (
@@ -31,8 +36,10 @@ func TestDiscoveryClient(t *testing.T) {
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
 	<-time.After(time.Duration(10) * time.Second)
-	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
-		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
+
+	var discoveryClientConfigDto = dtos.DiscoveryClientConfigDto{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
+		pushStatusInterval, pollClusterInfoInterval}
+	clientConfig, _ := ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto)
 
 	dClient, _ := NewDiscoveryClient(clientConfig, zap.NewNop())
 	defer dClient.Close()
@@ -113,6 +120,28 @@ func TestDiscoveryClient(t *testing.T) {
 	if len(regionInfos) != 0 {
 		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "DB1 vBucket3", 0, len(regionInfos))
 	}
+}
+
+func TestValidateAndGetDiscoveryClientConfig(t *testing.T) {
+
+	var discoveryServerAddr = fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort)
+	var discoveryClientConfigDto = dtos.DiscoveryClientConfigDto{discoveryServerAddr,
+		pushStatusInterval, pollClusterInfoInterval}
+	discoveryClientConfig, error := ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto)
+
+	if error != nil{
+		t.Errorf("Error occured while parsing discovery client config")
+	}
+
+	pushStatusInterval, _ := strconv.Atoi(pushStatusInterval)
+	pollClusterInterval,_ := strconv.Atoi(pollClusterInfoInterval)
+
+	if (discoveryClientConfig.PushStatusInterval != time.Duration(pushStatusInterval)) ||
+		(discoveryClientConfig.PollClusterInfoInterval != time.Duration(pollClusterInterval)) ||
+		(discoveryClientConfig.DiscoveryServiceAddr != discoveryServerAddr) {
+		t.Errorf("Invalid discovery client config")
+	}
+
 }
 
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
