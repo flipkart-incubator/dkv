@@ -416,7 +416,7 @@ func (ss *slaveService) reconnectMaster() error {
 func (ss *slaveService) findAndConnectToMaster() error {
 	if master, err := ss.findNewMaster(); err == nil {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
-		if replCli, err := ctl.NewInSecureDKVClient(*master, ""); err == nil {
+		if replCli, err := ctl.NewInSecureDKVClient(*master, "", ctl.DefaultConnectOpts); err == nil {
 			if ss.replInfo.replCli != nil {
 				ss.replInfo.replCli.Close()
 			}

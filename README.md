@@ -75,21 +75,21 @@ $ ./bin/dkvsrv --config dkvsrv.yaml  --db-folder <folder_name>  --listen-addr <h
 ```
 
 ```bash
-$ ./bin/dkvctl -dkvAddr <host:port> -set <key> <value>
-$ ./bin/dkvctl -dkvAddr <host:port> -get <key>
+$ ./bin/dkvctl -a <host:port> --set <key> <value>
+$ ./bin/dkvctl -a <host:port> --get <key>
 ```
 
 Example session:
 ```bash
 $ ./bin/dkvsrv --config dkvsrv.yaml --db-folder /tmp/db --listen-addr 127.0.0.1:8080
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set foo bar
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get foo
+$ ./bin/dkvctl -a 127.0.0.1:8080 --set foo bar
+$ ./bin/dkvctl -a 127.0.0.1:8080 --get foo
 bar
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -set hello world
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -get hello
+$ ./bin/dkvctl -a 127.0.0.1:8080 --set hello world
+$ ./bin/dkvctl -a 127.0.0.1:8080 --get hello
 world
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -del foo
-$ ./bin/dkvctl -dkvAddr 127.0.0.1:8080 -iter "*"
+$ ./bin/dkvctl -a 127.0.0.1:8080 --del foo
+$ ./bin/dkvctl -a 127.0.0.1:8080 --iter "*"
 hello => world
 ```
 
