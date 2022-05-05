@@ -5,10 +5,8 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/dtos"
 	"net"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -270,7 +268,7 @@ func startDiscoveryServer() {
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, discoverydkvSvc)
 
-	discoveryServConfigDto := dtos.DiscoveryConfigDto{strconv.Itoa(statusTtl), strconv.Itoa(heartBeatTimeOut)}
+	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
 	discoverServiceConf,_ := discovery.ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
 	discoveryService, _ := discovery.NewDiscoveryService(discoverydkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)

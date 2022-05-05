@@ -2,8 +2,6 @@ package discovery
 
 import (
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/dtos"
-	"strconv"
 	"testing"
 	"time"
 
@@ -16,8 +14,8 @@ import (
 
 const (
 	discoverySvcPort = 8070
-	pollClusterInfoInterval = "5"
-	pushStatusInterval = "5"
+	pollClusterInfoInterval = time.Duration(5)
+	pushStatusInterval = time.Duration(5)
 
 )
 
@@ -37,7 +35,7 @@ func TestDiscoveryClient(t *testing.T) {
 	defer grpcSrvr.GracefulStop()
 	<-time.After(time.Duration(10) * time.Second)
 
-	var discoveryClientConfigDto = dtos.DiscoveryClientConfigDto{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
+	var discoveryClientConfigDto = opts.DiscoveryClientConfiguration{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		pushStatusInterval, pollClusterInfoInterval}
 	clientConfig, _ := ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto)
 
@@ -125,7 +123,7 @@ func TestDiscoveryClient(t *testing.T) {
 func TestValidateAndGetDiscoveryClientConfig(t *testing.T) {
 
 	var discoveryServerAddr = fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort)
-	var discoveryClientConfigDto = dtos.DiscoveryClientConfigDto{discoveryServerAddr,
+	var discoveryClientConfigDto = opts.DiscoveryClientConfiguration{discoveryServerAddr,
 		pushStatusInterval, pollClusterInfoInterval}
 	discoveryClientConfig, error := ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto)
 
@@ -133,11 +131,9 @@ func TestValidateAndGetDiscoveryClientConfig(t *testing.T) {
 		t.Errorf("Error occured while parsing discovery client config")
 	}
 
-	pushStatusInterval, _ := strconv.Atoi(pushStatusInterval)
-	pollClusterInterval,_ := strconv.Atoi(pollClusterInfoInterval)
 
-	if (discoveryClientConfig.PushStatusInterval != time.Duration(pushStatusInterval)) ||
-		(discoveryClientConfig.PollClusterInfoInterval != time.Duration(pollClusterInterval)) ||
+	if (discoveryClientConfig.PushStatusInterval != pushStatusInterval) ||
+		(discoveryClientConfig.PollClusterInfoInterval != pollClusterInfoInterval) ||
 		(discoveryClientConfig.DiscoveryServiceAddr != discoveryServerAddr) {
 		t.Errorf("Invalid discovery client config")
 	}

@@ -5,13 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/dtos"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"io"
-	"strconv"
 )
 
 /*
@@ -28,12 +27,10 @@ type DiscoveryConfig struct {
 }
 
 
-func ValidateAndGetDiscoveryServerConfig(serverConfigDto dtos.DiscoveryConfigDto) (*DiscoveryConfig, error) {
+func ValidateAndGetDiscoveryServerConfig(serverConfigDto opts.DiscoveryServerConfiguration) (*DiscoveryConfig, error) {
 
-	if statusTTL, err := strconv.ParseUint(serverConfigDto.StatusTTl, 10, 64); err == nil {
-		if heartbeatTimeout, err := strconv.ParseUint(serverConfigDto.HeartbeatTimeout, 10, 64); err == nil {
-			return &DiscoveryConfig{statusTTL, heartbeatTimeout}, nil
-		}
+	if serverConfigDto.StatusTTl > 0 && serverConfigDto.HeartbeatTimeout > 0 {
+		return &DiscoveryConfig{uint64(serverConfigDto.StatusTTl), uint64(serverConfigDto.HeartbeatTimeout)}, nil
 	}
 	return nil, fmt.Errorf("Invalid discovery server configuration")
 }

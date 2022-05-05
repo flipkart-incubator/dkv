@@ -2,10 +2,9 @@ package discovery
 
 import (
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/dtos"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"net"
 	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
@@ -161,7 +160,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 
 func TestValidateAndGetDiscoveryServerConfig(t *testing.T) {
 
-	discoveryServConfigDto := dtos.DiscoveryConfigDto{strconv.Itoa(statusTtl), strconv.Itoa(heartBeatTimeOut)}
+	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
 	discoveryServConfig,err := ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
 	if err != nil{
 		t.Errorf("Error while fetching discovery server config")
@@ -180,7 +179,7 @@ func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFold
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 
-	discoveryServConfigDto := dtos.DiscoveryConfigDto{strconv.Itoa(statusTtl), strconv.Itoa(heartBeatTimeOut)}
+	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
 	discoverServiceConf,_ := ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
