@@ -37,7 +37,11 @@ func TestDiscoveryClient(t *testing.T) {
 
 	var discoveryClientConfigDto = opts.DiscoveryClientConfiguration{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		pushStatusInterval, pollClusterInfoInterval}
-	clientConfig, _ := ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto)
+	clientConfig := &DiscoveryClientConfig{
+		DiscoveryServiceAddr:    discoveryClientConfigDto.DiscoveryServiceAddr,
+		PushStatusInterval:      discoveryClientConfigDto.PushStatusInterval,
+		PollClusterInfoInterval: discoveryClientConfigDto.PollClusterInfoInterval,
+	}
 
 	dClient, _ := NewDiscoveryClient(clientConfig, zap.NewNop())
 	defer dClient.Close()
@@ -120,25 +124,6 @@ func TestDiscoveryClient(t *testing.T) {
 	}
 }
 
-func TestValidateAndGetDiscoveryClientConfig(t *testing.T) {
-
-	var discoveryServerAddr = fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort)
-	var discoveryClientConfigDto = opts.DiscoveryClientConfiguration{discoveryServerAddr,
-		pushStatusInterval, pollClusterInfoInterval}
-	discoveryClientConfig, error := ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto)
-
-	if error != nil{
-		t.Errorf("Error occured while parsing discovery client config")
-	}
-
-
-	if (discoveryClientConfig.PushStatusInterval != pushStatusInterval) ||
-		(discoveryClientConfig.PollClusterInfoInterval != pollClusterInfoInterval) ||
-		(discoveryClientConfig.DiscoveryServiceAddr != discoveryServerAddr) {
-		t.Errorf("Invalid discovery client config")
-	}
-
-}
 
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
 	dbDir := fmt.Sprintf("%s_%d", dbFolder, id)

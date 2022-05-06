@@ -6,8 +6,6 @@ This class contains the behaviour of propagating a nodes status updates to disco
 
 import (
 	"context"
-	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/opts"
 	"time"
 
 	_ "github.com/Jille/grpc-multi-resolver"
@@ -23,20 +21,6 @@ type DiscoveryClientConfig struct {
 	PushStatusInterval time.Duration
 	// time in seconds to poll cluster info from discovery server
 	PollClusterInfoInterval time.Duration
-}
-
-func ValidateAndGetDiscoveryClientConfig(discoveryClientConfigDto opts.DiscoveryClientConfiguration) (*DiscoveryClientConfig, error) {
-
-	if len(discoveryClientConfigDto.DiscoveryServiceAddr) > 0 &&
-		discoveryClientConfigDto.PushStatusInterval > 0 &&
-		discoveryClientConfigDto.PollClusterInfoInterval > 0 {
-			return &DiscoveryClientConfig{
-				DiscoveryServiceAddr:    discoveryClientConfigDto.DiscoveryServiceAddr,
-				PushStatusInterval:      discoveryClientConfigDto.PushStatusInterval,
-				PollClusterInfoInterval: discoveryClientConfigDto.PollClusterInfoInterval,
-			}, nil
-	}
-	return nil, fmt.Errorf("Invalid discovery client configuration")
 }
 
 type discoveryClient struct {

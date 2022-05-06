@@ -269,7 +269,8 @@ func startDiscoveryServer() {
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, discoverydkvSvc)
 
 	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
-	discoverServiceConf,_ := discovery.ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
+	discoverServiceConf := &discovery.DiscoveryConfig{uint64(discoveryServConfigDto.StatusTTl),
+		uint64(discoveryServConfigDto.HeartbeatTimeout)}
 	discoveryService, _ := discovery.NewDiscoveryService(discoverydkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 	go grpcSrvr.Serve(newListener(discoveryPort))

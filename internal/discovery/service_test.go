@@ -158,19 +158,6 @@ func TestDKVDiscoveryService(t *testing.T) {
 	}
 }
 
-func TestValidateAndGetDiscoveryServerConfig(t *testing.T) {
-
-	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
-	discoveryServConfig,err := ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
-	if err != nil{
-		t.Errorf("Error while fetching discovery server config")
-	}
-
-	if (discoveryServConfig.HeartbeatTimeout != uint64(heartBeatTimeOut)) || (discoveryServConfig.StatusTTl != uint64(statusTtl)){
-		t.Errorf("Invalid discovery server config")
-	}
-}
-
 func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFolder string) (master.DKVService, *grpc.Server) {
 	kvs, cp, ba := newKVStore(dbFolder)
 	dkvSvc := master.NewStandaloneService(kvs, cp, ba, info, serveropts)
@@ -180,7 +167,8 @@ func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFold
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 
 	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
-	discoverServiceConf,_ := ValidateAndGetDiscoveryServerConfig(discoveryServConfigDto)
+	discoverServiceConf := &DiscoveryConfig{uint64(discoveryServConfigDto.StatusTTl),
+		uint64(discoveryServConfigDto.HeartbeatTimeout)}
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 

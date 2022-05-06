@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
@@ -24,15 +22,6 @@ type DiscoveryConfig struct {
 	// maximum time in seconds for the last status update to be considered valid
 	// after exceeding this time the region & node combination can be marked invalid
 	HeartbeatTimeout uint64
-}
-
-
-func ValidateAndGetDiscoveryServerConfig(serverConfigDto opts.DiscoveryServerConfiguration) (*DiscoveryConfig, error) {
-
-	if serverConfigDto.StatusTTl > 0 && serverConfigDto.HeartbeatTimeout > 0 {
-		return &DiscoveryConfig{uint64(serverConfigDto.StatusTTl), uint64(serverConfigDto.HeartbeatTimeout)}, nil
-	}
-	return nil, fmt.Errorf("Invalid discovery server configuration")
 }
 
 type discoverService struct {

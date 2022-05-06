@@ -428,10 +428,9 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 
 func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
 
-	discoverySrvConfig, err := discovery.ValidateAndGetDiscoveryServerConfig(config.DiscoveryServiceConfig.ServerConfig)
-	if err != nil {
-		return err
-	}
+	discoverySrvConfig := &discovery.DiscoveryConfig{uint64(config.DiscoveryServiceConfig.ServerConfig.StatusTTl),
+		uint64(config.DiscoveryServiceConfig.ServerConfig.HeartbeatTimeout)}
+
 	discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, discoverySrvConfig)
 	if err != nil {
 		return err
@@ -442,10 +441,12 @@ func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService
 
 func newDiscoveryClient() (discovery.Client, error) {
 
-	clientConfig, err := discovery.ValidateAndGetDiscoveryClientConfig(config.DiscoveryServiceConfig.ClientConfig)
-	if err != nil {
-		return nil, err
+	clientConfig := &discovery.DiscoveryClientConfig{
+		DiscoveryServiceAddr:    config.DiscoveryServiceConfig.ClientConfig.DiscoveryServiceAddr,
+		PushStatusInterval:      config.DiscoveryServiceConfig.ClientConfig.PushStatusInterval,
+		PollClusterInfoInterval: config.DiscoveryServiceConfig.ClientConfig.PollClusterInfoInterval,
 	}
+
 	client, err := discovery.NewDiscoveryClient(clientConfig, dkvLogger)
 	if err != nil {
 		return nil, err

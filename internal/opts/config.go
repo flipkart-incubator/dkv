@@ -66,6 +66,31 @@ type Config struct {
 	NexusSnapshotCount          int    `mapstructure:"nexus-snapshot-count" desc:"Number of committed transactions to trigger a snapshot to disk"`
 }
 
+type DiscoveryClientConfiguration struct {
+
+	DiscoveryServiceAddr string `mapstructure:"discovery-service-addr"`
+	// time in seconds to push status updates to discovery server
+	PushStatusInterval time.Duration `mapstructure:"push-status-interval"`
+	// time in seconds to poll cluster info from discovery server
+	PollClusterInfoInterval time.Duration `mapstructure:"poll-cluster-info-interval"`
+}
+
+type DiscoveryServerConfiguration struct {
+	// time in seconds after which the status entry of the region & node combination can be purged
+	StatusTTl int64 `mapstructure:"status-ttl"`
+	// maximum time in seconds for the last status update to be considered valid
+	// after exceeding this time the region & node combination can be marked invalid
+	HeartbeatTimeout int64 `mapstructure:"heartbeat-timeout"`
+}
+
+type DiscoveryServiceConfiguration struct {
+	//server side config for discovery service
+	ServerConfig DiscoveryServerConfiguration `mapstructure:"server-config"`
+	//client side config for discovery service
+	ClientConfig DiscoveryClientConfiguration `mapstructure:"client-config"`
+}
+
+
 func (c *Config) parseConfig() {
 	viper.Unmarshal(c)
 	//Handling time duration variable unmarshalling
@@ -114,6 +139,28 @@ func (c *Config) validateFlags() {
 		if c.ReplicationMasterAddr != "" && strings.IndexRune(c.ReplicationMasterAddr, ':') < 0 {
 			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", c.ReplicationMasterAddr)
 		}
+	}
+
+	//validate discovery server config
+
+	discoveryServerConfig := c.DiscoveryServiceConfig
+
+	if c.DbRole == "discovery" {
+
+		if discoveryServerConfig.ServerConfig.HeartbeatTimeout <= 0 ||
+			discoveryServerConfig.ServerConfig.StatusTTl <= 0 {
+			log.Panicf("Invalid discovery server configuration")
+		}
+	}
+
+	if c.DbRole != "none" && c.DbRole != "discovery" {
+
+		if len(discoveryServerConfig.ClientConfig.DiscoveryServiceAddr) <= 0 ||
+			discoveryServerConfig.ClientConfig.PushStatusInterval <= 0 ||
+				discoveryServerConfig.ClientConfig.PollClusterInfoInterval <= 0 {
+			log.Panicf("Invalid discovery server client configuration")
+		}
+
 	}
 }
 
