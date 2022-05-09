@@ -9,14 +9,18 @@ import (
 	"strings"
 	"time"
 
+	dto "github.com/prometheus/client_model/go"
+
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	opts "github.com/flipkart-incubator/dkv/internal/opts"
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -41,9 +45,6 @@ type ReplicationConfig struct {
 	MaxActiveReplElapsed uint64
 	// Listener address of the master node
 	ReplMasterAddr string
-	// Temporary flag to disable automatic master discovery until https://github.com/flipkart-incubator/dkv/issues/82 is fixed
-	// The above issue causes replication issues during master switch due to inconsistent change numbers
-	DisableAutoMasterDisc bool
 }
 
 type replInfo struct {
@@ -58,6 +59,9 @@ type replInfo struct {
 	lastReplTime uint64
 	replConfig   *ReplicationConfig
 	fromChngNum  uint64
+	//replDelay is an approximation of the delay in time units of the changes seen
+	// in the master and the same changes seen in the slave
+	replDelay float64
 }
 
 type slaveService struct {
@@ -68,6 +72,44 @@ type slaveService struct {
 	isClosed    bool
 	replInfo    *replInfo
 	serveropts  *opts.ServerOpts
+	stat        *stat
+}
+type stat struct {
+	ReplicationLag    prometheus.Gauge
+	ReplicationDelay  prometheus.Gauge
+	ReplicationStatus *prometheus.SummaryVec
+	ReplicationSpeed  prometheus.Histogram
+}
+
+func newStat(registry prometheus.Registerer) *stat {
+	replicationLag := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_lag",
+		Help:      "replication lag of the slave",
+	})
+	replicationDelay := prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_delay",
+		Help:      "replication delay of the slave",
+	})
+	replicationStatus := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_status",
+		Help:      "replication status of the slave",
+		MaxAge:    5 * time.Second,
+	}, []string{"masterAddr"})
+	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: stats.Namespace,
+		Name:      "slave_replication_speed",
+		Help:      "replication speed of the slave",
+	})
+	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed, replicationStatus)
+	return &stat{
+		ReplicationLag:    replicationLag,
+		ReplicationDelay:  replicationDelay,
+		ReplicationStatus: replicationStatus,
+		ReplicationSpeed:  replicationSpeed,
+	}
 }
 
 // NewService creates a slave DKVService that periodically polls
@@ -86,7 +128,7 @@ func NewService(store storage.KVStore, ca storage.ChangeApplier, regionInfo *ser
 func newSlaveService(store storage.KVStore, ca storage.ChangeApplier, info *serverpb.RegionInfo,
 	replConf *ReplicationConfig, clusterInfo discovery.ClusterInfoGetter, serveropts *opts.ServerOpts) *slaveService {
 	ri := &replInfo{replConfig: replConf}
-	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts}
+	ss := &slaveService{store: store, ca: ca, regionInfo: info, replInfo: ri, clusterInfo: clusterInfo, serveropts: serveropts, stat: newStat(serveropts.PrometheusRegistry)}
 	ss.findAndConnectToMaster()
 	ss.startReplication()
 	return ss
@@ -211,13 +253,18 @@ func (ss *slaveService) pollAndApplyChanges() {
 		case <-ss.replInfo.replTckr.C:
 			ss.serveropts.Logger.Info("Current replication lag", zap.Uint64("ReplicationLag", ss.replInfo.replLag))
 			ss.serveropts.StatsCli.Gauge("replication.lag", int64(ss.replInfo.replLag))
+			ss.stat.ReplicationLag.Set(float64(ss.replInfo.replLag))
+			ss.stat.ReplicationDelay.Set(ss.replInfo.replDelay)
 			if err := ss.applyChangesFromMaster(ss.replInfo.replConfig.MaxNumChngs); err != nil {
+				ss.stat.ReplicationStatus.WithLabelValues("no-master").Observe(1)
 				ss.serveropts.Logger.Error("Unable to retrieve changes from master", zap.Error(err))
 				if err := ss.replaceMasterIfInactive(); err != nil {
 					ss.serveropts.Logger.Error("Unable to replace master", zap.Error(err))
 				}
 			}
+			ss.stat.ReplicationStatus.WithLabelValues(ss.replInfo.replConfig.ReplMasterAddr).Observe(1)
 		case <-ss.replInfo.replStop:
+			ss.stat.ReplicationStatus.WithLabelValues("no-master").Observe(0)
 			ss.serveropts.Logger.Info("Stopping the change poller")
 			break
 		}
@@ -274,13 +321,36 @@ func (ss *slaveService) applyChanges(chngsRes *serverpb.GetChangesResponse) erro
 		if err != nil {
 			return err
 		}
+		if timeBwRepl := (hlc.UnixNow() - ss.replInfo.lastReplTime); ss.replInfo.lastReplTime != 0 && timeBwRepl != 0 && actChngNum > ss.replInfo.fromChngNum {
+			currentReplSpeed := (float64(actChngNum-ss.replInfo.fromChngNum) / float64(timeBwRepl))
+			ss.stat.ReplicationSpeed.Observe(currentReplSpeed)
+		}
 		ss.replInfo.fromChngNum = actChngNum + 1
 		ss.serveropts.Logger.Info("Changes applied to local storage", zap.Uint64("FromChangeNumber", ss.replInfo.fromChngNum))
-		ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		if chngsRes.MasterChangeNumber >= actChngNum {
+			ss.replInfo.replLag = chngsRes.MasterChangeNumber - actChngNum
+		} else {
+			ss.replInfo.replLag = 0 //replication lag can be negative when master has returned every change that was available to it
+		}
+		replicationSpeedMetric := getReplicationSpeed(ss)
+		if cnt := replicationSpeedMetric.Histogram.GetSampleCount(); cnt != 0 {
+			replSpeedAvg := replicationSpeedMetric.Histogram.GetSampleSum() / float64(cnt)
+			if replSpeedAvg > float64(1e-9) {
+				ss.replInfo.replDelay = float64(ss.replInfo.replLag) / replSpeedAvg
+			}
+		}
 	} else {
 		ss.serveropts.Logger.Info("Not received any changes from master")
 	}
 	return nil
+}
+
+func getReplicationSpeed(ss *slaveService) *dto.Metric {
+	metric := &dto.Metric{}
+	if err := ss.stat.ReplicationSpeed.Write(metric); err != nil {
+		ss.serveropts.Logger.Warn("Error while writing out %s metric", zap.String("Metric", "ReplicationSpeed"))
+	}
+	return metric
 }
 
 func newErrorStatus(err error) *serverpb.Status {
@@ -308,8 +378,8 @@ func (ss *slaveService) GetStatus(context context.Context, request *emptypb.Empt
 }
 
 func (ss *slaveService) replaceMasterIfInactive() error {
-	if ss.replInfo.replConfig.DisableAutoMasterDisc {
-		return nil
+	if ss.replInfo.replConfig.ReplMasterAddr != "" {
+		return ss.reconnectMaster() // reconnect to the existing master
 	}
 	if regions, err := ss.clusterInfo.GetClusterStatus(ss.regionInfo.GetDatabase(), ss.regionInfo.GetVBucket()); err == nil {
 		var currentMaster *serverpb.RegionInfo = nil
@@ -346,13 +416,14 @@ func (ss *slaveService) reconnectMaster() error {
 func (ss *slaveService) findAndConnectToMaster() error {
 	if master, err := ss.findNewMaster(); err == nil {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
-		if replCli, err := ctl.NewInSecureDKVClient(*master, ""); err == nil {
+		if replCli, err := ctl.NewInSecureDKVClient(*master, "", ctl.DefaultConnectOpts); err == nil {
 			if ss.replInfo.replCli != nil {
 				ss.replInfo.replCli.Close()
 			}
 			ss.replInfo.replCli = replCli
 			ss.replInfo.replConfig.ReplMasterAddr = *master
 			ss.replInfo.replActive = true
+			ss.serveropts.Logger.Warn("Started replication client with master", zap.String("MasterIP", *master))
 		} else {
 			ss.serveropts.Logger.Warn("Unable to create a replication client", zap.Error(err))
 			return err
@@ -369,7 +440,7 @@ func (ss *slaveService) findAndConnectToMaster() error {
 // followed by followers outside DC, followed by master outside DC
 // TODO - rather than randomly selecting a master from applicable followers, load balance to distribute better
 func (ss *slaveService) findNewMaster() (*string, error) {
-	if ss.replInfo.replConfig.DisableAutoMasterDisc {
+	if ss.replInfo.replConfig.ReplMasterAddr != "" {
 		return &ss.replInfo.replConfig.ReplMasterAddr, nil
 	}
 	// Get all active regions

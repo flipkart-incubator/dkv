@@ -66,6 +66,7 @@ var (
 	serverOpts = &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 	}
 
@@ -281,7 +282,7 @@ func startSlaveAndAttachToMaster(client *ctl.DKVClient) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	rdbStore := newRocksDBStore(dbFolderSlave)
-	go serveStandaloneDKVSlave(&wg, rdbStore, rdbStore, client, false, discoveryCli)
+	go serveStandaloneDKVSlave(&wg, rdbStore, rdbStore, client, discoveryCli)
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -313,7 +314,7 @@ func stopServers() {
 func initDKVClients(ids ...int) {
 	for id := 1; id <= clusterSize; id++ {
 		svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-		if client, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+		if client, err := ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
 			panic(err)
 		} else {
 			dkvClis[id] = client
@@ -323,7 +324,7 @@ func initDKVClients(ids ...int) {
 
 func initSingleDkvClient(id int) {
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-	if client, err := ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	} else {
 		dkvClis[id] = client
@@ -458,7 +459,7 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 	defer masterGrpcSrvr.GracefulStop()
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli, false, testingClusterInfo{})
+	go serveStandaloneDKVSlave(&wg, slaveRDB, slaveRDB, masterCli, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -516,7 +517,7 @@ func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.Cha
 	masterCli = newDKVClient(masterSvcPort)
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, false, testingClusterInfo{})
+	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -830,7 +831,7 @@ func testDelete(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
 
 func newDKVClient(port int) *ctl.DKVClient {
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	} else {
 		return client
@@ -886,19 +887,19 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 	masterGrpcSrvr.Serve(lis)
 }
 
-func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, disableAutoMasterDisc bool, discoveryClient discovery.Client) {
+func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, discoveryClient discovery.Client) {
 	lgr, _ := zap.NewDevelopment()
 	replConf := ReplicationConfig{
-		MaxNumChngs:           2,
-		ReplPollInterval:      5 * time.Second,
-		MaxActiveReplLag:      10,
-		MaxActiveReplElapsed:  5,
-		DisableAutoMasterDisc: disableAutoMasterDisc,
+		MaxNumChngs:          2,
+		ReplPollInterval:     5 * time.Second,
+		MaxActiveReplLag:     10,
+		MaxActiveReplElapsed: 5,
 	}
 
 	specialOpts := &opts.ServerOpts{
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		HealthCheckTickerInterval: uint(1),
 	}
 

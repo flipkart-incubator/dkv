@@ -7,14 +7,15 @@ This class contains the behaviour of propagating a nodes status updates to disco
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
+
 	_ "github.com/Jille/grpc-multi-resolver"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"gopkg.in/ini.v1"
-	"strconv"
-	"time"
 )
 
 type DiscoveryClientConfig struct {
@@ -155,6 +156,8 @@ func (m *discoveryClient) pollClusterInfo() error {
 	}
 }
 
+// gets cluster info for the provided database and vBucket
+// database and vBucket can be empty strings, in which case, the entire cluster set is returned
 func (m *discoveryClient) GetClusterStatus(database string, vBucket string) ([]*serverpb.RegionInfo, error) {
 	if m.clusterInfo == nil {
 		// When called before cluster info is initialised
@@ -165,8 +168,10 @@ func (m *discoveryClient) GetClusterStatus(database string, vBucket string) ([]*
 	}
 	var regions []*serverpb.RegionInfo
 	for _, region := range m.clusterInfo {
-		if region.Database == database && region.VBucket == vBucket {
-			regions = append(regions, region)
+		if region.Database == database || database == "" {
+			if region.VBucket == vBucket || vBucket == "" {
+				regions = append(regions, region)
+			}
 		}
 	}
 	return regions, nil

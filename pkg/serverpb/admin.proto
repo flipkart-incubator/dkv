@@ -191,6 +191,9 @@ message RegionInfo {
   // Nexus cluster url of the region
   // Will be used by new followers to discover the raft cluster
   optional string nexusClusterUrl = 7;
+  // http listener of the node.
+  // http endpoint is useful for admin API interactions
+  string httpAddress = 8;
 }
 
 enum RegionStatus {

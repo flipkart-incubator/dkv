@@ -24,30 +24,48 @@ type DKVClient struct {
 	dkvBRCli   serverpb.DKVBackupRestoreClient
 	dkvClusCli serverpb.DKVClusterClient
 	dkvDisCli  serverpb.DKVDiscoveryClient
+	opts       ConnectOpts
 }
 
-// TODO: Should these be paramterised ?
 const (
-	ReadBufSize    = 10 << 20
-	WriteBufSize   = 10 << 20
-	MaxMsgSize     = 50 << 20
-	Timeout        = 10 * time.Second
-	ConnectTimeout = 10 * time.Second
+	DefaultReadBufSize    = 10 << 20
+	DefaultWriteBufSize   = 10 << 20
+	DefaultMaxMsgSize     = 50 << 20
+	DefaultTimeout        = 10 * time.Second
+	DefaultConnectTimeout = 5 * time.Second
 )
+
+//ConnectOpts DKV Client Connection Options
+type ConnectOpts struct {
+	ReadBufSize    int
+	WriteBufSize   int
+	MaxMsgSize     int
+	Timeout        time.Duration
+	ConnectTimeout time.Duration
+}
+
+//DefaultConnectOpts Default Connection Opts for DKV Client
+var DefaultConnectOpts ConnectOpts = ConnectOpts{
+	ReadBufSize:    DefaultReadBufSize,
+	WriteBufSize:   DefaultWriteBufSize,
+	MaxMsgSize:     DefaultMaxMsgSize,
+	Timeout:        DefaultTimeout,
+	ConnectTimeout: DefaultConnectTimeout,
+}
 
 // NewInSecureDKVClient creates an insecure GRPC client against the
 // given DKV service address. Optionally the authority param can be
 // used to send a :authority psuedo-header for routing purposes.
-func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
+func NewInSecureDKVClient(svcAddr, authority string, opts ConnectOpts) (*DKVClient, error) {
 	var dkvClnt *DKVClient
-	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), opts.ConnectTimeout)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, svcAddr,
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)),
-		grpc.WithReadBufferSize(ReadBufSize),
-		grpc.WithWriteBufferSize(WriteBufSize),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.MaxMsgSize)),
+		grpc.WithReadBufferSize(opts.ReadBufSize),
+		grpc.WithWriteBufferSize(opts.WriteBufSize),
 		grpc.WithAuthority(authority),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 	if err == nil {
@@ -56,7 +74,7 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
 		dkvClusCli := serverpb.NewDKVClusterClient(conn)
 		dkvDisCli := serverpb.NewDKVDiscoveryClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli}
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli, opts}
 	}
 	return dkvClnt, err
 }
@@ -64,7 +82,7 @@ func NewInSecureDKVClient(svcAddr, authority string) (*DKVClient, error) {
 // Put takes the key and value as byte arrays and invokes the
 // GRPC Put method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	putReq := &serverpb.PutRequest{Key: key, Value: value}
 	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
@@ -78,7 +96,7 @@ func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {
 // PutTTL takes the key and value as byte arrays, expireTS as epoch seconds and invokes the
 // GRPC Put method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS uint64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	putReq := &serverpb.PutRequest{Key: key, Value: value, ExpireTS: expireTS}
 	res, err := dkvClnt.dkvCli.Put(ctx, putReq)
@@ -93,7 +111,7 @@ func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS uint64) erro
 // It invokes the underlying GRPC CompareAndSet method. This is a
 // convenience wrapper.
 func (dkvClnt *DKVClient) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	casReq := &serverpb.CompareAndSetRequest{Key: key, OldValue: expect, NewValue: update}
 	casRes, err := dkvClnt.dkvCli.CompareAndSet(ctx, casReq)
@@ -106,7 +124,7 @@ func (dkvClnt *DKVClient) CompareAndSet(key []byte, expect []byte, update []byte
 // Delete takes the key as byte arrays and invokes the
 // GRPC Delete method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Delete(key []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	delReq := &serverpb.DeleteRequest{Key: key}
 	res, err := dkvClnt.dkvCli.Delete(ctx, delReq)
@@ -120,7 +138,7 @@ func (dkvClnt *DKVClient) Delete(key []byte) error {
 // Get takes the key as byte array along with the consistency
 // level and invokes the GRPC Get method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverpb.GetResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	getReq := &serverpb.GetRequest{Key: key, ReadConsistency: rc}
 	return dkvClnt.dkvCli.Get(ctx, getReq)
@@ -129,7 +147,7 @@ func (dkvClnt *DKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*serverp
 // MultiGet takes the keys as byte arrays along with the consistency
 // level and invokes the GRPC MultiGet method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) ([]*serverpb.KVPair, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	multiGetReq := &serverpb.MultiGetRequest{Keys: keys, ReadConsistency: rc}
 	res, err := dkvClnt.dkvCli.MultiGet(ctx, multiGetReq)
@@ -144,7 +162,7 @@ func (dkvClnt *DKVClient) MultiGet(rc serverpb.ReadConsistency, keys ...[]byte) 
 // number of changes retrieved using the maxNumChanges parameter.
 // This is a convenience wrapper.
 func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32) (*serverpb.GetChangesResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	getChngsReq := &serverpb.GetChangesRequest{FromChangeNumber: fromChangeNum, MaxNumberOfChanges: maxNumChanges}
 	return dkvClnt.dkvReplCli.GetChanges(ctx, getChngsReq)
@@ -154,7 +172,7 @@ func (dkvClnt *DKVClient) GetChanges(fromChangeNum uint64, maxNumChanges uint32)
 // location using the underlying GRPC Backup method. This is a
 // convenience wrapper.
 func (dkvClnt *DKVClient) Backup(path string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	backupReq := &serverpb.BackupRequest{BackupPath: path}
 	res, err := dkvClnt.dkvBRCli.Backup(ctx, backupReq)
@@ -165,7 +183,7 @@ func (dkvClnt *DKVClient) Backup(path string) error {
 // location using the underlying GRPC Restore method. This is a
 // convenience wrapper.
 func (dkvClnt *DKVClient) Restore(path string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	restoreReq := &serverpb.RestoreRequest{RestorePath: path}
 	res, err := dkvClnt.dkvBRCli.Restore(ctx, restoreReq)
@@ -175,7 +193,7 @@ func (dkvClnt *DKVClient) Restore(path string) error {
 // AddNode adds the node with the given Nexus URL to
 // the Nexus cluster of which the current node is a member of.
 func (dkvClnt *DKVClient) AddNode(nodeURL string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	addNodeReq := &serverpb.AddNodeRequest{NodeUrl: nodeURL}
 	res, err := dkvClnt.dkvClusCli.AddNode(ctx, addNodeReq)
@@ -185,7 +203,7 @@ func (dkvClnt *DKVClient) AddNode(nodeURL string) error {
 // RemoveNode removes the node with the given URL from the
 // Nexus cluster of which the current node is a member of.
 func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	remNodeReq := &serverpb.RemoveNodeRequest{NodeUrl: nodeURL}
 	res, err := dkvClnt.dkvClusCli.RemoveNode(ctx, remNodeReq)
@@ -195,7 +213,7 @@ func (dkvClnt *DKVClient) RemoveNode(nodeURL string) error {
 // ListNodes retrieves the current members of the Nexus cluster
 // along with identifying the leader.
 func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	res, err := dkvClnt.dkvClusCli.ListNodes(ctx, &empty.Empty{})
 	if res != nil {
@@ -208,7 +226,7 @@ func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, erro
 }
 
 func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	_, err := dkvClnt.dkvDisCli.UpdateStatus(ctx, &serverpb.UpdateStatusRequest{
 		RegionInfo: &info,
@@ -218,7 +236,7 @@ func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
 }
 
 func (dkvClnt *DKVClient) GetClusterInfo(dcId string, database string, vBucket string) ([]*serverpb.RegionInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), Timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	clusterInfo, err := dkvClnt.dkvDisCli.GetClusterInfo(ctx, &serverpb.GetClusterInfoRequest{
 		DcID:     &dcId,

@@ -32,6 +32,7 @@ var (
 	serverOpts = &opts.ServerOpts{
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		Logger:                    lgr,
 	}
 )
@@ -54,7 +55,7 @@ func TestStandaloneService(t *testing.T) {
 	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
 	} else {
 		dkvCli = client
@@ -81,7 +82,7 @@ func TestStreamingHealthCheck(t *testing.T) {
 	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
 	} else {
 		dkvCli = client

@@ -22,6 +22,7 @@ var (
 		Logger:                    lgr,
 		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
 		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 	}
 )
 
@@ -29,7 +30,7 @@ func TestDiscoveryClient(t *testing.T) {
 	dkvSvc, grpcSrvr := serveStandaloneDKVWithDiscovery(discoverySvcPort, &serverpb.RegionInfo{}, dbFolder+"_DC")
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
-
+	<-time.After(time.Duration(10) * time.Second)
 	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 
@@ -99,13 +100,13 @@ func TestDiscoveryClient(t *testing.T) {
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("", "vbucket2")
-	if len(regionInfos) != 0 {
-		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No database", 0, len(regionInfos))
+	if len(regionInfos) != 1 {
+		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No database", 1, len(regionInfos))
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("db1", "")
-	if len(regionInfos) != 0 {
-		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No vBucket", 0, len(regionInfos))
+	if len(regionInfos) != 3 {
+		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "No vBucket", 3, len(regionInfos))
 	}
 
 	regionInfos, _ = dClient.GetClusterStatus("db1", "vbucket3")

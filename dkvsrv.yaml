@@ -1,10 +1,12 @@
 
-node-name : ""                  #Name of the current Node Name
-listen-addr : "0.0.0.0:8080"    #listen address
-role : "none"                   #Role of the node - master|slave|standalone
-pprof : false                   #Enable profiling
-statsd-addr : ""                #StatsdD Address
-verbose : false                 # Enable verbose logging. By default, only warnings and errors are logged.
+node-name : ""                    #Name of the current Node Name
+listen-addr : "0.0.0.0:8080"      #listen address
+http-listen-addr : "0.0.0.0:8081" # http listen address
+role : "none"                     #Role of the node - master|slave|standalone
+pprof : false                     #Enable profiling
+statsd-addr : ""                  #StatsdD Address
+verbose : false                   # Enable verbose logging. By default, only warnings and errors are logged.
+log-level : "warn"                # Use exact log level.
 
 db-engine : "rocksdb"           #Underlying DB engine for storing data - badger|rocksdb
 db-engine-ini : "rocksdb.ini"   #An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.
@@ -18,7 +20,6 @@ vbucket : "default"   # Database identifier
 database : "default"  # vBucket identifier
 
 
-disable-auto-master-disc : false
 discovery-service-config : "internal/discovery/discovery.ini"
 repl-master-addr : ""         #Service address of DKV master node for replication
 repl-poll-interval : "5s"     #Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.

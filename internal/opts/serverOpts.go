@@ -2,6 +2,7 @@ package opts
 
 import (
 	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -12,6 +13,7 @@ type ServerOpts struct {
 	HealthCheckTickerInterval uint
 	StatsCli                  stats.Client
 	Logger                    *zap.Logger
+	PrometheusRegistry        prometheus.Registerer
 }
 
 const (

@@ -2,6 +2,11 @@ package discovery
 
 import (
 	"fmt"
+	"net"
+	"os/exec"
+	"testing"
+	"time"
+
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
@@ -10,14 +15,10 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"net"
-	"os/exec"
-	"testing"
-	"time"
 )
 
 const (
-	dkvSvcPort = 8080
+	dkvSvcPort = 8082
 	dkvSvcHost = "localhost"
 	dbFolder   = "/tmp/dkv_discovery_test_db"
 	cacheSize  = 3 << 30
@@ -33,7 +34,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 	defer grpcSvc.GracefulStop()
 
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if dkvCli, err = ctl.NewInSecureDKVClient(svcAddr, ""); err != nil {
+	if dkvCli, err = ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	}
 	defer dkvCli.Close()
