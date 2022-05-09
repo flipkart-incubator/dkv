@@ -35,9 +35,9 @@ func TestDiscoveryClient(t *testing.T) {
 	defer grpcSrvr.GracefulStop()
 	<-time.After(time.Duration(10) * time.Second)
 
-	var discoveryClientConfigDto = opts.DiscoveryClientConfiguration{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
+	var discoveryClientConfigDto = opts.DiscoveryClientConfig{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
 		pushStatusInterval, pollClusterInfoInterval}
-	clientConfig := &DiscoveryClientConfig{
+	clientConfig := &opts.DiscoveryClientConfig{
 		DiscoveryServiceAddr:    discoveryClientConfigDto.DiscoveryServiceAddr,
 		PushStatusInterval:      discoveryClientConfigDto.PushStatusInterval,
 		PollClusterInfoInterval: discoveryClientConfigDto.PollClusterInfoInterval,

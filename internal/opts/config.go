@@ -66,7 +66,7 @@ type Config struct {
 	NexusSnapshotCount          int    `mapstructure:"nexus-snapshot-count" desc:"Number of committed transactions to trigger a snapshot to disk"`
 }
 
-type DiscoveryClientConfiguration struct {
+type DiscoveryClientConfig struct {
 
 	DiscoveryServiceAddr string `mapstructure:"discovery-service-addr"`
 	// time in seconds to push status updates to discovery server
@@ -74,8 +74,12 @@ type DiscoveryClientConfiguration struct {
 	// time in seconds to poll cluster info from discovery server
 	PollClusterInfoInterval time.Duration `mapstructure:"poll-cluster-info-interval"`
 }
+/*
+This class contains the behaviour of receiving status updates from nodes in the cluster
+and providing the latest cluster info of active master / followers / slave of a region when requested
+*/
 
-type DiscoveryServerConfiguration struct {
+type DiscoveryServerConfig struct {
 	// time in seconds after which the status entry of the region & node combination can be purged
 	StatusTTl int64 `mapstructure:"status-ttl"`
 	// maximum time in seconds for the last status update to be considered valid
@@ -85,9 +89,9 @@ type DiscoveryServerConfiguration struct {
 
 type DiscoveryServiceConfiguration struct {
 	//server side config for discovery service
-	ServerConfig DiscoveryServerConfiguration `mapstructure:"server-config"`
+	ServerConfig DiscoveryServerConfig `mapstructure:"server-config"`
 	//client side config for discovery service
-	ClientConfig DiscoveryClientConfiguration `mapstructure:"client-config"`
+	ClientConfig DiscoveryClientConfig `mapstructure:"client-config"`
 }
 
 

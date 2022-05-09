@@ -268,16 +268,14 @@ func startDiscoveryServer() {
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, discoverydkvSvc)
 
-	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
-	discoverServiceConf := &discovery.DiscoveryConfig{uint64(discoveryServConfigDto.StatusTTl),
-		uint64(discoveryServConfigDto.HeartbeatTimeout)}
+	discoverServiceConf := &opts.DiscoveryServerConfig{statusTtl, heartBeatTimeOut}
 	discoveryService, _ := discovery.NewDiscoveryService(discoverydkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 	go grpcSrvr.Serve(newListener(discoveryPort))
 }
 
 func startDiscoveryCli() {
-	clientConfig := &discovery.DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort),
+	clientConfig := &opts.DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 	discoveryCli, _ = discovery.NewDiscoveryClient(clientConfig, zap.NewNop())
 }

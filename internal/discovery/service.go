@@ -5,29 +5,17 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"io"
 )
 
-/*
-This class contains the behaviour of receiving status updates from nodes in the cluster
-and providing the latest cluster info of active master / followers / slave of a region when requested
-*/
-
-type DiscoveryConfig struct {
-	// time in seconds after which the status entry of the region & node combination can be purged
-	StatusTTl uint64
-	// maximum time in seconds for the last status update to be considered valid
-	// after exceeding this time the region & node combination can be marked invalid
-	HeartbeatTimeout uint64
-}
-
 type discoverService struct {
 	dkvCli serverpb.DKVClient
 	logger *zap.Logger
-	config *DiscoveryConfig
+	config *opts.DiscoveryServerConfig
 }
 
 // Create the dkv lookup key from region info
@@ -61,7 +49,7 @@ func (d *discoverService) UpdateStatus(ctx context.Context, request *serverpb.Up
 		return newErrorStatus(err), err
 	}
 
-	putRequest := serverpb.PutRequest{Key: createKeyToInsert(request.GetRegionInfo()), Value: val, ExpireTS: hlc.GetUnixTimeFromNow(d.config.StatusTTl)}
+	putRequest := serverpb.PutRequest{Key: createKeyToInsert(request.GetRegionInfo()), Value: val, ExpireTS: hlc.GetUnixTimeFromNow(uint64(d.config.StatusTTl))}
 	if _, err = d.dkvCli.Put(ctx, &putRequest); err != nil {
 		return newErrorStatus(err), err
 	} else {
@@ -108,7 +96,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 		}
 		// Filter inactive regions and regions whose status was updated long time back and hence considered inactive
 		// This simplifies logic on consumers of this API (envoy, slaves) which don't need to filter by status
-		if hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < d.config.HeartbeatTimeout && statusUpdate.GetRegionInfo().GetStatus() != serverpb.RegionStatus_INACTIVE {
+		if hlc.GetTimeAgo(statusUpdate.GetTimestamp()) < uint64(d.config.HeartbeatTimeout) && statusUpdate.GetRegionInfo().GetStatus() != serverpb.RegionStatus_INACTIVE {
 			regionsInfo = append(regionsInfo, statusUpdate.GetRegionInfo())
 		}
 		// TODO : Filter such that only 1 master is returned per region
@@ -116,7 +104,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 	return &serverpb.GetClusterInfoResponse{RegionInfos: regionsInfo}, nil
 }
 
-func NewDiscoveryService(dkvService serverpb.DKVServer, logger *zap.Logger, config *DiscoveryConfig) (serverpb.DKVDiscoveryServer, error) {
+func NewDiscoveryService(dkvService serverpb.DKVServer, logger *zap.Logger, config *opts.DiscoveryServerConfig) (serverpb.DKVDiscoveryServer, error) {
 	dkvClient, err := ctl.CreateInProcessDKVClient(dkvService).GRPCClient()
 	if err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ This class contains the behaviour of propagating a nodes status updates to disco
 
 import (
 	"context"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"time"
 
 	_ "github.com/Jille/grpc-multi-resolver"
@@ -15,14 +16,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-type DiscoveryClientConfig struct {
-	DiscoveryServiceAddr string
-	// time in seconds to push status updates to discovery server
-	PushStatusInterval time.Duration
-	// time in seconds to poll cluster info from discovery server
-	PollClusterInfoInterval time.Duration
-}
-
 type discoveryClient struct {
 	// All the regions hosted in the current node
 	regions               []serverpb.DKVDiscoveryNodeServer
@@ -31,7 +24,7 @@ type discoveryClient struct {
 	logger                *zap.Logger
 	statusUpdateTicker    *time.Ticker
 	pollClusterInfoTicker *time.Ticker
-	config                *DiscoveryClientConfig
+	config                *opts.DiscoveryClientConfig
 	stopChannel           chan struct{}
 	// latest info of all regions in the cluster
 	clusterInfo []*serverpb.RegionInfo
@@ -47,7 +40,7 @@ const (
 	connectTimeout = 10 * time.Second
 )
 
-func NewDiscoveryClient(config *DiscoveryClientConfig, logger *zap.Logger) (Client, error) {
+func NewDiscoveryClient(config *opts.DiscoveryClientConfig, logger *zap.Logger) (Client, error) {
 	conn, err := getDiscoveryClient(config.DiscoveryServiceAddr)
 	if err != nil {
 		logger.Error("Unable to create DKV client to connect to discovery server", zap.Error(err))

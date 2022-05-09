@@ -166,9 +166,7 @@ func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFold
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 
-	discoveryServConfigDto := opts.DiscoveryServerConfiguration{statusTtl, heartBeatTimeOut}
-	discoverServiceConf := &DiscoveryConfig{uint64(discoveryServConfigDto.StatusTTl),
-		uint64(discoveryServConfigDto.HeartbeatTimeout)}
+	discoverServiceConf := &opts.DiscoveryServerConfig{statusTtl, heartBeatTimeOut}
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 
