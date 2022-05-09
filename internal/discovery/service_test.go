@@ -19,13 +19,13 @@ import (
 )
 
 const (
-	dkvSvcPort = 8082
-	dkvSvcHost = "localhost"
-	dbFolder   = "/tmp/dkv_discovery_test_db"
-	cacheSize  = 3 << 30
-	engine     = "rocksdb"
+	dkvSvcPort       = 8082
+	dkvSvcHost       = "localhost"
+	dbFolder         = "/tmp/dkv_discovery_test_db"
+	cacheSize        = 3 << 30
+	engine           = "rocksdb"
 	heartBeatTimeOut = 2
-	statusTtl = 5
+	statusTtl        = 5
 )
 
 func TestDKVDiscoveryService(t *testing.T) {
@@ -139,7 +139,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 	}
 
 	// Test regions are marked inactive after heartbeat interval expired
-	time.Sleep((heartBeatTimeOut+1) * time.Second)
+	time.Sleep((heartBeatTimeOut + 1) * time.Second)
 	regionInfos, _ = dkvCli.GetClusterInfo("", "", "")
 	if len(regionInfos) != 0 {
 		t.Errorf("GET Cluster Info mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "All expired", 0, len(regionInfos))
@@ -148,7 +148,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 	// Test keys are purged after status TTL expired
 	getResponse, _ := dkvCli.Get(serverpb.ReadConsistency_SEQUENTIAL, []byte("db1:vbucket1:host1:port"))
 	if getResponse.Value != nil {
-		time.Sleep((heartBeatTimeOut+1) * time.Second)
+		time.Sleep((heartBeatTimeOut + 1) * time.Second)
 		getResponse, _ = dkvCli.Get(serverpb.ReadConsistency_SEQUENTIAL, []byte("db1:vbucket1:host1:port"))
 		if getResponse.Value != nil {
 			t.Errorf("Key not expired")
@@ -166,7 +166,7 @@ func serveStandaloneDKVWithDiscovery(port int, info *serverpb.RegionInfo, dbFold
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
 
-	discoverServiceConf := &opts.DiscoveryServerConfig{statusTtl, heartBeatTimeOut}
+	discoverServiceConf := &opts.DiscoveryServerConfig{StatusTTl: statusTtl, HeartbeatTimeout: heartBeatTimeOut}
 	discoveryService, _ := NewDiscoveryService(dkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 

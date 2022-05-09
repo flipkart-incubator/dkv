@@ -13,10 +13,9 @@ import (
 )
 
 const (
-	discoverySvcPort = 8070
+	discoverySvcPort        = 8070
 	pollClusterInfoInterval = time.Duration(5)
-	pushStatusInterval = time.Duration(5)
-
+	pushStatusInterval      = time.Duration(5)
 )
 
 var (
@@ -35,15 +34,13 @@ func TestDiscoveryClient(t *testing.T) {
 	defer grpcSrvr.GracefulStop()
 	<-time.After(time.Duration(10) * time.Second)
 
-	var discoveryClientConfigDto = opts.DiscoveryClientConfig{fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
-		pushStatusInterval, pollClusterInfoInterval}
-	clientConfig := &opts.DiscoveryClientConfig{
-		DiscoveryServiceAddr:    discoveryClientConfigDto.DiscoveryServiceAddr,
-		PushStatusInterval:      discoveryClientConfigDto.PushStatusInterval,
-		PollClusterInfoInterval: discoveryClientConfigDto.PollClusterInfoInterval,
+	discoveryClientConfig := opts.DiscoveryClientConfig{
+		DiscoveryServiceAddr:    fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
+		PushStatusInterval:      pushStatusInterval,
+		PollClusterInfoInterval: pollClusterInfoInterval,
 	}
 
-	dClient, _ := NewDiscoveryClient(clientConfig, zap.NewNop())
+	dClient, _ := NewDiscoveryClient(&discoveryClientConfig, zap.NewNop())
 	defer dClient.Close()
 
 	// stop the poller so as to avoid race with these poller
@@ -123,7 +120,6 @@ func TestDiscoveryClient(t *testing.T) {
 		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "DB1 vBucket3", 0, len(regionInfos))
 	}
 }
-
 
 func newStandaloneDKVWithID(info *serverpb.RegionInfo, dbFolder string, id int) master.DKVService {
 	dbDir := fmt.Sprintf("%s_%d", dbFolder, id)

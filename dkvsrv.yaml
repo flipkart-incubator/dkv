@@ -20,10 +20,10 @@ vbucket : "default"   # Database identifier
 database : "default"  # vBucket identifier
 
 discovery-service:
-  server-config:
+  server:
     status-ttl: 300
     heartbeat-timeout: 60
-  client-config:
+  client:
     discovery-service-addr: "multi:///127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003"
     push-status-interval: 1
     poll-cluster-info-interval: 1

@@ -39,7 +39,7 @@ type Config struct {
 	StatsdAddr     string `mapstructure:"statsd-addr" desc:"StatsD service address in host:port format"`
 
 	//Service discovery related params
-	DiscoveryServiceConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
+	DiscoveryConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
@@ -67,13 +67,13 @@ type Config struct {
 }
 
 type DiscoveryClientConfig struct {
-
 	DiscoveryServiceAddr string `mapstructure:"discovery-service-addr"`
 	// time in seconds to push status updates to discovery server
 	PushStatusInterval time.Duration `mapstructure:"push-status-interval"`
 	// time in seconds to poll cluster info from discovery server
 	PollClusterInfoInterval time.Duration `mapstructure:"poll-cluster-info-interval"`
 }
+
 /*
 This class contains the behaviour of receiving status updates from nodes in the cluster
 and providing the latest cluster info of active master / followers / slave of a region when requested
@@ -89,11 +89,10 @@ type DiscoveryServerConfig struct {
 
 type DiscoveryServiceConfiguration struct {
 	//server side config for discovery service
-	ServerConfig DiscoveryServerConfig `mapstructure:"server-config"`
+	ServerConfig DiscoveryServerConfig `mapstructure:"server"`
 	//client side config for discovery service
-	ClientConfig DiscoveryClientConfig `mapstructure:"client-config"`
+	ClientConfig DiscoveryClientConfig `mapstructure:"client"`
 }
-
 
 func (c *Config) parseConfig() {
 	viper.Unmarshal(c)
@@ -145,26 +144,20 @@ func (c *Config) validateFlags() {
 		}
 	}
 
-	//validate discovery server config
-
-	discoveryServerConfig := c.DiscoveryServiceConfig
-
+	//validate discovery configs
 	if c.DbRole == "discovery" {
-
-		if discoveryServerConfig.ServerConfig.HeartbeatTimeout <= 0 ||
-			discoveryServerConfig.ServerConfig.StatusTTl <= 0 {
+		if c.DiscoveryConfig.ServerConfig.HeartbeatTimeout <= 0 ||
+			c.DiscoveryConfig.ServerConfig.StatusTTl <= 0 {
 			log.Panicf("Invalid discovery server configuration")
 		}
 	}
 
 	if c.DbRole != "none" && c.DbRole != "discovery" {
-
-		if len(discoveryServerConfig.ClientConfig.DiscoveryServiceAddr) <= 0 ||
-			discoveryServerConfig.ClientConfig.PushStatusInterval <= 0 ||
-				discoveryServerConfig.ClientConfig.PollClusterInfoInterval <= 0 {
+		if c.DiscoveryConfig.ClientConfig.DiscoveryServiceAddr == "" ||
+			c.DiscoveryConfig.ClientConfig.PushStatusInterval <= 0 ||
+			c.DiscoveryConfig.ClientConfig.PollClusterInfoInterval <= 0 {
 			log.Panicf("Invalid discovery server client configuration")
 		}
-
 	}
 }
 

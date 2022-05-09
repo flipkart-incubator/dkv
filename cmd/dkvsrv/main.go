@@ -427,10 +427,7 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 }
 
 func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
-
-	discoverySrvConfig := &config.DiscoveryServiceConfig.ServerConfig
-
-	discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, discoverySrvConfig)
+	discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, &config.DiscoveryConfig.ServerConfig)
 	if err != nil {
 		return err
 	}
@@ -439,10 +436,7 @@ func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService
 }
 
 func newDiscoveryClient() (discovery.Client, error) {
-
-	clientConfig := &config.DiscoveryServiceConfig.ClientConfig
-
-	client, err := discovery.NewDiscoveryClient(clientConfig, dkvLogger)
+	client, err := discovery.NewDiscoveryClient(&config.DiscoveryConfig.ClientConfig, dkvLogger)
 	if err != nil {
 		return nil, err
 	}
