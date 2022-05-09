@@ -40,19 +40,19 @@ const (
 	cacheSize      = 3 << 30
 
 	// for creating a distribute server cluster
-	dbFolderMaster = "/tmp/dkv_test_db_master"
-	dbFolderSlave  = "/tmp/dkv_test_db_slave"
-	clusterSize    = 5
-	discoveryPort  = 8686
-	logDir         = "/tmp/dkv_test/logs"
-	snapDir        = "/tmp/dkv_test/snap"
-	clusterURL     = "http://127.0.0.1:9331,http://127.0.0.1:9332,http://127.0.0.1:9333,http://127.0.0.1:9334,http://127.0.0.1:9335"
-	replTimeout    = 3 * time.Second
-	engine         = "rocksdb"
-	dbName         = "default"
-	vbucket        = "default"
+	dbFolderMaster   = "/tmp/dkv_test_db_master"
+	dbFolderSlave    = "/tmp/dkv_test_db_slave"
+	clusterSize      = 5
+	discoveryPort    = 8686
+	logDir           = "/tmp/dkv_test/logs"
+	snapDir          = "/tmp/dkv_test/snap"
+	clusterURL       = "http://127.0.0.1:9331,http://127.0.0.1:9332,http://127.0.0.1:9333,http://127.0.0.1:9334,http://127.0.0.1:9335"
+	replTimeout      = 3 * time.Second
+	engine           = "rocksdb"
+	dbName           = "default"
+	vbucket          = "default"
 	heartBeatTimeOut = 2
-	statusTtl = 5
+	statusTtl        = 5
 )
 
 var (
