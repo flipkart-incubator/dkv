@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	discoverySvcPort = 8070
+	discoverySvcPort        = 8070
+	pollClusterInfoInterval = time.Duration(5)
+	pushStatusInterval      = time.Duration(5)
 )
 
 var (
@@ -31,10 +33,14 @@ func TestDiscoveryClient(t *testing.T) {
 	defer dkvSvc.Close()
 	defer grpcSrvr.GracefulStop()
 	<-time.After(time.Duration(10) * time.Second)
-	clientConfig := &DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
-		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 
-	dClient, _ := NewDiscoveryClient(clientConfig, zap.NewNop())
+	discoveryClientConfig := opts.DiscoveryClientConfig{
+		DiscoveryServiceAddr:    fmt.Sprintf("%s:%d", dkvSvcHost, discoverySvcPort),
+		PushStatusInterval:      pushStatusInterval,
+		PollClusterInfoInterval: pollClusterInfoInterval,
+	}
+
+	dClient, _ := NewDiscoveryClient(&discoveryClientConfig, zap.NewNop())
 	defer dClient.Close()
 
 	// stop the poller so as to avoid race with these poller

@@ -15,11 +15,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gopkg.in/ini.v1"
-
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/opts"
@@ -34,6 +29,9 @@ import (
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
 	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
+	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	flag "github.com/spf13/pflag"
@@ -429,47 +427,20 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 }
 
 func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
-	iniConfig, err := ini.Load(config.DiscoveryServiceConfig)
+	discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, &config.DiscoveryConfig.ServerConfig)
 	if err != nil {
-		return fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", config.DiscoveryServiceConfig, err)
+		return err
 	}
-	if discoveryServerSection, err := iniConfig.GetSection(discoveryServerConfig); err == nil {
-		discoverySrvConfig, err := discovery.NewDiscoverConfigFromIni(discoveryServerSection)
-		if err != nil {
-			return err
-		}
-		discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, discoverySrvConfig)
-		if err != nil {
-			return err
-		}
-		serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
-		return nil
-	} else {
-		return fmt.Errorf("started as discovery server but can't load the section %s in file %s, error: %v",
-			discoveryServerConfig, config.DiscoveryServiceConfig, err)
-	}
+	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
+	return nil
 }
 
 func newDiscoveryClient() (discovery.Client, error) {
-	iniConfig, err := ini.Load(config.DiscoveryServiceConfig)
+	client, err := discovery.NewDiscoveryClient(&config.DiscoveryConfig.ClientConfig, dkvLogger)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load discovery service configuration from given file: %s, error: %v", config.DiscoveryServiceConfig, err)
+		return nil, err
 	}
-
-	if discoveryClientSection, err := iniConfig.GetSection(discoveryClientConfig); err == nil {
-		clientConfig, err := discovery.NewDiscoveryClientConfigFromIni(discoveryClientSection)
-		if err != nil {
-			return nil, err
-		}
-		client, err := discovery.NewDiscoveryClient(clientConfig, dkvLogger)
-		if err != nil {
-			return nil, err
-		}
-		return client, nil
-	} else {
-		return nil, fmt.Errorf("can't load discovery client configuration from section %s in file %s, error: %v",
-			discoveryClientConfig, config.DiscoveryServiceConfig, err)
-	}
+	return client, nil
 
 }
 
