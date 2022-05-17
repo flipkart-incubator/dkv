@@ -833,11 +833,7 @@ func testDelete(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
 
 func newDKVClient(port int) *ctl.DKVClient {
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
-<<<<<<< HEAD
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
-=======
-	if client, err := ctl.NewDKVClient(dkvSvcAddr, "", grpc.WithInsecure()); err != nil {
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 		panic(err)
 	} else {
 		return client

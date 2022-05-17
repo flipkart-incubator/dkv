@@ -21,7 +21,6 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.0.10 // indirect
 	github.com/smira/go-statsd v1.3.1
-<<<<<<< HEAD
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/vmihailenco/msgpack/v5 v5.3.4
@@ -30,18 +29,6 @@ require (
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/ini.v1 v1.66.2
-=======
-	go.uber.org/zap v1.14.1
-	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
-	golang.org/x/net v0.0.0-20201002202402-0a1ea396d57c // indirect
-	golang.org/x/sys v0.0.0-20201005065044-765f4ea38db3 // indirect
-	golang.org/x/text v0.3.2 // indirect
-	golang.org/x/tools v0.0.0-20210108195828-e2f9c7f1fc8e // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	google.golang.org/grpc v1.28.0
-	google.golang.org/protobuf v1.26.0
-	gopkg.in/ini.v1 v1.62.0
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 	honnef.co/go/tools v0.0.1-2020.1.3 // indirect
 )
 

@@ -6,23 +6,16 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-<<<<<<< HEAD
 	"net"
 	"net/http"
 	"net/url"
-=======
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 	"os"
 	"os/signal"
 	"path"
 	"strings"
 	"syscall"
 
-<<<<<<< HEAD
 	"github.com/flipkart-incubator/dkv/internal/discovery"
-=======
-	utils "github.com/flipkart-incubator/dkv/internal"
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/slave"
@@ -32,7 +25,6 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
 	"github.com/flipkart-incubator/dkv/internal/sync"
-<<<<<<< HEAD
 	"github.com/flipkart-incubator/dkv/pkg/health"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
@@ -73,30 +65,6 @@ var (
 
 	//nexus flags
 	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
-=======
-	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	nexus_api "github.com/flipkart-incubator/nexus/pkg/api"
-	nexus "github.com/flipkart-incubator/nexus/pkg/raft"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-)
-
-var (
-	disklessMode     bool
-	dbEngine         string
-	dbEngineIni      string
-	dbFolder         string
-	dbListenAddr     string
-	peerListenAddr   string
-	dbRole           string
-	statsdAddr       string
-	replMasterAddr   string
-	replPollInterval time.Duration
-	certPath         string
-	keyPath          string
-	caCertPath       string
-	blockCacheSize   uint64
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 
 	// Logging vars
 	verboseLogging bool
@@ -114,27 +82,7 @@ var (
 )
 
 func init() {
-<<<<<<< HEAD
 	initializeFlags()
-=======
-	flag.BoolVar(&disklessMode, "dbDiskless", false, fmt.Sprintf("Enables diskless mode where data is stored entirely in memory.\nAvailable on Badger for standalone and slave roles. (default %v)", disklessMode))
-	flag.StringVar(&dbFolder, "dbFolder", "/tmp/dkvsrv", "DB folder path for storing data files")
-	flag.StringVar(&dbListenAddr, "dbListenAddr", "127.0.0.1:8080", "Address on which the DKV service binds")
-	flag.StringVar(&peerListenAddr, "peerListenAddr", "127.0.0.1:8083", "Address on which the DKV replication service binds")
-	flag.StringVar(&dbEngine, "dbEngine", "rocksdb", "Underlying DB engine for storing data - badger|rocksdb")
-	flag.StringVar(&dbEngineIni, "dbEngineIni", "", "An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details.")
-	flag.StringVar(&dbRole, "dbRole", "none", "DB role of this node - none|master|slave")
-	flag.StringVar(&statsdAddr, "statsdAddr", "", "StatsD service address in host:port format")
-	flag.StringVar(&replMasterAddr, "replMasterAddr", "", "Service address of DKV master node for replication")
-	flag.DurationVar(&replPollInterval, "replPollInterval", 5*time.Second, "Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.")
-	flag.StringVar(&dbAccessLog, "dbAccessLog", "", "File for logging DKV accesses eg., stdout, stderr, /tmp/access.log")
-	flag.StringVar(&certPath, "certPath", "", "Path for certificate file of this node")
-	flag.StringVar(&keyPath, "keyPath", "", "Path for key file of this node")
-	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
-	flag.BoolVar(&verboseLogging, "verbose", false, fmt.Sprintf("Enable verbose logging.\nBy default, only warnings and errors are logged. (default %v)", verboseLogging))
-	flag.Uint64Var(&blockCacheSize, "block-cache-size", defBlockCacheSize, "Amount of cache (in bytes) to set aside for data blocks. A value of 0 disables block caching altogether.")
-	setDKVDefaultsForNexusDirs()
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 }
 
 func initializeFlags() {
@@ -157,19 +105,8 @@ func main() {
 	setupStats()
 	go setupHttpServer()
 
-	var secure = caCertPath != "" && keyPath != "" && certPath != ""
-
-	var srvrMode utils.ConnectionMode
-	if secure {
-		srvrMode = utils.ServerTLS
-	} else {
-		srvrMode = utils.Insecure
-	}
-
 	kvs, cp, ca, br := newKVStore()
-	grpcSrvr, lstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
-		SrvrAddr: dbListenAddr, KeyPath: keyPath, CertPath: certPath,
-		CaCertPath: caCertPath}, accessLogger)
+	grpcSrvr, lstnr := newGrpcServerListener()
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(config.DbRole)
 	//srvrRole.printFlags()
@@ -236,7 +173,6 @@ func main() {
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-<<<<<<< HEAD
 		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 
@@ -246,35 +182,6 @@ func main() {
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
 			}
-=======
-		var replSrvrMode utils.ConnectionMode
-		if secure {
-			replSrvrMode = utils.MutualTLS
-		} else {
-			replSrvrMode = utils.Insecure
-		}
-		replGrpcSrvr, replLstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: replSrvrMode,
-			SrvrAddr: peerListenAddr, KeyPath: keyPath, CertPath: certPath,
-			CaCertPath: caCertPath}, accessLogger)
-		defer replGrpcSrvr.GracefulStop()
-		serverpb.RegisterDKVReplicationServer(replGrpcSrvr, dkvSvc)
-		go replGrpcSrvr.Serve(replLstnr)
-	case slaveRole:
-		var replClientMode utils.ConnectionMode
-		if secure {
-			replClientMode = utils.MutualTLS
-		} else {
-			replClientMode = utils.Insecure
-		}
-
-		// TODO: Check if authority override option is needed for slaves
-		// while they connect with masters
-		if replCli, err := utils.NewDKVClient(utils.DKVConfig{ConnectionMode: replClientMode,
-			SrvrAddr: replMasterAddr, KeyPath: keyPath, CertPath: certPath,
-			CaCertPath: caCertPath}, "");
-			err != nil {
-			panic(err)
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 		} else {
 			// Currently nodes can be either discovery server or client. This will change when a node supports multiple regions
 			discoveryClient.RegisterRegion(dkvSvc)
@@ -302,42 +209,6 @@ func main() {
 	log.Printf("[WARN] Caught signal: %v. Shutting down...\n", sig)
 }
 
-<<<<<<< HEAD
-=======
-func validateFlags() {
-	if dbListenAddr != "" && strings.IndexRune(dbListenAddr, ':') < 0 {
-		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
-	}
-	if peerListenAddr != "" && strings.IndexRune(peerListenAddr, ':') < 0 {
-		log.Panicf("given listen address: %s is invalid, must be in host:port format", dbListenAddr)
-	}
-	if replMasterAddr != "" && strings.IndexRune(replMasterAddr, ':') < 0 {
-		log.Panicf("given master address: %s for replication is invalid, must be in host:port format", replMasterAddr)
-	}
-	if statsdAddr != "" && strings.IndexRune(statsdAddr, ':') < 0 {
-		log.Panicf("given StatsD address: %s is invalid, must be in host:port format", statsdAddr)
-	}
-
-	if disklessMode && strings.ToLower(dbEngine) == "rocksdb" {
-		log.Panicf("diskless is available only on Badger storage")
-	}
-
-	if strings.ToLower(dbRole) == slaveRole && replMasterAddr == "" {
-		log.Panicf("repl-master-addr must be given in slave mode")
-	}
-	nonNullAuthFlags := btou(certPath != "", keyPath != "", caCertPath != "")
-	if nonNullAuthFlags > 0 && nonNullAuthFlags < 3 {
-		log.Panicf("Missing TLS attributes, set all flags (caCertPath, keyPath, certPath) to run DKV in secure mode")
-	}
-
-	if dbEngineIni != "" {
-		if _, err := os.Stat(dbEngineIni); err != nil && os.IsNotExist(err) {
-			log.Panicf("given storage configuration file: %s does not exist", dbEngineIni)
-		}
-	}
-}
-
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 func setupAccessLogger() {
 	accessLogger = zap.NewNop()
 	if config.AccessLog != "" {
@@ -413,7 +284,6 @@ func setupDKVLogger() {
 	}
 }
 
-<<<<<<< HEAD
 func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	grpcSrvr := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
@@ -432,8 +302,6 @@ func newListener() (lis net.Listener) {
 	return
 }
 
-=======
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 func setupSignalHandler() <-chan os.Signal {
 	signals := []os.Signal{syscall.SIGINT, syscall.SIGQUIT, syscall.SIGSTOP, syscall.SIGTERM}
 	stopChan := make(chan os.Signal, len(signals))
@@ -455,26 +323,7 @@ func toDKVSrvrRole(role string) dkvSrvrRole {
 	return dkvSrvrRole(strings.TrimSpace(strings.ToLower(role)))
 }
 
-<<<<<<< HEAD
 func setFlagsForNexusDirs() {
-=======
-func (role dkvSrvrRole) printFlags() {
-	log.Println("Launching DKV server with following flags:")
-	switch role {
-	case noRole:
-		printFlagsWithPrefix("db")
-	case masterRole:
-		if haveFlagsWithPrefix("nexus") {
-			printFlagsWithPrefix("db", "nexus", "peer")
-		} else {
-			printFlagsWithPrefix("db", "peer")
-		}
-	case slaveRole:
-		printFlagsWithPrefix("db", "repl")
-	}
-	printFlagsWithoutPrefix("db", "repl", "nexus")
-}
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 
 	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
 	if nexusLogDirFlag.Value.String() == "" {
@@ -577,7 +426,6 @@ func newDKVReplicator(kvs storage.KVStore) nexus_api.RaftReplicator {
 	}
 }
 
-<<<<<<< HEAD
 func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService) error {
 	discoveryService, err := discovery.NewDiscoveryService(dkvService, dkvLogger, &config.DiscoveryConfig.ServerConfig)
 	if err != nil {
@@ -737,14 +585,4 @@ func clusterMetricsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-=======
-func btou(conditions... bool) int {
-	cnt := 0
-	for _, cond := range conditions {
-		if cond {
-			cnt += 1
-		}
-	}
-	return cnt
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 }

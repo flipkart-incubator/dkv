@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	utils "github.com/flipkart-incubator/dkv/internal"
 	"os"
 	"sort"
 	"strings"
@@ -229,21 +228,11 @@ func (c *cmd) clusterInfo(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-var (
-	dkvAddr      string
-	caCertPath   string
-	dkvAuthority string
-)
+var dkvAddr, dkvAuthority string
 
 func init() {
-<<<<<<< HEAD
 	flag.StringVarP(&dkvAddr, "dkvAddr", "a", "127.0.0.1:8080", "<host>:<port> - DKV server address")
-=======
-	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
-	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
-
 	for _, c := range cmds {
 		if c.argDesc == "" {
 			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
@@ -258,7 +247,6 @@ func init() {
 	flag.CommandLine.SortFlags = false
 }
 
-<<<<<<< HEAD
 func isFlagPassed(name string) bool {
 	found := false
 	flag.Visit(func(f *flag.Flag) {
@@ -267,27 +255,6 @@ func isFlagPassed(name string) bool {
 		}
 	})
 	return found
-=======
-func usage() {
-	fmt.Printf("Usage of %s:\n", os.Args[0])
-	printUsage([]string{"dkvAddr", "authority", "caCertPath"})
-	for _, cmd := range cmds {
-		cmd.usage()
-	}
-}
-
-func printUsage(flags []string) {
-	for _, flagName := range flags {
-		dkvFlag := flag.Lookup(flagName)
-		if dkvFlag != nil {
-			fmt.Printf("  -%s %s (default: %s)\n", dkvFlag.Name, dkvFlag.Usage, dkvFlag.DefValue)
-		}
-	}
-}
-
-func trimLower(str string) string {
-	return strings.ToLower(strings.TrimSpace(str))
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 }
 
 func main() {
@@ -302,12 +269,7 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-<<<<<<< HEAD
 	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority, ctl.DefaultConnectOpts)
-=======
-	client, err := utils.NewDKVClient(utils.DKVConfig{
-		SrvrAddr: dkvAddr, CaCertPath: caCertPath}, dkvAuthority)
->>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
