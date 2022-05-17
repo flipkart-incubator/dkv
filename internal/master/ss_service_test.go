@@ -55,7 +55,11 @@ func TestStandaloneService(t *testing.T) {
 	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
+<<<<<<< HEAD
 	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
+=======
+	if client, err := ctl.NewDKVClient(dkvSvcAddr, "", grpc.WithInsecure()); err != nil {
+>>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
 	} else {
 		dkvCli = client

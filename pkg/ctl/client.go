@@ -35,6 +35,7 @@ const (
 	DefaultConnectTimeout = 5 * time.Second
 )
 
+<<<<<<< HEAD
 //ConnectOpts DKV Client Connection Options
 type ConnectOpts struct {
 	ReadBufSize    int
@@ -68,6 +69,20 @@ func NewInSecureDKVClient(svcAddr, authority string, opts ConnectOpts) (*DKVClie
 		grpc.WithWriteBufferSize(opts.WriteBufSize),
 		grpc.WithAuthority(authority),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+=======
+// NewDKVClient creates a GRPC client against the
+// given DKV service address and dial options. Optionally the authority param can be
+//// used to send a :authority psuedo-header for routing purposes
+func NewDKVClient(svcAddr string, authority string, opts ...grpc.DialOption) (*DKVClient, error) {
+	var dkvClnt *DKVClient
+	ctx, cancel := context.WithTimeout(context.Background(), ConnectTimeout)
+	optsCopy := opts
+	optsCopy = append(optsCopy, grpc.WithBlock(), grpc.WithReadBufferSize(ReadBufSize),
+		grpc.WithWriteBufferSize(WriteBufSize), grpc.WithAuthority(authority),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxMsgSize)))
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
+>>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)

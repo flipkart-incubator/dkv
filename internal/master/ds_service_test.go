@@ -416,7 +416,11 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 
 	// Create the client for the new DKV node
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[newNodeID])
+<<<<<<< HEAD
 	if dkvCli, err := ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
+=======
+	if dkvCli, err := ctl.NewDKVClient(svcAddr, "", grpc.WithInsecure()); err != nil {
+>>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 		t.Fatal(err)
 	} else {
 		defer dkvCli.Close()
@@ -453,7 +457,11 @@ func testNewDKVNodeJoiningAndLeaving(t *testing.T) {
 func initDKVClients(ids ...int) {
 	for id := 1; id <= clusterSize; id++ {
 		svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
+<<<<<<< HEAD
 		if client, err := ctl.NewInSecureDKVClient(svcAddr, "", ctl.DefaultConnectOpts); err != nil {
+=======
+		if client, err := ctl.NewDKVClient(svcAddr, "", grpc.WithInsecure()); err != nil {
+>>>>>>> 5cda07c6b9de1771e120145aad6d107a9eb3f108
 			panic(err)
 		} else {
 			dkvClis[id] = client
