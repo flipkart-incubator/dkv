@@ -15,6 +15,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+var (
+	AppConfig Config
+)
+
+
 type Config struct {
 
 	// region level configuration.
@@ -40,6 +45,14 @@ type Config struct {
 
 	//Service discovery related params
 	DiscoveryConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
+
+	// secure communication related params
+	PeerListenAddr string `mapstructure:"peer-listen-addr" desc:"Address on which the DKV replication service binds"`
+	CertPath       string `mapstructure:"cert-path" desc:"Path for certificate file of this node"`
+	KeyPath        string `mapstructure:"key-path" desc:"Path for key file of this node"`
+	CaCertPath     string `mapstructure:"ca-cert-path" desc:"Path for root certificate of the chain, i.e. CA certificate"`
+
+
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
@@ -132,6 +145,10 @@ func (c *Config) validateFlags() {
 		log.Panicf("diskless is available only on Badger storage")
 	}
 
+	if c.PeerListenAddr != "" && strings.IndexRune(c.PeerListenAddr, ':') < 0 {
+		log.Panicf("given listen address: %s is invalid, must be in host:port format", c.PeerListenAddr)
+	}
+
 	if c.DbEngineIni != "" {
 		if _, err := os.Stat(c.DbEngineIni); err != nil && os.IsNotExist(err) {
 			log.Panicf("given storage configuration file: %s does not exist", c.DbEngineIni)
@@ -158,6 +175,11 @@ func (c *Config) validateFlags() {
 			c.DiscoveryConfig.ClientConfig.PollClusterInfoInterval <= 0 {
 			log.Panicf("Invalid discovery server client configuration")
 		}
+	}
+
+	nonNullAuthFlags := btou(c.CertPath != "", c.KeyPath != "", c.CaCertPath != "")
+	if nonNullAuthFlags > 0 && nonNullAuthFlags < 3 {
+		log.Panicf("Missing TLS attributes, set all flags (caCertPath, keyPath, certPath) to run DKV in secure mode")
 	}
 }
 
@@ -234,4 +256,14 @@ func isFlagPassed(name string) bool {
 		}
 	})
 	return found
+}
+
+func btou(conditions... bool) int {
+	cnt := 0
+	for _, cond := range conditions {
+		if cond {
+			cnt += 1
+		}
+	}
+	return cnt
 }

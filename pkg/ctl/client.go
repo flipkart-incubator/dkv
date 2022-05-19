@@ -79,6 +79,29 @@ func NewInSecureDKVClient(svcAddr, authority string, opts ConnectOpts) (*DKVClie
 	return dkvClnt, err
 }
 
+// NewDKVClient creates a GRPC client against the
+// given DKV service address and dial options. Optionally the authority param can be
+//// used to send a :authority psuedo-header for routing purposes
+func NewDKVClient(svcAddr string, authority string, connectOptions ConnectOpts, opts ...grpc.DialOption) (*DKVClient, error) {
+	var dkvClnt *DKVClient
+	ctx, cancel := context.WithTimeout(context.Background(), connectOptions.ConnectTimeout)
+	defer cancel()
+	opts = append(opts, grpc.WithBlock(), grpc.WithReadBufferSize(connectOptions.ReadBufSize),
+		grpc.WithWriteBufferSize(connectOptions.WriteBufSize), grpc.WithAuthority(authority),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(connectOptions.MaxMsgSize)), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
+	if err == nil {
+		dkvCli := serverpb.NewDKVClient(conn)
+		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
+		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
+		dkvClusCli := serverpb.NewDKVClusterClient(conn)
+		dkvDisCli := serverpb.NewDKVDiscoveryClient(conn)
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli, connectOptions}
+	}
+	return dkvClnt, err
+}
+
+
 // Put takes the key and value as byte arrays and invokes the
 // GRPC Put method. This is a convenience wrapper.
 func (dkvClnt *DKVClient) Put(key []byte, value []byte) error {

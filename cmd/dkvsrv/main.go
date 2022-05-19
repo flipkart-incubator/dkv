@@ -3,18 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"os/signal"
-	"path"
-	"strings"
-	"syscall"
-
+	utils "github.com/flipkart-incubator/dkv/internal"
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/opts"
@@ -32,14 +21,22 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"io"
+	"io/ioutil"
+	"log"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"path"
+	"strings"
+	"syscall"
 
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-
 	"net/http/pprof"
 )
 
@@ -98,6 +95,7 @@ func main() {
 	flag.Parse()
 	config.Init(cfgFile)
 	config.Print()
+	opts.AppConfig = config
 
 	setupDKVLogger()
 	setupAccessLogger()
@@ -105,8 +103,20 @@ func main() {
 	setupStats()
 	go setupHttpServer()
 
+	var secure = config.CaCertPath != "" && config.KeyPath != "" && config.CertPath != ""
+
+	var srvrMode utils.ConnectionMode
+	if secure {
+		srvrMode = utils.ServerTLS
+	} else {
+		srvrMode = utils.Insecure
+	}
+
 	kvs, cp, ca, br := newKVStore()
-	grpcSrvr, lstnr := newGrpcServerListener()
+	//grpcSrvr, lstnr := newGrpcServerListener()
+	grpcSrvr, lstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
+		SrvrAddr: config.ListenAddr, KeyPath: config.KeyPath, CertPath: config.CertPath,
+		CaCertPath: config.CaCertPath}, accessLogger)
 	defer grpcSrvr.GracefulStop()
 	srvrRole := toDKVSrvrRole(config.DbRole)
 	//srvrRole.printFlags()
@@ -173,7 +183,22 @@ func main() {
 		}
 		defer dkvSvc.Close()
 		serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
-		serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
+
+		var replSrvrMode utils.ConnectionMode
+		if secure {
+			replSrvrMode = utils.MutualTLS
+		} else {
+			replSrvrMode = utils.Insecure
+		}
+
+		replGrpcSrvr, replLstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: replSrvrMode,
+			SrvrAddr: config.PeerListenAddr, KeyPath: config.KeyPath, CertPath: config.CertPath,
+			CaCertPath: config.CaCertPath}, accessLogger)
+		defer replGrpcSrvr.GracefulStop()
+
+		serverpb.RegisterDKVReplicationServer(replGrpcSrvr, dkvSvc)
+		go replGrpcSrvr.Serve(replLstnr)
+		//TODO do we need to register below with replGrpcSrvr as well
 		health.RegisterHealthServer(grpcSrvr, dkvSvc)
 
 		// Discovery servers can be only configured if node started as master.
@@ -282,24 +307,6 @@ func setupDKVLogger() {
 	} else {
 		dkvLogger = lg
 	}
-}
-
-func newGrpcServerListener() (*grpc.Server, net.Listener) {
-	grpcSrvr := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_zap.StreamServerInterceptor(accessLogger)),
-		grpc.UnaryInterceptor(grpc_zap.UnaryServerInterceptor(accessLogger)),
-	)
-	reflection.Register(grpcSrvr)
-	return grpcSrvr, newListener()
-}
-
-func newListener() (lis net.Listener) {
-	var err error
-	if lis, err = net.Listen("tcp", config.ListenAddr); err != nil {
-		log.Panicf("failed to listen: %v", err)
-		return
-	}
-	return
 }
 
 func setupSignalHandler() <-chan os.Signal {

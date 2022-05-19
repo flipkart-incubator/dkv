@@ -11,11 +11,12 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 
+	utils "github.com/flipkart-incubator/dkv/internal"
 	"github.com/flipkart-incubator/dkv/pkg/health"
 
 	"github.com/flipkart-incubator/dkv/internal/discovery"
 	"github.com/flipkart-incubator/dkv/internal/hlc"
-	opts "github.com/flipkart-incubator/dkv/internal/opts"
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
@@ -416,7 +417,12 @@ func (ss *slaveService) reconnectMaster() error {
 func (ss *slaveService) findAndConnectToMaster() error {
 	if master, err := ss.findNewMaster(); err == nil {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
-		if replCli, err := ctl.NewInSecureDKVClient(*master, "", ctl.DefaultConnectOpts); err == nil {
+
+		slaveClientConfig := getSlaveClientConfig(*master)
+		//replCli, err := ctl.NewInSecureDKVClient(*master, "", ctl.DefaultConnectOpts);
+		replCli, err := utils.NewDKVClient(slaveClientConfig, "", ctl.DefaultConnectOpts);
+
+		if err == nil {
 			if ss.replInfo.replCli != nil {
 				ss.replInfo.replCli.Close()
 			}
@@ -433,6 +439,27 @@ func (ss *slaveService) findAndConnectToMaster() error {
 		return err
 	}
 	return nil
+}
+
+func getSlaveClientConfig(masterSvcAddr string) utils.DKVConfig {
+	config := opts.AppConfig
+
+	var secure = config.CaCertPath != "" && config.KeyPath != "" && config.CertPath != ""
+
+	var replClientMode utils.ConnectionMode
+	if secure {
+		replClientMode = utils.MutualTLS
+	} else {
+		replClientMode = utils.Insecure
+	}
+
+	slaveClientConfig := utils.DKVConfig{
+		ConnectionMode: replClientMode,
+		KeyPath:        config.KeyPath,
+		CertPath:       config.CertPath,
+		CaCertPath:     config.CaCertPath,
+		SrvrAddr:       masterSvcAddr}
+	return slaveClientConfig
 }
 
 // Finds a new active master for the region

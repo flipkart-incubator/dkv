@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	utils "github.com/flipkart-incubator/dkv/internal"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 
@@ -228,11 +229,13 @@ func (c *cmd) clusterInfo(client *ctl.DKVClient, args ...string) {
 	}
 }
 
-var dkvAddr, dkvAuthority string
+var dkvAddr, dkvAuthority, caCertPath string
 
 func init() {
 	flag.StringVarP(&dkvAddr, "dkvAddr", "a", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
+	flag.StringVar(&caCertPath, "caCertPath", "", "Path for root certificate of the chain, i.e. CA certificate")
+
 	for _, c := range cmds {
 		if c.argDesc == "" {
 			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
@@ -269,7 +272,11 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority, ctl.DefaultConnectOpts)
+	//client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority, ctl.DefaultConnectOpts)
+	dkvConfig := utils.DKVConfig{
+		SrvrAddr:dkvAddr,
+		CaCertPath:caCertPath}
+	client, err := utils.NewDKVClient(dkvConfig, dkvAuthority, ctl.DefaultConnectOpts)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
