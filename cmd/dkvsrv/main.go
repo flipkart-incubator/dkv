@@ -382,6 +382,7 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.ChangeAppl
 		if err != nil {
 			dkvLogger.Panic("RocksDB engine init failed", zap.Error(err))
 		}
+
 		return rocksDb, rocksDb, rocksDb, rocksDb
 	case "badger":
 		var badgerDb badger.DB

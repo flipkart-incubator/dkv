@@ -239,6 +239,8 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 		globalMutation: 0,
 		stat:           storage.NewStat(opts.promRegistry, "rocksdb"),
 	}
+	rocksdb.metricsCollector()
+
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	//go rocksdb.Compaction()
 	return &rocksdb, nil
