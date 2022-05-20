@@ -169,7 +169,7 @@ func WithMemTableSize(size int64) DBOption {
 func OpenDB(dbOpts ...DBOption) (kvs DB, err error) {
 	noopLgr := zap.NewNop()
 	opts := &bdgrOpts{
-		opts:         badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}),
+		opts:         badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}).WithMetricsEnabled(true),
 		lgr:          noopLgr,
 		statsCli:     stats.NewNoOpClient(),
 		promRegistry: stats.NewPromethousNoopRegistry(),
@@ -185,7 +185,10 @@ func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts, storage.NewStat(bdbOpts.promRegistry, "badger"), 0}, nil
+
+	bdb := badgerDB{db, bdbOpts, storage.NewStat(bdbOpts.promRegistry, "badger"), 0}
+	bdb.metricsCollector()
+	return &bdb, nil
 }
 
 func (bdb *badgerDB) Close() error {
