@@ -1,6 +1,6 @@
 
 GOOS ?= darwin
-GOARCH ?= amd64
+GOARCH ?= 
 CGO_ENABLED ?= 1
 CGO_CFLAGS ?=
 CGO_LDFLAGS ?= "-lrocksdb -lm -lzstd -lz -lbz2 -lsnappy"
@@ -39,7 +39,7 @@ endif
 .PHONY: protoc
 protoc:
 	@echo ">> generating proto code"
-	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=paths=source_relative:. --go-grpc_out=paths=source_relative:.  $$proto_dir/*.proto || exit 1; done
+	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=paths=source_relative:. --go-grpc_out=require_unimplemented_servers=false,paths=source_relative:.  $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
 format:

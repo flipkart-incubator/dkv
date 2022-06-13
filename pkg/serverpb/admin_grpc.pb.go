@@ -78,7 +78,7 @@ func (c *dKVReplicationClient) GetReplicas(ctx context.Context, in *GetReplicasR
 }
 
 // DKVReplicationServer is the server API for DKVReplication service.
-// All implementations must embed UnimplementedDKVReplicationServer
+// All implementations should embed UnimplementedDKVReplicationServer
 // for forward compatibility
 type DKVReplicationServer interface {
 	// GetChanges retrieves all changes from a given change number.
@@ -89,10 +89,9 @@ type DKVReplicationServer interface {
 	RemoveReplica(context.Context, *Replica) (*Status, error)
 	// GetReplicas retrieves all the replicas of the current master.
 	GetReplicas(context.Context, *GetReplicasRequest) (*GetReplicasResponse, error)
-	mustEmbedUnimplementedDKVReplicationServer()
 }
 
-// UnimplementedDKVReplicationServer must be embedded to have forward compatible implementations.
+// UnimplementedDKVReplicationServer should be embedded to have forward compatible implementations.
 type UnimplementedDKVReplicationServer struct {
 }
 
@@ -108,7 +107,6 @@ func (UnimplementedDKVReplicationServer) RemoveReplica(context.Context, *Replica
 func (UnimplementedDKVReplicationServer) GetReplicas(context.Context, *GetReplicasRequest) (*GetReplicasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetReplicas not implemented")
 }
-func (UnimplementedDKVReplicationServer) mustEmbedUnimplementedDKVReplicationServer() {}
 
 // UnsafeDKVReplicationServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DKVReplicationServer will
@@ -259,7 +257,7 @@ func (c *dKVBackupRestoreClient) Restore(ctx context.Context, in *RestoreRequest
 }
 
 // DKVBackupRestoreServer is the server API for DKVBackupRestore service.
-// All implementations must embed UnimplementedDKVBackupRestoreServer
+// All implementations should embed UnimplementedDKVBackupRestoreServer
 // for forward compatibility
 type DKVBackupRestoreServer interface {
 	// Backup backs up the entire keyspace into the given filesystem location.
@@ -267,10 +265,9 @@ type DKVBackupRestoreServer interface {
 	// Restore restores the entire keyspace from an existing backup at the
 	// given filesystem location.
 	Restore(context.Context, *RestoreRequest) (*Status, error)
-	mustEmbedUnimplementedDKVBackupRestoreServer()
 }
 
-// UnimplementedDKVBackupRestoreServer must be embedded to have forward compatible implementations.
+// UnimplementedDKVBackupRestoreServer should be embedded to have forward compatible implementations.
 type UnimplementedDKVBackupRestoreServer struct {
 }
 
@@ -280,7 +277,6 @@ func (UnimplementedDKVBackupRestoreServer) Backup(context.Context, *BackupReques
 func (UnimplementedDKVBackupRestoreServer) Restore(context.Context, *RestoreRequest) (*Status, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restore not implemented")
 }
-func (UnimplementedDKVBackupRestoreServer) mustEmbedUnimplementedDKVBackupRestoreServer() {}
 
 // UnsafeDKVBackupRestoreServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DKVBackupRestoreServer will
@@ -400,7 +396,7 @@ func (c *dKVClusterClient) ListNodes(ctx context.Context, in *emptypb.Empty, opt
 }
 
 // DKVClusterServer is the server API for DKVCluster service.
-// All implementations must embed UnimplementedDKVClusterServer
+// All implementations should embed UnimplementedDKVClusterServer
 // for forward compatibility
 type DKVClusterServer interface {
 	// AddNode adds the given DKV node to the cluster that the
@@ -412,10 +408,9 @@ type DKVClusterServer interface {
 	// ListNodes retrieves the current set of DKV nodes from
 	// the Nexus cluster.
 	ListNodes(context.Context, *emptypb.Empty) (*ListNodesResponse, error)
-	mustEmbedUnimplementedDKVClusterServer()
 }
 
-// UnimplementedDKVClusterServer must be embedded to have forward compatible implementations.
+// UnimplementedDKVClusterServer should be embedded to have forward compatible implementations.
 type UnimplementedDKVClusterServer struct {
 }
 
@@ -428,7 +423,6 @@ func (UnimplementedDKVClusterServer) RemoveNode(context.Context, *RemoveNodeRequ
 func (UnimplementedDKVClusterServer) ListNodes(context.Context, *emptypb.Empty) (*ListNodesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListNodes not implemented")
 }
-func (UnimplementedDKVClusterServer) mustEmbedUnimplementedDKVClusterServer() {}
 
 // UnsafeDKVClusterServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DKVClusterServer will
@@ -556,17 +550,16 @@ func (c *dKVDiscoveryClient) GetClusterInfo(ctx context.Context, in *GetClusterI
 }
 
 // DKVDiscoveryServer is the server API for DKVDiscovery service.
-// All implementations must embed UnimplementedDKVDiscoveryServer
+// All implementations should embed UnimplementedDKVDiscoveryServer
 // for forward compatibility
 type DKVDiscoveryServer interface {
 	// Update status of the given database and vBucket
 	UpdateStatus(context.Context, *UpdateStatusRequest) (*Status, error)
 	// Retrieve all active nodes in cluster with their status after filtering based on request params
 	GetClusterInfo(context.Context, *GetClusterInfoRequest) (*GetClusterInfoResponse, error)
-	mustEmbedUnimplementedDKVDiscoveryServer()
 }
 
-// UnimplementedDKVDiscoveryServer must be embedded to have forward compatible implementations.
+// UnimplementedDKVDiscoveryServer should be embedded to have forward compatible implementations.
 type UnimplementedDKVDiscoveryServer struct {
 }
 
@@ -576,7 +569,6 @@ func (UnimplementedDKVDiscoveryServer) UpdateStatus(context.Context, *UpdateStat
 func (UnimplementedDKVDiscoveryServer) GetClusterInfo(context.Context, *GetClusterInfoRequest) (*GetClusterInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusterInfo not implemented")
 }
-func (UnimplementedDKVDiscoveryServer) mustEmbedUnimplementedDKVDiscoveryServer() {}
 
 // UnsafeDKVDiscoveryServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DKVDiscoveryServer will
@@ -671,22 +663,20 @@ func (c *dKVDiscoveryNodeClient) GetStatus(ctx context.Context, in *emptypb.Empt
 }
 
 // DKVDiscoveryNodeServer is the server API for DKVDiscoveryNode service.
-// All implementations must embed UnimplementedDKVDiscoveryNodeServer
+// All implementations should embed UnimplementedDKVDiscoveryNodeServer
 // for forward compatibility
 type DKVDiscoveryNodeServer interface {
 	// Get status of region
 	GetStatus(context.Context, *emptypb.Empty) (*RegionInfo, error)
-	mustEmbedUnimplementedDKVDiscoveryNodeServer()
 }
 
-// UnimplementedDKVDiscoveryNodeServer must be embedded to have forward compatible implementations.
+// UnimplementedDKVDiscoveryNodeServer should be embedded to have forward compatible implementations.
 type UnimplementedDKVDiscoveryNodeServer struct {
 }
 
 func (UnimplementedDKVDiscoveryNodeServer) GetStatus(context.Context, *emptypb.Empty) (*RegionInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
 }
-func (UnimplementedDKVDiscoveryNodeServer) mustEmbedUnimplementedDKVDiscoveryNodeServer() {}
 
 // UnsafeDKVDiscoveryNodeServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DKVDiscoveryNodeServer will

@@ -135,7 +135,7 @@ func (c *dKVClient) CompareAndSet(ctx context.Context, in *CompareAndSetRequest,
 }
 
 // DKVServer is the server API for DKV service.
-// All implementations must embed UnimplementedDKVServer
+// All implementations should embed UnimplementedDKVServer
 // for forward compatibility
 type DKVServer interface {
 	// Put puts the given key into the key value store.
@@ -154,10 +154,9 @@ type DKVServer interface {
 	// CompareAndSet offers the standard CAS style transaction over a given
 	// key. Intended to be used in concurrent workloads with less contention.
 	CompareAndSet(context.Context, *CompareAndSetRequest) (*CompareAndSetResponse, error)
-	mustEmbedUnimplementedDKVServer()
 }
 
-// UnimplementedDKVServer must be embedded to have forward compatible implementations.
+// UnimplementedDKVServer should be embedded to have forward compatible implementations.
 type UnimplementedDKVServer struct {
 }
 
@@ -182,7 +181,6 @@ func (UnimplementedDKVServer) Iterate(*IterateRequest, DKV_IterateServer) error 
 func (UnimplementedDKVServer) CompareAndSet(context.Context, *CompareAndSetRequest) (*CompareAndSetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompareAndSet not implemented")
 }
-func (UnimplementedDKVServer) mustEmbedUnimplementedDKVServer() {}
 
 // UnsafeDKVServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to DKVServer will

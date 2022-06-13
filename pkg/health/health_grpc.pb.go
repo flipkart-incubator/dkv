@@ -80,7 +80,7 @@ func (x *healthWatchClient) Recv() (*HealthCheckResponse, error) {
 }
 
 // HealthServer is the server API for Health service.
-// All implementations must embed UnimplementedHealthServer
+// All implementations should embed UnimplementedHealthServer
 // for forward compatibility
 type HealthServer interface {
 	// Check offers the standard GRPC health checks on the underlying implementation
@@ -89,10 +89,9 @@ type HealthServer interface {
 	// Watch offers standard GRPC streaming health check on the underlying implementation
 	// of the key value store
 	Watch(*HealthCheckRequest, Health_WatchServer) error
-	mustEmbedUnimplementedHealthServer()
 }
 
-// UnimplementedHealthServer must be embedded to have forward compatible implementations.
+// UnimplementedHealthServer should be embedded to have forward compatible implementations.
 type UnimplementedHealthServer struct {
 }
 
@@ -102,7 +101,6 @@ func (UnimplementedHealthServer) Check(context.Context, *HealthCheckRequest) (*H
 func (UnimplementedHealthServer) Watch(*HealthCheckRequest, Health_WatchServer) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
 }
-func (UnimplementedHealthServer) mustEmbedUnimplementedHealthServer() {}
 
 // UnsafeHealthServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to HealthServer will
