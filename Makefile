@@ -1,6 +1,6 @@
 
 GOOS ?= darwin
-GOARCH ?= amd64
+GOARCH ?= 
 CGO_ENABLED ?= 1
 CGO_CFLAGS ?=
 CGO_LDFLAGS ?= "-lrocksdb -lm -lzstd -lz -lbz2 -lsnappy"
@@ -16,8 +16,6 @@ PACKAGES = $(shell $(GO) list ./... | grep -v '/vendor/' | grep -v '/extras/')
 PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/ | grep -v /clients/)
 
 TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
-
-PROTO_VER = $(shell $(GO) list -m all | grep "github.com/golang/protobuf" | awk '{print $$2}')
 
 ifeq ($(VERSION),)
   VERSION = latest
@@ -40,9 +38,8 @@ endif
 
 .PHONY: protoc
 protoc:
-	@echo ">> generating proto code using Proto version $(PROTO_VER)"
-	@$(GO) get -u github.com/golang/protobuf/protoc-gen-go@$(PROTO_VER)
-	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=M.,plugins=grpc,paths=source_relative:. $$proto_dir/*.proto || exit 1; done
+	@echo ">> generating proto code"
+	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=paths=source_relative:. --go-grpc_out=require_unimplemented_servers=false,paths=source_relative:.  $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
 format:
