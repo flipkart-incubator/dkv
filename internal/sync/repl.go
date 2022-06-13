@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"io"
-	"strconv"
-	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
@@ -47,8 +44,6 @@ func (dr *dkvReplStore) Save(ent db.RaftEntry, req []byte) (res []byte, err erro
 	}
 	return
 }
-
-
 
 func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 	intReq := new(raftpb.InternalRaftRequest)

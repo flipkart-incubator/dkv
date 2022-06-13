@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -22,10 +21,9 @@ func TestDKVReplStoreSave(t *testing.T) {
 	kvs := newMemStore()
 	dkvRepl := NewDKVReplStore(kvs)
 
-	term, index := uint64(1), uint64(1)
-	testPut(t, kvs, dkvRepl, []byte("foo"), []byte("bar"), term, index)
-	testPut(t, kvs, dkvRepl, []byte("hello"), []byte("world"), term, index + 1)
-	testPut(t, kvs, dkvRepl, []byte("kit"), []byte("kat"), term, index + 2)
+	testPut(t, kvs, dkvRepl, []byte("foo"), []byte("bar"))
+	testPut(t, kvs, dkvRepl, []byte("hello"), []byte("world"))
+	testPut(t, kvs, dkvRepl, []byte("kit"), []byte("kat"))
 
 	testGet(t, kvs, dkvRepl, []byte("foo"))
 	testGet(t, kvs, dkvRepl, []byte("hello"))
@@ -33,9 +31,9 @@ func TestDKVReplStoreSave(t *testing.T) {
 
 	testMultiGet(t, kvs, dkvRepl, []byte("foo"), []byte("hello"), []byte("kit"))
 
-	testDelete(t, kvs, dkvRepl, []byte("foo"), term, index + 3)
-	testDelete(t, kvs, dkvRepl, []byte("hello"), term, index + 4)
-	testDelete(t, kvs, dkvRepl, []byte("kit"), term, index + 5)
+	testDelete(t, kvs, dkvRepl, []byte("foo"))
+	testDelete(t, kvs, dkvRepl, []byte("hello"))
+	testDelete(t, kvs, dkvRepl, []byte("kit"))
 }
 
 func TestDKVReplStoreClose(t *testing.T) {
@@ -48,13 +46,13 @@ func TestDKVReplStoreClose(t *testing.T) {
 	}
 }
 
-func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte, term, index uint64) {
+func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte) {
 	intReq := new(raftpb.InternalRaftRequest)
 	intReq.Put = &serverpb.PutRequest{Key: key, Value: val}
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(db.RaftEntry{term, index}, reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if res, err := kvs.Get(key); err != nil {
@@ -62,35 +60,22 @@ func testPut(t *testing.T, kvs *memStore, dkvRepl db.Store, key, val []byte, ter
 			} else if string(res[0].Value) != string(val) {
 				t.Errorf("Value mismatch for key: %s. Expected: %s, Actual: %s", key, val, res[0].Value)
 			}
-			checkRAFTEntry(t, kvs, term, index)
 		}
 	}
 }
 
-func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte, term, index uint64) {
+func testDelete(t *testing.T, kvs *memStore, dkvRepl db.Store, key []byte) {
 	intReq := new(raftpb.InternalRaftRequest)
 	intReq.Delete = &serverpb.DeleteRequest{Key: key}
 	if reqBts, err := proto.Marshal(intReq); err != nil {
 		t.Error(err)
 	} else {
-		if _, err := dkvRepl.Save(db.RaftEntry{term, index}, reqBts); err != nil {
+		if _, err := dkvRepl.Save(db.RaftEntry{}, reqBts); err != nil {
 			t.Error(err)
 		} else {
 			if _, err := kvs.Get(key); err.Error() != "Given key not found" {
 				t.Error(err)
 			}
-		}
-		checkRAFTEntry(t, kvs, term, index)
-	}
-}
-
-func checkRAFTEntry(t *testing.T, kvs *memStore, term, index uint64) {
-	if res, err := kvs.Get([]byte(raftMeta)); err != nil {
-		t.Error(err)
-	} else {
-		exp := fmt.Sprintf("%d%c%d", term, raftMetaDelim, index)
-		if string(res[0].Value) != exp {
-			t.Errorf("Mismatch in RAFT entry. Expected: %s, Actual: %s", exp, res[0].Value)
 		}
 	}
 }
@@ -169,10 +154,6 @@ func (ms *memStore) Put(pairs ...*serverpb.KVPair) error {
 
 	for _, kv := range pairs {
 		storeKey := string(kv.Key)
-		if storeKey == raftMeta {
-			ms.store[storeKey] = memStoreObject{kv.Value, 0}
-			continue
-		}
 		if _, present := ms.store[storeKey]; present {
 			return errors.New("given key already exists")
 		}
