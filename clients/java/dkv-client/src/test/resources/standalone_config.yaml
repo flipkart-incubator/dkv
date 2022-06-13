@@ -3,7 +3,6 @@ db-engine-ini : ""
 block-cache-size : 3221225472
 root-folder : "/tmp/dkvsrv"
 dc-id : "dc1"
-discovery-service-config : "internal/discovery/discovery.ini"
 diskless : false
 pprof : false
 repl-master-addr : ""
@@ -13,3 +12,12 @@ statsd-addr : ""
 vbucket : "default"
 verbose : false
 log-level : "warn"
+discovery-service:
+  server:
+    status-ttl: 300
+    heartbeat-timeout: 60
+  client:
+    discovery-service-addr: "multi:///127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003"
+    push-status-interval: 30
+    poll-cluster-info-interval: 1
+
