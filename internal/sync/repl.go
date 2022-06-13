@@ -121,6 +121,11 @@ func (dr *dkvReplStore) Close() error {
 	return dr.kvs.Close()
 }
 
+// TODO: implement this correctly
+func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
+	return db.RaftEntry{}, errors.New("not implemented")
+}
+
 func (dr *dkvReplStore) Backup(_ db.SnapshotState) (io.ReadCloser, error) {
 	return dr.kvs.GetSnapshot()
 }
