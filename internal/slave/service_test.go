@@ -40,17 +40,19 @@ const (
 	cacheSize      = 3 << 30
 
 	// for creating a distribute server cluster
-	dbFolderMaster = "/tmp/dkv_test_db_master"
-	dbFolderSlave  = "/tmp/dkv_test_db_slave"
-	clusterSize    = 5
-	discoveryPort  = 8686
-	logDir         = "/tmp/dkv_test/logs"
-	snapDir        = "/tmp/dkv_test/snap"
-	clusterURL     = "http://127.0.0.1:9331,http://127.0.0.1:9332,http://127.0.0.1:9333,http://127.0.0.1:9334,http://127.0.0.1:9335"
-	replTimeout    = 3 * time.Second
-	engine         = "rocksdb"
-	dbName         = "default"
-	vbucket        = "default"
+	dbFolderMaster   = "/tmp/dkv_test_db_master"
+	dbFolderSlave    = "/tmp/dkv_test_db_slave"
+	clusterSize      = 5
+	discoveryPort    = 8686
+	logDir           = "/tmp/dkv_test/logs"
+	snapDir          = "/tmp/dkv_test/snap"
+	clusterURL       = "http://127.0.0.1:9331,http://127.0.0.1:9332,http://127.0.0.1:9333,http://127.0.0.1:9334,http://127.0.0.1:9335"
+	replTimeout      = 3 * time.Second
+	engine           = "rocksdb"
+	dbName           = "default"
+	vbucket          = "default"
+	heartBeatTimeOut = 2
+	statusTtl        = 5
 )
 
 var (
@@ -266,14 +268,14 @@ func startDiscoveryServer() {
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, discoverydkvSvc)
 
-	discoverServiceConf := &discovery.DiscoveryConfig{StatusTTl: 5, HeartbeatTimeout: 2}
+	discoverServiceConf := &opts.DiscoveryServerConfig{statusTtl, heartBeatTimeOut}
 	discoveryService, _ := discovery.NewDiscoveryService(discoverydkvSvc, zap.NewNop(), discoverServiceConf)
 	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
 	go grpcSrvr.Serve(newListener(discoveryPort))
 }
 
 func startDiscoveryCli() {
-	clientConfig := &discovery.DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort),
+	clientConfig := &opts.DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
 	discoveryCli, _ = discovery.NewDiscoveryClient(clientConfig, zap.NewNop())
 }

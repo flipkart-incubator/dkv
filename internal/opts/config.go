@@ -39,7 +39,7 @@ type Config struct {
 	StatsdAddr     string `mapstructure:"statsd-addr" desc:"StatsD service address in host:port format"`
 
 	//Service discovery related params
-	DiscoveryServiceConfig string `mapstructure:"discovery-service-config" desc:"A .ini file for configuring discovery service parameters"`
+	DiscoveryConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
@@ -64,6 +64,34 @@ type Config struct {
 	NexusMaxWals                int    `mapstructure:"nexus-max-wals" desc:"Maximum number of WAL files to retain (0 is unlimited)"`
 	NexusSnapshotCatchupEntries int    `mapstructure:"nexus-snapshot-catchup-entries" desc:"Number of entries for a slow follower to catch-up after compacting the raft storage entries"`
 	NexusSnapshotCount          int    `mapstructure:"nexus-snapshot-count" desc:"Number of committed transactions to trigger a snapshot to disk"`
+}
+
+type DiscoveryClientConfig struct {
+	DiscoveryServiceAddr string `mapstructure:"discovery-service-addr"`
+	// time in seconds to push status updates to discovery server
+	PushStatusInterval time.Duration `mapstructure:"push-status-interval"`
+	// time in seconds to poll cluster info from discovery server
+	PollClusterInfoInterval time.Duration `mapstructure:"poll-cluster-info-interval"`
+}
+
+/*
+This class contains the behaviour of receiving status updates from nodes in the cluster
+and providing the latest cluster info of active master / followers / slave of a region when requested
+*/
+
+type DiscoveryServerConfig struct {
+	// time in seconds after which the status entry of the region & node combination can be purged
+	StatusTTl int64 `mapstructure:"status-ttl"`
+	// maximum time in seconds for the last status update to be considered valid
+	// after exceeding this time the region & node combination can be marked invalid
+	HeartbeatTimeout int64 `mapstructure:"heartbeat-timeout"`
+}
+
+type DiscoveryServiceConfiguration struct {
+	//server side config for discovery service
+	ServerConfig DiscoveryServerConfig `mapstructure:"server"`
+	//client side config for discovery service
+	ClientConfig DiscoveryClientConfig `mapstructure:"client"`
 }
 
 func (c *Config) parseConfig() {
@@ -113,6 +141,22 @@ func (c *Config) validateFlags() {
 	if c.DbRole == "slave" {
 		if c.ReplicationMasterAddr != "" && strings.IndexRune(c.ReplicationMasterAddr, ':') < 0 {
 			log.Panicf("given master address: %s for replication is invalid, must be in host:port format", c.ReplicationMasterAddr)
+		}
+	}
+
+	//validate discovery configs
+	if c.DbRole == "discovery" {
+		if c.DiscoveryConfig.ServerConfig.HeartbeatTimeout <= 0 ||
+			c.DiscoveryConfig.ServerConfig.StatusTTl <= 0 {
+			log.Panicf("Invalid discovery server configuration")
+		}
+	}
+
+	if c.DbRole != "none" && c.DbRole != "discovery" {
+		if c.DiscoveryConfig.ClientConfig.DiscoveryServiceAddr == "" ||
+			c.DiscoveryConfig.ClientConfig.PushStatusInterval <= 0 ||
+			c.DiscoveryConfig.ClientConfig.PollClusterInfoInterval <= 0 {
+			log.Panicf("Invalid discovery server client configuration")
 		}
 	}
 }
