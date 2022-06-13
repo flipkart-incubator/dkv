@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/sync/raftpb"
@@ -147,11 +150,6 @@ func gobEncode(data interface{}) ([]byte, error) {
 
 func (dr *dkvReplStore) Close() error {
 	return dr.kvs.Close()
-}
-
-// TODO: implement this correctly
-func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
-	return db.RaftEntry{}, errors.New("not implemented")
 }
 
 func (dr *dkvReplStore) Backup(_ db.SnapshotState) (io.ReadCloser, error) {
