@@ -24,7 +24,7 @@ func NewDKVReplStore(kvs storage.KVStore) db.Store {
 	return &dkvReplStore{kvs}
 }
 
-func (dr *dkvReplStore) Save(ent db.RaftEntry, req []byte) (res []byte, err error) {
+func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) (res []byte, err error) {
 	intReq := new(raftpb.InternalRaftRequest)
 	if err = proto.Unmarshal(req, intReq); err != nil {
 		return nil, err
