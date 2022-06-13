@@ -45,42 +45,10 @@ func (dr *dkvReplStore) Save(ent db.RaftEntry, req []byte) (res []byte, err erro
 	default:
 		err = errors.New("Unknown Save request in dkv")
 	}
-
-	// It is perhaps fine to save RAFT entry after
-	// the main operation. The alternative involves
-	// modifying each of the above mutations to save
-	// the RAFT entry, which may not be possible.
-	if err == nil {
-		err = dr.saveEntry(ent)
-	}
 	return
 }
 
-const (
-	raftMeta      = "__$dkv_meta::RAFT_STATE"
-	raftMetaDelim = ':'
-)
 
-func (dr *dkvReplStore) saveEntry(ent db.RaftEntry) error {
-	_, err := dr.put(&serverpb.PutRequest{
-		Key:   []byte(raftMeta),
-		Value: []byte(fmt.Sprintf("%d%c%d", ent.Term, raftMetaDelim, ent.Index)),
-	})
-	return err
-}
-
-func (dr *dkvReplStore) GetLastAppliedEntry() (db.RaftEntry, error) {
-	vals, err := dr.kvs.Get([]byte(raftMeta))
-	if err != nil || vals == nil || len(vals) == 0 {
-		return db.RaftEntry{}, errors.New("no RAFT metadata found")
-	}
-	raftMetaStr := string(vals[0].Value)
-	idx := strings.IndexRune(raftMetaStr, raftMetaDelim)
-	term, _ := strconv.ParseUint(raftMetaStr[:idx], 10, 64)
-	index, _ := strconv.ParseUint(raftMetaStr[idx+1:], 10, 64)
-
-	return db.RaftEntry{Term: term, Index: index}, nil
-}
 
 func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
 	intReq := new(raftpb.InternalRaftRequest)
