@@ -17,8 +17,6 @@ PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort
 
 TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
 
-PROTO_VER = $(shell $(GO) list -m all | grep "github.com/golang/protobuf" | awk '{print $$2}')
-
 ifeq ($(VERSION),)
   VERSION = latest
 endif
@@ -40,7 +38,7 @@ endif
 
 .PHONY: protoc
 protoc:
-	@echo ">> generating proto code using Proto version $(PROTO_VER)"
+	@echo ">> generating proto code"
 	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=paths=source_relative:. --go-grpc_out=paths=source_relative:.  $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
