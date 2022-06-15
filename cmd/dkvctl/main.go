@@ -272,7 +272,6 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-	//client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority, ctl.DefaultConnectOpts)
 	dkvConfig := utils.DKVConfig{
 		SrvrAddr:dkvAddr,
 		CaCertPath:caCertPath}

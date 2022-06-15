@@ -37,7 +37,7 @@ import (
 const (
 	masterDBFolder = "/tmp/dkv_test_db_master"
 	slaveDBFolder  = "/tmp/dkv_test_db_slave"
-	masterSvcPort  = 8185
+	masterSvcPort  = 8181
 	slaveSvcPort   = 8282
 	dkvSvcHost     = "127.0.0.1"
 	cacheSize      = 3 << 30
@@ -173,23 +173,16 @@ func testSlaveAutoConnect(commType string, t *testing.T) {
 
 	//start discovery server
 	startDiscoveryServer()
-	t.Log("Started disc server")
 	sleepInSecs(3)
 	startDiscoveryCli()
-	t.Log("Started disc client")
 	defer discoverydkvSvc.Close()
 	defer discoveryCli.Close()
-
-	t.Log("closed")
 
 	//start dkvservers
 	initDKVServers()
 	sleepInSecs(3)
-	t.Log("DKV servers initisalised")
 	registerDkvServerWithDiscovery()
-	t.Log("register complete")
 	initDKVClients()
-	t.Log("dkv clients init")
 	defer stopClients()
 	defer stopServers()
 
@@ -202,7 +195,6 @@ func testSlaveAutoConnect(commType string, t *testing.T) {
 		t.Fatalf("Cannot connect to new master. Error: %v", err)
 	}
 
-	t.Log("present here")
 	lastClosedMasterId := -1
 	for cnt := 0; cnt < clusterSize+1; cnt++ {
 		masterId := getCurrentMasterIdFromSlave(t)
@@ -246,7 +238,6 @@ func testSlaveAutoConnect(commType string, t *testing.T) {
 
 		t.Log("New master port:", dkvPorts[masterId])
 	}
-	t.Log("hola here")
 	stopDiscoveryServer()
 }
 

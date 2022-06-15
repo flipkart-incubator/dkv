@@ -52,7 +52,6 @@ var DiscoveryClientConnectOpts = ctl.ConnectOpts{
 
 
 func NewDiscoveryClient(config *opts.DiscoveryClientConfig, dkvConfig utils.DKVConfig, logger *zap.Logger) (Client, error) {
-	//conn, err := getDiscoveryClient(config.DiscoveryServiceAddr)
 	dkvConfig.SrvrAddr = config.DiscoveryServiceAddr
 	client, err := utils.NewDKVClient(dkvConfig, "", DiscoveryClientConnectOpts)
 	if err != nil {
@@ -66,20 +65,6 @@ func NewDiscoveryClient(config *opts.DiscoveryClientConfig, dkvConfig utils.DKVC
 		dkvClient: dkvCli, logger: logger, config: config, conn: conn}
 	storePropagator.init()
 	return storePropagator, nil
-}
-
-func getDiscoveryClient(discoveryServiceAddr string) (*grpc.ClientConn, error) {
-	// TODO - check if authority is required
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-	return grpc.DialContext(ctx, discoveryServiceAddr,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)),
-		grpc.WithReadBufferSize(readBufSize),
-		grpc.WithWriteBufferSize(writeBufSize),
-		grpc.WithAuthority(""),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 }
 
 func (m *discoveryClient) RegisterRegion(server serverpb.DKVDiscoveryNodeServer) {

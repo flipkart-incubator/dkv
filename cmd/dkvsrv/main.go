@@ -113,7 +113,6 @@ func main() {
 	}
 
 	kvs, cp, ca, br := newKVStore()
-	//grpcSrvr, lstnr := newGrpcServerListener()
 	grpcSrvr, lstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
 		SrvrAddr: config.ListenAddr, KeyPath: config.KeyPath, CertPath: config.CertPath,
 		CaCertPath: config.CaCertPath}, accessLogger)
