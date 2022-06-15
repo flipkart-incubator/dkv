@@ -153,7 +153,7 @@ func main() {
 
 	if srvrRole != noRole && srvrRole != discoveryRole {
 		var err error
-		discoveryClient, err = newDiscoveryClient()
+		discoveryClient, err = newDiscoveryClient(utils.DKVConfig{CaCertPath:config.CaCertPath})
 		if err != nil {
 			log.Panicf("Failed to start Discovery Client %v.", err)
 		}
@@ -443,8 +443,8 @@ func registerDiscoveryServer(grpcSrvr *grpc.Server, dkvService master.DKVService
 	return nil
 }
 
-func newDiscoveryClient() (discovery.Client, error) {
-	client, err := discovery.NewDiscoveryClient(&config.DiscoveryConfig.ClientConfig, dkvLogger)
+func newDiscoveryClient(dkvConfig utils.DKVConfig) (discovery.Client, error) {
+	client, err := discovery.NewDiscoveryClient(&config.DiscoveryConfig.ClientConfig, dkvConfig, dkvLogger)
 	if err != nil {
 		return nil, err
 	}

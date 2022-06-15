@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
+	utils "github.com/flipkart-incubator/dkv/internal"
 	"github.com/flipkart-incubator/dkv/internal/master"
 	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
@@ -40,7 +40,7 @@ func TestDiscoveryClient(t *testing.T) {
 		PollClusterInfoInterval: pollClusterInfoInterval,
 	}
 
-	dClient, _ := NewDiscoveryClient(&discoveryClientConfig, zap.NewNop())
+	dClient, _ := NewDiscoveryClient(&discoveryClientConfig,  utils.DKVConfig{} , zap.NewNop())
 	defer dClient.Close()
 
 	// stop the poller so as to avoid race with these poller

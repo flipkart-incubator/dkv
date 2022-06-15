@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/internal/helper"
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"go.uber.org/zap"
@@ -21,6 +22,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 )
@@ -49,28 +51,42 @@ func NewDKVClient(clientConfig DKVConfig, authority string, options ctl.ConnectO
 	if clientMode == "" {
 		clientMode = clientModeFromFlags(clientConfig)
 	}
+
+	log.Print(clientMode)
+
 	switch clientMode {
 	case MutualTLS:
 		config, err = getTLSConfigWithCertPool(clientConfig.CaCertPath)
 		if err == nil {
 			var cert tls.Certificate
+			//log.Fatal("hrt33")
+
 			cert, err = tls.LoadX509KeyPair(clientConfig.CertPath, clientConfig.KeyPath)
+
 			if err == nil {
+
+				//log.Fatal("hrtrr")
+
+
 				config.Certificates = []tls.Certificate{cert}
+
 				opt = grpc.WithTransportCredentials(credentials.NewTLS(config))
 			}
 		}
 	case ServerTLS:
 		config, err = getTLSConfigWithCertPool(clientConfig.CaCertPath)
 		if err == nil {
+
 			opt = grpc.WithTransportCredentials(credentials.NewTLS(config))
 		}
 	case Insecure:
 		opt = grpc.WithInsecure()
 	}
 	if err != nil {
+		log.Print("here")
 		return nil, err
 	}
+
 	return ctl.NewDKVClient(clientConfig.SrvrAddr, authority, options, opt)
 }
 
@@ -134,6 +150,65 @@ func loadTLSCredentials(clientConfig DKVConfig) (credentials.TransportCredential
 		config.ClientAuth = tls.NoClientCert
 	}
 	return credentials.NewTLS(config), nil
+}
+
+func GenerateTlsFiles() {
+
+	var err error
+
+	homeDir := helper.HomeDir
+	generatedCertDir := homeDir + "/cert"
+	tlsFile := generatedCertDir + "/tlsFiles.sh"
+	serverConfFile := generatedCertDir + "/server-ext.cnf"
+
+	if _, errCreate := os.Stat(generatedCertDir); os.IsNotExist(errCreate) {
+		err = os.MkdirAll(generatedCertDir, os.ModePerm)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	f, err := os.Create(tlsFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer f.Close()
+
+	err = os.Chmod(tlsFile, 0777)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err2 := f.WriteString(helper.TlsFileContent)
+
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+
+	f1, err := os.Create(serverConfFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f1.Close()
+
+	err = os.Chmod(serverConfFile, 0777)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err3 := f1.WriteString(helper.ServerConf)
+
+	if err3 != nil {
+		log.Fatal(err3)
+	}
+
+	cmd := exec.Command("/bin/sh", tlsFile)
+
+	err = cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func GenerateSelfSignedCert(generatedCertDir string, generatedCertValidity int) (string, string, error) {

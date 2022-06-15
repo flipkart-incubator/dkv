@@ -6,6 +6,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/nexus/models"
 	"io"
+	"log"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -18,7 +19,7 @@ import (
 // exposes a simpler API to its users without having to deal with timeouts,
 // contexts and other GRPC semantics.
 type DKVClient struct {
-	cliConn    *grpc.ClientConn
+	CliConn    *grpc.ClientConn
 	dkvCli     serverpb.DKVClient
 	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
@@ -63,6 +64,7 @@ func NewDKVClient(svcAddr string, authority string, connectOptions ConnectOpts, 
 	opts = append(opts, grpc.WithBlock(), grpc.WithReadBufferSize(connectOptions.ReadBufSize),
 		grpc.WithWriteBufferSize(connectOptions.WriteBufSize), grpc.WithAuthority(authority),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(connectOptions.MaxMsgSize)), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+	log.Print(svcAddr)
 	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
@@ -279,8 +281,8 @@ func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, e
 
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
-	if dkvClnt.cliConn != nil {
-		return dkvClnt.cliConn.Close()
+	if dkvClnt.CliConn != nil {
+		return dkvClnt.CliConn.Close()
 	}
 	return nil
 }

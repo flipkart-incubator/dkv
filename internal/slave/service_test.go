@@ -5,6 +5,9 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	utils "github.com/flipkart-incubator/dkv/internal"
+	"github.com/flipkart-incubator/dkv/internal/helper"
+	"log"
 	"net"
 	"os/exec"
 	"strings"
@@ -34,9 +37,9 @@ import (
 const (
 	masterDBFolder = "/tmp/dkv_test_db_master"
 	slaveDBFolder  = "/tmp/dkv_test_db_slave"
-	masterSvcPort  = 8181
+	masterSvcPort  = 8185
 	slaveSvcPort   = 8282
-	dkvSvcHost     = "localhost"
+	dkvSvcHost     = "127.0.0.1"
 	cacheSize      = 3 << 30
 
 	// for creating a distribute server cluster
@@ -62,6 +65,7 @@ var (
 	slaveCli       *ctl.DKVClient
 	slaveSvc       DKVService
 	slaveGrpcSrvr  *grpc.Server
+	discServerGrpcSrvr *grpc.Server
 	healthCheckCli *HealthCheckClient
 
 	lgr, _     = zap.NewDevelopment()
@@ -81,6 +85,9 @@ var (
 	discoveryCli    discovery.Client
 	discoverydkvSvc master.DKVService
 	closedMasters   = make(map[int]bool)
+	caCertPath = helper.HomeDir + "/cert/ca-cert.pem"
+	certPath = helper.HomeDir + "/cert/server-cert.pem"
+	keyPath = helper.HomeDir + "/cert/server-key.pem"
 )
 
 type HealthCheckClient struct {
@@ -89,51 +96,100 @@ type HealthCheckClient struct {
 }
 
 func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
+	opts.AppConfig = getConfigInsecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
 	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
-func TestMasterRocksDBSlaveBadger(t *testing.T) {
+func TestMasterRocksDBSlaveRocksDB_Secured(t *testing.T) {
+
+	utils.GenerateTlsFiles()
+	opts.AppConfig = getConfigSecure()
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newRocksDBStore(slaveDBFolder)
+	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
+}
+
+func TestMasterRocksDBSlaveBadger_Secure(t *testing.T) {
+	utils.GenerateTlsFiles()
+	opts.AppConfig = getConfigSecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newBadgerDBStore(slaveDBFolder)
 	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
+func TestMasterRocksDBSlaveBadger(t *testing.T) {
+	opts.AppConfig = getConfigInsecure()
+	masterRDB := newRocksDBStore(masterDBFolder)
+	slaveRDB := newBadgerDBStore(slaveDBFolder)
+	testMasterSlaveRepl(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
+}
+
+
 func TestSlaveDiscoveryFunctionality(t *testing.T) {
+	opts.AppConfig = getConfigInsecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
 	testGetStatus(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
 func TestSlaveHealthCheck(t *testing.T) {
+	opts.AppConfig = getConfigInsecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
 	testHealthCheck(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
 func TestSlaveHealthCheckStream(t *testing.T) {
+	opts.AppConfig = getConfigInsecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
 	testHealthCheckStream(t, masterRDB, slaveRDB, masterRDB, slaveRDB, masterRDB)
 }
 
-func TestSlaveAutoConnect(t *testing.T) {
+
+func TestSlaveAutoConnect_Insecure(t *testing.T) {
+
+	testSlaveAutoConnect("InSecured", t)
+}
+
+/*
+func TestSlaveAutoConnect_Secure(t *testing.T) {
+
+	testSlaveAutoConnect("Secured", t)
+}*/
+
+func testSlaveAutoConnect(commType string, t *testing.T) {
+
+	if commType == "Secured" {
+		opts.AppConfig = getConfigSecure()
+	}else {
+		opts.AppConfig = getConfigInsecure()
+	}
+
 	//reset raft directories
 	resetRaftStateDirs(t)
 
 	//start discovery server
 	startDiscoveryServer()
+	t.Log("Started disc server")
 	sleepInSecs(3)
 	startDiscoveryCli()
+	t.Log("Started disc client")
 	defer discoverydkvSvc.Close()
 	defer discoveryCli.Close()
+
+	t.Log("closed")
 
 	//start dkvservers
 	initDKVServers()
 	sleepInSecs(3)
+	t.Log("DKV servers initisalised")
 	registerDkvServerWithDiscovery()
+	t.Log("register complete")
 	initDKVClients()
+	t.Log("dkv clients init")
 	defer stopClients()
 	defer stopServers()
 
@@ -145,6 +201,8 @@ func TestSlaveAutoConnect(t *testing.T) {
 	if err := slaveSvc.(*slaveService).findAndConnectToMaster(); err != nil {
 		t.Fatalf("Cannot connect to new master. Error: %v", err)
 	}
+
+	t.Log("present here")
 	lastClosedMasterId := -1
 	for cnt := 0; cnt < clusterSize+1; cnt++ {
 		masterId := getCurrentMasterIdFromSlave(t)
@@ -188,6 +246,12 @@ func TestSlaveAutoConnect(t *testing.T) {
 
 		t.Log("New master port:", dkvPorts[masterId])
 	}
+	t.Log("hola here")
+	stopDiscoveryServer()
+}
+
+func stopDiscoveryServer() {
+	discServerGrpcSrvr.GracefulStop()
 }
 
 func getNodeUrl(id int) string {
@@ -202,30 +266,6 @@ func startDkvSvcAndCli(id int) {
 	initSingleDkvClient(id)
 	discoveryCli.RegisterRegion(dkvSvcs[id])
 	discoveryCli.PropagateStatus()
-}
-
-func getCurrentMasterId(t *testing.T) int {
-	var currentMaster string
-	if regions, err := discoveryCli.GetClusterStatus(dbName, vbucket); err != nil {
-		t.Fatalf("Error while fetching the cluster info. Cannot proceed further. Error: %v", err)
-	} else {
-		for _, region := range regions {
-			if region.MasterHost != nil {
-				currentMaster = *region.MasterHost
-			}
-		}
-	}
-	if currentMaster == "" {
-		t.Fatalf("No master found")
-	}
-	detail := strings.Split(currentMaster, ":")
-	for i := 1; i <= clusterSize; i++ {
-		if fmt.Sprintf("%d", dkvPorts[i]) == detail[1] {
-			return i
-		}
-	}
-	t.Fatalf("Error: Master port not found")
-	return -1
 }
 
 func getCurrentMasterIdFromSlave(t *testing.T) int {
@@ -259,32 +299,57 @@ func registerDkvServerWithDiscovery() {
 	sleepInSecs(3)
 }
 
+func getSrvrMode() utils.ConnectionMode {
+	config := opts.AppConfig
+
+	var secure = config.CaCertPath != "" && config.KeyPath != "" && config.CertPath != ""
+
+	var srvrMode utils.ConnectionMode
+	if secure {
+		srvrMode = utils.ServerTLS
+	} else {
+		srvrMode = utils.Insecure
+	}
+
+	return srvrMode
+}
+
+
 func startDiscoveryServer() {
+
+	config := opts.AppConfig
+	srvrMode := getSrvrMode()
+	var lstnr net.Listener
 	//todo check why does this need a kv store?
 	discoverykvs, discoverycp, discoveryba := newKVStore(masterDBFolder + "_DC")
 	discoverydkvSvc = master.NewStandaloneService(discoverykvs, discoverycp, discoveryba, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, serverOpts)
-	grpcSrvr := grpc.NewServer()
-	serverpb.RegisterDKVServer(grpcSrvr, discoverydkvSvc)
-	serverpb.RegisterDKVReplicationServer(grpcSrvr, discoverydkvSvc)
-	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, discoverydkvSvc)
+	discServerGrpcSrvr, lstnr = utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
+		SrvrAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort), KeyPath: config.KeyPath, CertPath: config.CertPath,
+		CaCertPath: config.CaCertPath}, zap.NewNop())
+	serverpb.RegisterDKVServer(discServerGrpcSrvr, discoverydkvSvc)
+	serverpb.RegisterDKVReplicationServer(discServerGrpcSrvr, discoverydkvSvc)
+	serverpb.RegisterDKVBackupRestoreServer(discServerGrpcSrvr, discoverydkvSvc)
 
 	discoverServiceConf := &opts.DiscoveryServerConfig{statusTtl, heartBeatTimeOut}
 	discoveryService, _ := discovery.NewDiscoveryService(discoverydkvSvc, zap.NewNop(), discoverServiceConf)
-	serverpb.RegisterDKVDiscoveryServer(grpcSrvr, discoveryService)
-	go grpcSrvr.Serve(newListener(discoveryPort))
+	serverpb.RegisterDKVDiscoveryServer(discServerGrpcSrvr, discoveryService)
+	go discServerGrpcSrvr.Serve(lstnr)
 }
 
 func startDiscoveryCli() {
+
+	config := opts.AppConfig
+
 	clientConfig := &opts.DiscoveryClientConfig{DiscoveryServiceAddr: fmt.Sprintf("%s:%d", dkvSvcHost, discoveryPort),
 		PushStatusInterval: time.Duration(5), PollClusterInfoInterval: time.Duration(5)}
-	discoveryCli, _ = discovery.NewDiscoveryClient(clientConfig, zap.NewNop())
+	discoveryCli, _ = discovery.NewDiscoveryClient(clientConfig, utils.DKVConfig{CaCertPath:config.CaCertPath} ,zap.NewNop())
 }
 
 func startSlaveAndAttachToMaster(client *ctl.DKVClient) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	rdbStore := newRocksDBStore(dbFolderSlave)
-	go serveStandaloneDKVSlave(&wg, rdbStore, rdbStore, client, discoveryCli)
+	go serveStandaloneDKVSlaveV2(&wg, rdbStore, rdbStore, client, discoveryCli)
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -314,9 +379,10 @@ func stopServers() {
 }
 
 func initDKVClients(ids ...int) {
+	config := opts.AppConfig
 	for id := 1; id <= clusterSize; id++ {
 		svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-		if client, err := ctl.NewDKVClient(svcAddr, "", ctl.DefaultConnectOpts, grpc.WithInsecure()); err != nil {
+		if client, err := utils.NewDKVClient(utils.DKVConfig{SrvrAddr:svcAddr, CaCertPath:config.CaCertPath}, "", ctl.DefaultConnectOpts); err != nil {
 			panic(err)
 		} else {
 			dkvClis[id] = client
@@ -325,8 +391,9 @@ func initDKVClients(ids ...int) {
 }
 
 func initSingleDkvClient(id int) {
+	config := opts.AppConfig
 	svcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvPorts[id])
-	if client, err := ctl.NewDKVClient(svcAddr, "", ctl.DefaultConnectOpts, grpc.WithInsecure()); err != nil {
+	if client, err := utils.NewDKVClient(utils.DKVConfig{SrvrAddr:svcAddr, CaCertPath:config.CaCertPath}, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	} else {
 		dkvClis[id] = client
@@ -341,12 +408,12 @@ func initDKVServers() {
 }
 
 func serveDistributedDKV(id int, nodeURL string) {
-	dkvSvc, grpcSvc := newDistributedDKVNode(id, nodeURL, clusterURL)
+	dkvSvc, grpcSvc, lstnr := newDistributedDKVNode(id, nodeURL, clusterURL)
 	mutex.Lock()
 	dkvSvcs[id] = dkvSvc
 	grpcSrvs[id] = grpcSvc
 	mutex.Unlock()
-	grpcSrvs[id].Serve(newListener(dkvPorts[id]))
+	grpcSrvs[id].Serve(lstnr)
 }
 
 func newReplicator(kvs storage.KVStore, nodeURL, clusterURL string) nexus_api.RaftReplicator {
@@ -397,7 +464,7 @@ func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.
 	}
 }
 
-func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server) {
+func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.Server, net.Listener) {
 	dir := fmt.Sprintf("%s_%d", dbFolderMaster, id)
 	kvs, cp, br := newKVStore(dir)
 	dkvRepl := newReplicator(kvs, nodeURL, clusURL)
@@ -405,11 +472,19 @@ func newDistributedDKVNode(id int, nodeURL, clusURL string) (DKVService, *grpc.S
 	regionInfo := &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}
 	regionInfo.NodeAddress = "127.0.0.1" + ":" + fmt.Sprint(dkvPorts[id])
 	distSrv := master.NewDistributedService(kvs, cp, br, dkvRepl, regionInfo, serverOpts)
-	grpcSrv := grpc.NewServer()
+	//grpcSrv := grpc.NewServer()
+
+	srvrMode := getSrvrMode()
+	config := opts.AppConfig
+
+	grpcSrv, lstnr := utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
+		SrvrAddr: regionInfo.NodeAddress, KeyPath: config.KeyPath, CertPath: config.CertPath,
+		CaCertPath: config.CaCertPath}, zap.NewNop())
+
 	serverpb.RegisterDKVServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVClusterServer(grpcSrv, distSrv)
 	serverpb.RegisterDKVReplicationServer(grpcSrv, distSrv)
-	return distSrv, grpcSrv
+	return distSrv, grpcSrv, lstnr
 }
 
 func resetRaftStateDirs(t *testing.T) {
@@ -513,13 +588,13 @@ func TestLargePayloadsDuringRepl(t *testing.T) {
 func initMasterAndSlaves(masterStore, slaveStore storage.KVStore, cp storage.ChangePropagator, ca storage.ChangeApplier, masterBU storage.Backupable) {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go serveStandaloneDKVMaster(&wg, masterStore, cp, masterBU)
+	go serveStandaloneDKVMasterV2(&wg, masterStore, cp, masterBU)
 	wg.Wait()
 
 	masterCli = newDKVClient(masterSvcPort)
 
 	wg.Add(1)
-	go serveStandaloneDKVSlave(&wg, slaveStore, ca, masterCli, testingClusterInfo{})
+	go serveStandaloneDKVSlaveV2(&wg, slaveStore, ca, masterCli, testingClusterInfo{})
 	wg.Wait()
 
 	// stop the slave poller so as to avoid race with this poller
@@ -832,8 +907,11 @@ func testDelete(t *testing.T, dkvCli *ctl.DKVClient, keyPrefix string) {
 }
 
 func newDKVClient(port int) *ctl.DKVClient {
+
+	config := opts.AppConfig
+
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, port)
-	if client, err := ctl.NewDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts, grpc.WithInsecure()); err != nil {
+	if client, err := utils.NewDKVClient(utils.DKVConfig{SrvrAddr: dkvSvcAddr, CaCertPath: config.CaCertPath}, "", ctl.DefaultConnectOpts); err != nil {
 		panic(err)
 	} else {
 		return client
@@ -888,6 +966,89 @@ func serveStandaloneDKVMaster(wg *sync.WaitGroup, store storage.KVStore, cp stor
 	wg.Done()
 	masterGrpcSrvr.Serve(lis)
 }
+
+func serveStandaloneDKVMasterV2(wg *sync.WaitGroup, store storage.KVStore, cp storage.ChangePropagator, bu storage.Backupable) {
+	// No need to set the storage.Backupable instance since its not needed here
+
+	config := opts.AppConfig
+
+	var secure = config.CaCertPath != "" && config.KeyPath != "" && config.CertPath != ""
+
+	var srvrMode utils.ConnectionMode
+	if secure {
+		srvrMode = utils.ServerTLS
+	} else {
+		srvrMode = utils.Insecure
+	}
+
+	log.Print(srvrMode )
+	masterSvc = master.NewStandaloneService(store, cp, bu, &serverpb.RegionInfo{}, serverOpts)
+
+	var lsnr net.Listener
+
+	masterGrpcSrvr, lsnr = utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
+		SrvrAddr: fmt.Sprintf("%s:%d", dkvSvcHost, masterSvcPort), KeyPath: config.KeyPath, CertPath: config.CertPath,
+		CaCertPath: config.CaCertPath}, zap.NewNop())
+
+	serverpb.RegisterDKVServer(masterGrpcSrvr, masterSvc)
+	serverpb.RegisterDKVReplicationServer(masterGrpcSrvr, masterSvc)
+	serverpb.RegisterDKVBackupRestoreServer(masterGrpcSrvr, masterSvc)
+	//lis := listen(masterSvcPort)
+	wg.Done()
+	masterGrpcSrvr.Serve(lsnr)
+	//go masterGrpcSrvr.Serve(lstnr)
+}
+
+func serveStandaloneDKVSlaveV2(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, discoveryClient discovery.Client) {
+
+	config := opts.AppConfig
+	var secure = config.CaCertPath != "" && config.KeyPath != "" && config.CertPath != ""
+
+	var srvrMode utils.ConnectionMode
+	if secure {
+		srvrMode = utils.ServerTLS
+	} else {
+		srvrMode = utils.Insecure
+	}
+
+	lgr, _ := zap.NewDevelopment()
+	replConf := ReplicationConfig{
+		MaxNumChngs:          2,
+		ReplPollInterval:     5 * time.Second,
+		MaxActiveReplLag:     10,
+		MaxActiveReplElapsed: 5,
+	}
+
+	specialOpts := &opts.ServerOpts{
+		Logger:                    lgr,
+		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
+		HealthCheckTickerInterval: uint(1),
+	}
+
+	if ss, err := NewService(store, ca, &serverpb.RegionInfo{Database: dbName, VBucket: vbucket}, &replConf, discoveryClient, specialOpts); err != nil {
+		panic(err)
+	} else {
+		slaveSvc = ss
+		if masterCli != nil {
+			slaveSvc.(*slaveService).replInfo.replCli = masterCli
+		}
+
+		var lstnr net.Listener
+
+		slaveGrpcSrvr, lstnr = utils.NewGrpcServerListener(utils.DKVConfig{ConnectionMode: srvrMode,
+			SrvrAddr: fmt.Sprintf("%s:%d", dkvSvcHost, slaveSvcPort), KeyPath: config.KeyPath, CertPath: config.CertPath,
+			CaCertPath: config.CaCertPath}, zap.NewNop())
+
+		serverpb.RegisterDKVServer(slaveGrpcSrvr, slaveSvc)
+		health.RegisterHealthServer(slaveGrpcSrvr, slaveSvc)
+		//lis := listen(slaveSvcPort)
+		wg.Done()
+		slaveGrpcSrvr.Serve(lstnr)
+	}
+}
+
+
 
 func serveStandaloneDKVSlave(wg *sync.WaitGroup, store storage.KVStore, ca storage.ChangeApplier, masterCli *ctl.DKVClient, discoveryClient discovery.Client) {
 	lgr, _ := zap.NewDevelopment()
@@ -971,4 +1132,15 @@ func (m testingClusterInfo) GetClusterStatus(database string, vBucket string) ([
 	}
 
 	return regions, nil
+}
+
+func getConfigInsecure() opts.Config {
+
+	return opts.Config{}
+}
+
+func getConfigSecure() opts.Config {
+
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, masterSvcPort)
+	return opts.Config{CaCertPath: caCertPath, KeyPath: keyPath, CertPath: certPath, ListenAddr:dkvSvcAddr}
 }

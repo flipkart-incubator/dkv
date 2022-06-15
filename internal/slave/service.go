@@ -419,7 +419,6 @@ func (ss *slaveService) findAndConnectToMaster() error {
 		// TODO: Check if authority override option is needed for slaves while they connect with masters
 
 		slaveClientConfig := getSlaveClientConfig(*master)
-		//replCli, err := ctl.NewInSecureDKVClient(*master, "", ctl.DefaultConnectOpts);
 		replCli, err := utils.NewDKVClient(slaveClientConfig, "", ctl.DefaultConnectOpts);
 
 		if err == nil {

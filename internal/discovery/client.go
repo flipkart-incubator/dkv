@@ -7,6 +7,8 @@ This class contains the behaviour of propagating a nodes status updates to disco
 import (
 	"context"
 	"github.com/flipkart-incubator/dkv/internal/opts"
+	utils "github.com/flipkart-incubator/dkv/internal"
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"time"
 
 	_ "github.com/Jille/grpc-multi-resolver"
@@ -40,12 +42,24 @@ const (
 	connectTimeout = 10 * time.Second
 )
 
-func NewDiscoveryClient(config *opts.DiscoveryClientConfig, logger *zap.Logger) (Client, error) {
-	conn, err := getDiscoveryClient(config.DiscoveryServiceAddr)
+var DiscoveryClientConnectOpts = ctl.ConnectOpts{
+	ReadBufSize:    readBufSize,
+	WriteBufSize:   writeBufSize,
+	MaxMsgSize:     maxMsgSize,
+	Timeout:        timeout,
+	ConnectTimeout: connectTimeout,
+}
+
+
+func NewDiscoveryClient(config *opts.DiscoveryClientConfig, dkvConfig utils.DKVConfig, logger *zap.Logger) (Client, error) {
+	//conn, err := getDiscoveryClient(config.DiscoveryServiceAddr)
+	dkvConfig.SrvrAddr = config.DiscoveryServiceAddr
+	client, err := utils.NewDKVClient(dkvConfig, "", DiscoveryClientConnectOpts)
 	if err != nil {
 		logger.Error("Unable to create DKV client to connect to discovery server", zap.Error(err))
 		return nil, err
 	}
+	conn := client.CliConn
 
 	dkvCli := serverpb.NewDKVDiscoveryClient(conn)
 	storePropagator := &discoveryClient{regions: []serverpb.DKVDiscoveryNodeServer{},
