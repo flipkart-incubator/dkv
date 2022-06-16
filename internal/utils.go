@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"testing"
 	"time"
 )
 
@@ -152,11 +153,12 @@ func loadTLSCredentials(clientConfig DKVConfig) (credentials.TransportCredential
 	return credentials.NewTLS(config), nil
 }
 
-func GenerateTlsFiles() {
+func GenerateTlsFiles(t *testing.T) {
 
 	var err error
 
 	homeDir := helper.HomeDir
+	t.Log(homeDir)
 	generatedCertDir := homeDir + "/cert"
 	tlsFile := generatedCertDir + "/tlsFiles.sh"
 	serverConfFile := generatedCertDir + "/server-ext.cnf"

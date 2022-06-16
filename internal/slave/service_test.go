@@ -104,7 +104,7 @@ func TestMasterRocksDBSlaveRocksDB(t *testing.T) {
 
 func TestMasterRocksDBSlaveRocksDB_Secured(t *testing.T) {
 
-	utils.GenerateTlsFiles()
+	utils.GenerateTlsFiles(t)
 	opts.AppConfig = getConfigSecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newRocksDBStore(slaveDBFolder)
@@ -112,7 +112,7 @@ func TestMasterRocksDBSlaveRocksDB_Secured(t *testing.T) {
 }
 
 func TestMasterRocksDBSlaveBadger_Secure(t *testing.T) {
-	utils.GenerateTlsFiles()
+	utils.GenerateTlsFiles(t)
 	opts.AppConfig = getConfigSecure()
 	masterRDB := newRocksDBStore(masterDBFolder)
 	slaveRDB := newBadgerDBStore(slaveDBFolder)
