@@ -24,23 +24,25 @@ func NewDKVReplStore(kvs storage.KVStore) db.Store {
 	return &dkvReplStore{kvs}
 }
 
-func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) ([]byte, error) {
+func (dr *dkvReplStore) Save(_ db.RaftEntry, req []byte) (res []byte, err error) {
 	intReq := new(raftpb.InternalRaftRequest)
-	if err := proto.Unmarshal(req, intReq); err != nil {
+	if err = proto.Unmarshal(req, intReq); err != nil {
 		return nil, err
 	}
+
 	switch {
 	case intReq.Put != nil:
-		return dr.put(intReq.Put)
+		res, err = dr.put(intReq.Put)
 	case intReq.MultiPut != nil:
-		return dr.multiPut(intReq.MultiPut)
+		res, err = dr.multiPut(intReq.MultiPut)
 	case intReq.Delete != nil:
-		return dr.delete(intReq.Delete)
+		res, err = dr.delete(intReq.Delete)
 	case intReq.Cas != nil:
-		return dr.cas(intReq.Cas)
+		res, err = dr.cas(intReq.Cas)
 	default:
-		return nil, errors.New("Unknown Save request in dkv")
+		err = errors.New("Unknown Save request in dkv")
 	}
+	return
 }
 
 func (dr *dkvReplStore) Load(req []byte) ([]byte, error) {
