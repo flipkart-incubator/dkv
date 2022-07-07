@@ -92,8 +92,8 @@ github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4 h1:9zPLm5QKcBp5xUOBMWhRZPU+iwfl6xJtbSmbazmgy2g=
 github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4/go.mod h1:kvJSXc90Ifw0rxuTxEHKq6UH/7hQ/gd9RKCyD94ctJ0=
-github.com/flipkart-incubator/nexus v0.0.0-20220406090439-e24842a8cf59 h1:Dsq1Q7/eoXu5A8pFzNw+69d1pLL5qrZqbgoenGtU9uA=
-github.com/flipkart-incubator/nexus v0.0.0-20220406090439-e24842a8cf59/go.mod h1:64iKmm70k+vveTbS0PI91hsalEhgnkZyNeAyvvFvLS8=
+github.com/flipkart-incubator/nexus v0.0.0-20220629150345-4b11935eda50 h1:RTXTdIq0+LRtbCbgBNRqNd77z67Dpoe84w2MgBQfz2w=
+github.com/flipkart-incubator/nexus v0.0.0-20220629150345-4b11935eda50/go.mod h1:cBJAQa9UoAjjY85k7byQ/oKV+f+BLUlacWZx5agM6HM=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.5.1 h1:mZcQUHVQUQWoPXXtuf9yuEXKudkV2sx1E06UadKWpgI=
 github.com/fsnotify/fsnotify v1.5.1/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5Ai1i3InKU=
