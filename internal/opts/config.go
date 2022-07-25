@@ -60,6 +60,8 @@ type Config struct {
 	NexusReplTimeout            int    `mapstructure:"nexus-repl-timeout" desc:"Replication timeout in seconds"`
 	NexusLogDir                 string `mapstructure:"nexus-log-dir" desc:"Dir for storing RAFT logs"`
 	NexusSnapDir                string `mapstructure:"nexus-snap-dir" desc:"Dir for storing RAFT snapshots"`
+	NexusEntryDir               string `mapstructure:"nexus-entry-dir" desc:"Dir for storing RAFT entries"`
+	NexusEntryStoreEngine       string `mapstructure:"nexus-entry-store" desc:"Nexus Entry store engine memory|disk"`
 	NexusMaxSnapshots           int    `mapstructure:"nexus-max-snapshots" desc:"Maximum number of snapshot files to retain (0 is unlimited)"`
 	NexusMaxWals                int    `mapstructure:"nexus-max-wals" desc:"Maximum number of WAL files to retain (0 is unlimited)"`
 	NexusSnapshotCatchupEntries int    `mapstructure:"nexus-snapshot-catchup-entries" desc:"Number of entries for a slow follower to catch-up after compacting the raft storage entries"`
@@ -115,6 +117,10 @@ func (c *Config) parseConfig() {
 
 	if c.NexusSnapDir == "" {
 		c.NexusSnapDir = path.Join(c.RootFolder, c.NodeName, "snap")
+	}
+
+	if c.NexusEntryDir == "" {
+		c.NexusSnapDir = path.Join(c.RootFolder, c.NodeName, "entry")
 	}
 
 	c.validateFlags()

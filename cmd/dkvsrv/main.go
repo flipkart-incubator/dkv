@@ -64,7 +64,7 @@ var (
 	config opts.Config
 
 	//nexus flags
-	nexusLogDirFlag, nexusSnapDirFlag *flag.Flag
+	nexusLogDirFlag, nexusSnapDirFlag, nexusEntDirFlag *flag.Flag
 
 	// Logging vars
 	verboseLogging bool
@@ -325,12 +325,19 @@ func toDKVSrvrRole(role string) dkvSrvrRole {
 
 func setFlagsForNexusDirs() {
 
-	nexusLogDirFlag, nexusSnapDirFlag = flag.Lookup("nexus-log-dir"), flag.Lookup("nexus-snap-dir")
+	nexusLogDirFlag = flag.Lookup("nexus-log-dir")
 	if nexusLogDirFlag.Value.String() == "" {
 		nexusLogDirFlag.Value.Set(path.Join(config.DbFolder, "logs"))
 	}
+
+	nexusSnapDirFlag = flag.Lookup("nexus-snap-dir")
 	if nexusSnapDirFlag.Value.String() == "" {
 		nexusSnapDirFlag.Value.Set(path.Join(config.DbFolder, "snap"))
+	}
+
+	nexusEntDirFlag = flag.Lookup("nexus-entry-dir")
+	if nexusEntDirFlag.Value.String() == "" {
+		nexusEntDirFlag.Value.Set(path.Join(config.DbFolder, "entry"))
 	}
 }
 
