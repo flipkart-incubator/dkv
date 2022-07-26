@@ -120,7 +120,7 @@ func (c *Config) parseConfig() {
 	}
 
 	if c.NexusEntryDir == "" {
-		c.NexusSnapDir = path.Join(c.RootFolder, c.NodeName, "entry")
+		c.NexusEntryDir = path.Join(c.RootFolder, c.NodeName, "entry")
 	}
 
 	c.validateFlags()
