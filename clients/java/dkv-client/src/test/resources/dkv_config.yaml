@@ -16,6 +16,7 @@ log-level : "warn"
 verbose : false
 nexus-cluster-name : "default"
 nexus-cluster-url : ""
+nexus-entry-store : "disk"
 nexus-max-snapshots : 5
 nexus-max-wals : 5
 nexus-repl-timeout : 5

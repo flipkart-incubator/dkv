@@ -36,6 +36,8 @@ nexus-node-url : ""                       # Node url (optional), will be auto de
 nexus-cluster-url : ""                    # Comma separated list of Nexus URLs of other nodes in the cluster
 nexus-log-dir : ""                        # Dir for storing RAFT logs
 nexus-snap-dir : ""                       # Dir for storing RAFT snapshots
+nexus-entry-dir : ""                      # Dir for storing RAFT entry
+nexus-entry-store : "memory"              # Raft EntryStore engine (memory|disk)
 nexus-max-snapshots : 5                   # Maximum number of snapshot files to retain (0 is unlimited)
 nexus-max-wals : 5                        # Maximum number of WAL files to retain (0 is unlimited)
 nexus-repl-timeout : 5                    # Replication timeout in seconds
