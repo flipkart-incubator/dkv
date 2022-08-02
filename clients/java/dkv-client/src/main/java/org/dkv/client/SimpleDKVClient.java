@@ -33,10 +33,14 @@ import static org.dkv.client.Utils.*;
 public class SimpleDKVClient implements DKVClient {
     private static final String DEF_METRIC_PREFIX = "dkv-client-java";
     private static final MetricRegistry metrics = new MetricRegistry();
+    public static final int DEFAULT_READ_TIMEOUT = 5000;
+    public static final int DEFAULT_WRITE_TIMEOUT = 5000;
 
     private final DKVGrpc.DKVBlockingStub blockingStub;
     private final ManagedChannel channel;
     private final JmxReporter reporter;
+    private int readTimeout;
+    private int writeTimeout;
 
     /**
      * Creates an instance with the underlying GRPC conduit to the DKV database
@@ -52,7 +56,7 @@ public class SimpleDKVClient implements DKVClient {
      * @throws RuntimeException in case of any connection failures
      */
     public SimpleDKVClient(String dkvHost, int dkvPort, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvHost, dkvPort), metricPrefix);
+        this(getManagedChannelBuilder(dkvHost, dkvPort), metricPrefix, DEFAULT_READ_TIMEOUT, DEFAULT_WRITE_TIMEOUT);
     }
 
     /**
@@ -76,7 +80,7 @@ public class SimpleDKVClient implements DKVClient {
      * @throws RuntimeException in case of any connection failures
      */
     public SimpleDKVClient(String dkvHost, int dkvPort, String authority, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvHost, dkvPort, authority), metricPrefix);
+        this(getManagedChannelBuilder(dkvHost, dkvPort, authority), metricPrefix, DEFAULT_READ_TIMEOUT, DEFAULT_WRITE_TIMEOUT);
     }
 
     /**
@@ -92,7 +96,7 @@ public class SimpleDKVClient implements DKVClient {
      * @throws RuntimeException in case of any connection failures
      */
     public SimpleDKVClient(String dkvTarget, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvTarget), metricPrefix);
+        this(getManagedChannelBuilder(dkvTarget), metricPrefix, DEFAULT_READ_TIMEOUT, DEFAULT_WRITE_TIMEOUT);
     }
 
     /**
@@ -115,7 +119,25 @@ public class SimpleDKVClient implements DKVClient {
      * @throws RuntimeException in case of any connection failures
      */
     public SimpleDKVClient(String dkvTarget, String authority, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvTarget, authority), metricPrefix);
+        this(getManagedChannelBuilder(dkvTarget, authority), metricPrefix, DEFAULT_READ_TIMEOUT, DEFAULT_WRITE_TIMEOUT);
+    }
+
+    public SimpleDKVClient(String dkvTarget, String authority, String metricPrefix, int readTimeout, int writeTimeout) {
+        this(dkvTarget, authority, metricPrefix);
+        this.readTimeout = readTimeout;
+        this.writeTimeout = writeTimeout;
+    }
+
+    public SimpleDKVClient(String dkvTarget, String metricPrefix, int readTimeout, int writeTimeout) {
+        this(getManagedChannelBuilder(dkvTarget), metricPrefix, DEFAULT_READ_TIMEOUT, DEFAULT_WRITE_TIMEOUT);
+        this.readTimeout = readTimeout;
+        this.writeTimeout = writeTimeout;
+    }
+
+    public SimpleDKVClient(String dkvHost, int dkvPort, String authority, String metricPrefix, int readTimeout, int writeTimeout) {
+        this(getManagedChannelBuilder(dkvHost, dkvPort, authority), metricPrefix, DEFAULT_READ_TIMEOUT, DEFAULT_WRITE_TIMEOUT);
+        this.readTimeout = readTimeout;
+        this.writeTimeout = writeTimeout;
     }
 
     @Override
@@ -283,7 +305,7 @@ public class SimpleDKVClient implements DKVClient {
         }
     }
 
-    private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, String metricPrefix) {
+    private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, String metricPrefix, int readTimeout, int writeTimeout) {
         this.reporter = JmxReporter.forRegistry(metrics)
                 .inDomain(metricPrefix != null ? metricPrefix.trim() : DEF_METRIC_PREFIX)
                 .convertRatesTo(TimeUnit.MILLISECONDS)
@@ -292,6 +314,8 @@ public class SimpleDKVClient implements DKVClient {
         this.reporter.start();
         this.channel = channelBuilder.build();
         this.blockingStub = DKVGrpc.newBlockingStub(channel).withInterceptors(new MetricsInterceptor(metrics));
+        this.readTimeout = readTimeout;
+        this.writeTimeout = writeTimeout;
     }
 
     private Iterator<DKVEntry> iterate(ByteString startKey, ByteString keyPref) {
@@ -343,7 +367,7 @@ public class SimpleDKVClient implements DKVClient {
                 .setValue(valByteStr)
                 .setExpireTS(expiryTS)
                 .build();
-        Api.Status status = blockingStub.put(putReq).getStatus();
+        Api.Status status = blockingStub.withDeadlineAfter(writeTimeout, TimeUnit.MILLISECONDS).put(putReq).getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "Put", new Object[]{keyByteStr.toByteArray(), valByteStr.toByteArray()});
         }
@@ -355,7 +379,7 @@ public class SimpleDKVClient implements DKVClient {
                 .setKey(keyByteStr)
                 .setReadConsistency(consistency)
                 .build();
-        Api.GetResponse getRes = blockingStub.get(getReq);
+        Api.GetResponse getRes = blockingStub.withDeadlineAfter(readTimeout, TimeUnit.MILLISECONDS).get(getReq);
         Api.Status status = getRes.getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "Get", new Object[]{consistency, keyByteStr.toByteArray()});
@@ -369,7 +393,7 @@ public class SimpleDKVClient implements DKVClient {
                 .addAllKeys(keyByteStrs)
                 .setReadConsistency(consistency)
                 .build();
-        Api.MultiGetResponse multiGetRes = blockingStub.multiGet(multiGetReq);
+        Api.MultiGetResponse multiGetRes = blockingStub.withDeadlineAfter(readTimeout, TimeUnit.MILLISECONDS).multiGet(multiGetReq);
         Api.Status status = multiGetRes.getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "MultiGet", new Object[]{consistency, keyByteStrs});
@@ -393,7 +417,7 @@ public class SimpleDKVClient implements DKVClient {
         Api.CompareAndSetRequest casReq = casReqBuilder
                 .setKey(keyByteStr).setOldValue(expectByteStr).setNewValue(updateByteStr)
                 .build();
-        Api.CompareAndSetResponse casRes = blockingStub.compareAndSet(casReq);
+        Api.CompareAndSetResponse casRes = blockingStub.withDeadlineAfter(writeTimeout, TimeUnit.MILLISECONDS).compareAndSet(casReq);
         Api.Status status = casRes.getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "CompareAndSet", new Object[]{keyByteStr, expectByteStr, updateByteStr});

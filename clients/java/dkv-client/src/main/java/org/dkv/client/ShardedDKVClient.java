@@ -6,9 +6,12 @@ import dkv.serverpb.Api;
 
 import java.io.Closeable;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.addAll;
 import static org.dkv.client.DKVNodeType.*;
+import static org.dkv.client.SimpleDKVClient.DEFAULT_READ_TIMEOUT;
+import static org.dkv.client.SimpleDKVClient.DEFAULT_WRITE_TIMEOUT;
 import static org.dkv.client.Utils.checkf;
 
 /**
@@ -31,11 +34,69 @@ public class ShardedDKVClient implements DKVClient {
     private static final int POOL_SIZE = 1000;
     private final ShardProvider shardProvider;
     private final DKVClientPool pool;
+    private final int readTimeout;
+    private final int writeTimeout;
 
     public ShardedDKVClient(ShardProvider shardProvider) {
         checkf(shardProvider != null, IllegalArgumentException.class, "Shard provider must be provided");
         this.shardProvider = shardProvider;
-        this.pool = new DKVClientPool(POOL_SIZE);
+        this.readTimeout = DEFAULT_READ_TIMEOUT;
+        this.writeTimeout = DEFAULT_WRITE_TIMEOUT;
+        this.pool = new DKVClientPool(POOL_SIZE, readTimeout, writeTimeout);
+    }
+
+    public ShardedDKVClient(Builder builder) {
+        this.shardProvider = builder.shardProvider;
+        this.readTimeout = builder.readTimeout;
+        this.writeTimeout = builder.writeTimeout;
+        this.pool = new DKVClientPool(builder.poolSize, builder.readTimeout, builder.writeTimeout);
+    }
+
+    public static final class Builder {
+        private ShardProvider shardProvider;
+        private int readTimeout;
+        private int writeTimeout;
+        private int poolSize;
+
+        public Builder() {
+            readTimeout = DEFAULT_READ_TIMEOUT;
+            writeTimeout = DEFAULT_WRITE_TIMEOUT;
+            this.poolSize = POOL_SIZE;
+        }
+
+        public Builder shardProvider(ShardProvider shardProvider) {
+            this.shardProvider = shardProvider;
+            return this;
+        }
+
+        public Builder readTimeout(long timeout, TimeUnit unit) {
+            if (timeout < 0) throw new IllegalArgumentException("timeout < 0");
+            if (unit == null) throw new IllegalArgumentException("unit == null");
+            long millis = unit.toMillis(timeout);
+            if (millis > Integer.MAX_VALUE) throw new IllegalArgumentException("Timeout too large.");
+            if (millis == 0 && timeout > 0) throw new IllegalArgumentException("Timeout too small.");
+            readTimeout = (int) millis;
+            return this;
+        }
+
+        public Builder writeTimeout(long timeout, TimeUnit unit) {
+            if (timeout < 0) throw new IllegalArgumentException("timeout < 0");
+            if (unit == null) throw new IllegalArgumentException("unit == null");
+            long millis = unit.toMillis(timeout);
+            if (millis > Integer.MAX_VALUE) throw new IllegalArgumentException("Timeout too large.");
+            if (millis == 0 && timeout > 0) throw new IllegalArgumentException("Timeout too small.");
+            writeTimeout = (int) millis;
+            return this;
+        }
+
+        public Builder poolSize(int poolSize) {
+            this.poolSize = poolSize;
+            return this;
+        }
+
+        public ShardedDKVClient build() {
+            return new ShardedDKVClient(this);
+        }
     }
 
     @Override
@@ -294,9 +355,13 @@ public class ShardedDKVClient implements DKVClient {
         }
 
         private final LoadingCache<Key, SimpleDKVClient> internalPool;
+        private final int readTimeout;
+        private final int writeTimeout;
 
-        private DKVClientPool(long poolSize) {
+        private DKVClientPool(long poolSize, int readTimeout, int writeTimeout) {
             internalPool = Caffeine.newBuilder().maximumSize(poolSize).removalListener(this).build(this);
+            this.readTimeout = readTimeout;
+            this.writeTimeout = writeTimeout;
         }
 
         SimpleDKVClient getDKVClient(DKVShard dkvShard, DKVNodeType... nodeTypes) {
@@ -319,7 +384,7 @@ public class ShardedDKVClient implements DKVClient {
 
         @Override
         public SimpleDKVClient load(ShardedDKVClient.DKVClientPool.Key key) {
-            return new SimpleDKVClient(key.dkvNode.getHost(), key.dkvNode.getPort(), key.authority, key.shardName);
+            return new SimpleDKVClient(key.dkvNode.getHost(), key.dkvNode.getPort(), key.authority, key.shardName, readTimeout, writeTimeout);
         }
 
         @Override

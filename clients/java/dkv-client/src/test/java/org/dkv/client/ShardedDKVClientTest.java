@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static dkv.serverpb.Api.ReadConsistency.LINEARIZABLE;
 import static dkv.serverpb.Api.ReadConsistency.SEQUENTIAL;
@@ -32,7 +33,8 @@ public class ShardedDKVClientTest {
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
 //        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
         shardProvider = new KeyHashBasedShardProvider(shardConf);
-        dkvClient = new ShardedDKVClient(shardProvider);
+        dkvClient = new ShardedDKVClient.Builder().shardProvider(shardProvider).readTimeout(200, TimeUnit.MILLISECONDS)
+                .writeTimeout(300, TimeUnit.MILLISECONDS).build();
     }
 
     @Test
