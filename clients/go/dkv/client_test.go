@@ -3,6 +3,7 @@ package dkv
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"os"
 	"time"
@@ -58,7 +59,7 @@ func initClusterConfig(t *testing.T) {
 	t.Log("Shard Info ", string(b))
 
 	shardProvider := &KeyHashBasedShardProvider{Dkvshards}
-	dkvCli, err = NewShardedDKVClient(shardProvider)
+	dkvCli, err = NewShardedDKVClient(shardProvider, ctl.DefaultConnectOpts)
 	if err != nil {
 		t.Fatal("ShardedDKVClient Create Failure")
 	}

@@ -119,10 +119,11 @@ type simpleDKVClient struct {
 type ShardedDKVClient struct {
 	pool          *ristretto.Cache
 	shardProvider ShardProvider
+	connectOpts   ctl.ConnectOpts
 }
 
 // NewShardedDKVClient creates and returns a instance of ShardedDKVClient.
-func NewShardedDKVClient(shardProvider ShardProvider) (*ShardedDKVClient, error) {
+func NewShardedDKVClient(shardProvider ShardProvider, opts ctl.ConnectOpts) (*ShardedDKVClient, error) {
 	if shardProvider == nil {
 		return nil, fmt.Errorf("shardProvider cannot be nil")
 	}
@@ -143,6 +144,7 @@ func NewShardedDKVClient(shardProvider ShardProvider) (*ShardedDKVClient, error)
 	return &ShardedDKVClient{
 		shardProvider: shardProvider,
 		pool:          cache,
+		connectOpts:   opts,
 	}, nil
 }
 
@@ -173,7 +175,7 @@ func (dkvClnt *ShardedDKVClient) getShardedClient(shard *DKVShard, role ...DKVSe
 	svcAddr := fmt.Sprintf("%s:%d", dkvNode.Host, dkvNode.Port)
 	if value, found := dkvClnt.pool.Get(svcAddr); !found {
 		log.Printf("[INFO] Creating new Client to : %s\n", svcAddr)
-		_client, err := ctl.NewInSecureDKVClient(svcAddr, nodeSet.Name)
+		_client, err := ctl.NewInSecureDKVClient(svcAddr, nodeSet.Name, dkvClnt.connectOpts)
 		if err != nil {
 			return nil, err
 		}
