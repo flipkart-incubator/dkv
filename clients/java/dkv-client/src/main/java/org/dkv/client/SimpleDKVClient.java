@@ -32,7 +32,6 @@ import static org.dkv.client.Utils.*;
  * @see DKVException
  */
 public class SimpleDKVClient implements DKVClient {
-    private static final String DEF_METRIC_PREFIX = "dkv-client-java";
     private static final MetricRegistry metrics = new MetricRegistry();
 
     private final DKVGrpc.DKVBlockingStub blockingStub;
@@ -333,7 +332,7 @@ public class SimpleDKVClient implements DKVClient {
 
     private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, ConnectionOptions options) {
         this.reporter = JmxReporter.forRegistry(metrics)
-                .inDomain(options.metricPrefix != null ? options.metricPrefix.trim() : DEF_METRIC_PREFIX)
+                .inDomain(options.getMetricPrefix())
                 .convertRatesTo(TimeUnit.MILLISECONDS)
                 .convertDurationsTo(TimeUnit.MILLISECONDS)
                 .build();

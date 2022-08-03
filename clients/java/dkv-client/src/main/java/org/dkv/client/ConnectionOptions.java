@@ -7,32 +7,33 @@ import lombok.Setter;
 @Setter
 public class ConnectionOptions {
 
-    public static long DEFAULT_REQUEST_TIMEOUT = 5000;
-    public static long DEFAULT_CONNECT_TIMEOUT = 5000;
+    private static final String DEF_METRIC_PREFIX = "dkv-client-java";
+    private static final long DEFAULT_REQUEST_TIMEOUT = 5000;
+    private static final long DEFAULT_CONNECT_TIMEOUT = 5000;
 
-    private Long RequestTimeout;
-    private Long ReadTimeout;
-    private Long WriteTimeout;
-    private Long ConnectTimeout;
+    private Long requestTimeout;
+    private Long readTimeout;
+    private Long writeTimeout;
+    private Long connectTimeout;
     private String metricPrefix;
 
     private long getRequestTimeout() {
-        return RequestTimeout != null ? RequestTimeout : DEFAULT_REQUEST_TIMEOUT;
+        return requestTimeout != null ? requestTimeout : DEFAULT_REQUEST_TIMEOUT;
     }
 
     public long getReadTimeout() {
-        return ReadTimeout != null ? ReadTimeout : getRequestTimeout();
+        return readTimeout != null ? readTimeout : getRequestTimeout();
     }
 
     public long getWriteTimeout() {
-        return WriteTimeout != null ? WriteTimeout : getRequestTimeout();
+        return writeTimeout != null ? writeTimeout : getRequestTimeout();
     }
 
     public long getConnectTimeout() {
-        return ConnectTimeout != null ? ConnectTimeout : DEFAULT_CONNECT_TIMEOUT;
+        return connectTimeout != null ? connectTimeout : DEFAULT_CONNECT_TIMEOUT;
     }
 
     public String getMetricPrefix() {
-        return metricPrefix;
+        return metricPrefix == null ? DEF_METRIC_PREFIX : metricPrefix.trim();
     }
 }

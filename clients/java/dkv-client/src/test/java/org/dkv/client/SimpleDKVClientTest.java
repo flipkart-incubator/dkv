@@ -26,7 +26,7 @@ public class SimpleDKVClientTest {
 
     @Before
     public void setUp() {
-        connectionOptions = ConnectionOptions.builder().RequestTimeout(5000L).build();
+        connectionOptions = ConnectionOptions.builder().requestTimeout(5000L).build();
         dkvCli = new SimpleDKVClient(DKV_TARGET, connectionOptions);
     }
 
