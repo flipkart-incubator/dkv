@@ -14,8 +14,7 @@ public class ConnectionOptions {
     private Long ReadTimeout;
     private Long WriteTimeout;
     private Long ConnectTimeout;
-
-    String metricPrefix;
+    private String metricPrefix;
 
     private long getRequestTimeout() {
         return RequestTimeout != null ? RequestTimeout : DEFAULT_REQUEST_TIMEOUT;
