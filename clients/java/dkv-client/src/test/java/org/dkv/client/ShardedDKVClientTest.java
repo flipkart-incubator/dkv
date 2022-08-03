@@ -25,6 +25,8 @@ public class ShardedDKVClientTest {
     private ShardedDKVClient dkvClient;
     private ShardProvider shardProvider;
 
+    private ConnectionOptions connectionOptions;
+
     @Before
     public void setup() {
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
@@ -32,7 +34,8 @@ public class ShardedDKVClientTest {
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
 //        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
         shardProvider = new KeyHashBasedShardProvider(shardConf);
-        dkvClient = new ShardedDKVClient(shardProvider);
+        connectionOptions = ConnectionOptions.builder().build();
+        dkvClient = new ShardedDKVClient(shardProvider,connectionOptions);
     }
 
     @Test

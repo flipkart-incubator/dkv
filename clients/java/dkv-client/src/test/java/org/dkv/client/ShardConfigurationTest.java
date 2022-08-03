@@ -26,6 +26,7 @@ public class ShardConfigurationTest {
             assertEquals(1, master.getNumNodes());
             DKVNode dkvNode = master.getNodes()[0];
             assertEquals("127.0.0.1", dkvNode.getHost());
+            assertEquals("127.0.0.1:8080", dkvNode.getAddress());
             assertEquals(8080, dkvNode.getPort());
 
             DKVNodeSet slaves = dkvShard.getNodesByType(DKVNodeType.SLAVE);
