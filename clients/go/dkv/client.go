@@ -194,11 +194,11 @@ func (dkvClnt *ShardedDKVClient) Put(key []byte, value []byte) error {
 	if err != nil {
 		return err
 	}
-	clnt, err := dkvClnt.getShardedClient(dkvShard, masterRole, noRole)
+	client, err := dkvClnt.getShardedClient(dkvShard, masterRole, noRole)
 	if err != nil {
 		return err
 	}
-	return clnt.Put(key, value)
+	return client.Put(key, value)
 }
 
 // Delete takes the key and value as byte arrays, find the corresponding shard
@@ -208,11 +208,11 @@ func (dkvClnt *ShardedDKVClient) Delete(key []byte) error {
 	if err != nil {
 		return err
 	}
-	clnt, err := dkvClnt.getShardedClient(dkvShard, masterRole, noRole)
+	client, err := dkvClnt.getShardedClient(dkvShard, masterRole, noRole)
 	if err != nil {
 		return err
 	}
-	return clnt.Delete(key)
+	return client.Delete(key)
 }
 
 // Get takes the key as byte array along with the consistency,
@@ -223,12 +223,12 @@ func (dkvClnt *ShardedDKVClient) Get(rc serverpb.ReadConsistency, key []byte) (*
 		return nil, err
 	}
 	nodeRole := getNodeTypeByReadConsistency(rc)
-	clnt, err := dkvClnt.getShardedClient(dkvShard, nodeRole, noRole)
+	client, err := dkvClnt.getShardedClient(dkvShard, nodeRole, noRole)
 
 	if err != nil {
 		return nil, err
 	}
-	return clnt.Get(rc, key)
+	return client.Get(rc, key)
 }
 
 // MultiGet takes the keys as byte arrays along with the consistency,
@@ -263,15 +263,15 @@ func (dkvClnt *ShardedDKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *ct
 	if err != nil {
 		return nil, err
 	}
-	clnt, err := dkvClnt.getShardedClient(dkvShard, slaveRole, noRole)
+	client, err := dkvClnt.getShardedClient(dkvShard, slaveRole, noRole)
 	if err != nil {
 		return nil, err
 	}
-	return clnt.Iterate(keyPrefix, startKey)
+	return client.Iterate(keyPrefix, startKey)
 }
 
 // Close closes the underlying GRPC client(s) connection to DKV service
 func (dkvClnt *ShardedDKVClient) Close() error {
-	dkvClnt.pool.Clear()
+	dkvClnt.pool.Close()
 	return nil
 }
