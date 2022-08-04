@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/Jille/grpc-multi-resolver v1.0.0
+	github.com/OneOfOne/xxhash v1.2.2
 	github.com/coreos/etcd v3.3.19+incompatible // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dgraph-io/badger/v3 v3.2103.1
