@@ -6,6 +6,7 @@ import (
 	"github.com/flipkart-incubator/dkv/internal/hlc"
 	"github.com/flipkart-incubator/nexus/models"
 	"io"
+	"log"
 	"time"
 
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
@@ -18,7 +19,7 @@ import (
 // exposes a simpler API to its users without having to deal with timeouts,
 // contexts and other GRPC semantics.
 type DKVClient struct {
-	cliConn    *grpc.ClientConn
+	CliConn    *grpc.ClientConn
 	dkvCli     serverpb.DKVClient
 	dkvReplCli serverpb.DKVReplicationClient
 	dkvBRCli   serverpb.DKVBackupRestoreClient
@@ -53,31 +54,29 @@ var DefaultConnectOpts ConnectOpts = ConnectOpts{
 	ConnectTimeout: DefaultConnectTimeout,
 }
 
-// NewInSecureDKVClient creates an insecure GRPC client against the
-// given DKV service address. Optionally the authority param can be
-// used to send a :authority psuedo-header for routing purposes.
-func NewInSecureDKVClient(svcAddr, authority string, opts ConnectOpts) (*DKVClient, error) {
+// NewDKVClient creates a GRPC client against the
+// given DKV service address and dial options. Optionally the authority param can be
+//// used to send a :authority psuedo-header for routing purposes
+func NewDKVClient(svcAddr string, authority string, connectOptions ConnectOpts, opts ...grpc.DialOption) (*DKVClient, error) {
 	var dkvClnt *DKVClient
-	ctx, cancel := context.WithTimeout(context.Background(), opts.ConnectTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), connectOptions.ConnectTimeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, svcAddr,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(opts.MaxMsgSize)),
-		grpc.WithReadBufferSize(opts.ReadBufSize),
-		grpc.WithWriteBufferSize(opts.WriteBufSize),
-		grpc.WithAuthority(authority),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+	opts = append(opts, grpc.WithBlock(), grpc.WithReadBufferSize(connectOptions.ReadBufSize),
+		grpc.WithWriteBufferSize(connectOptions.WriteBufSize), grpc.WithAuthority(authority),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(connectOptions.MaxMsgSize)), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+	log.Print(svcAddr)
+	conn, err := grpc.DialContext(ctx, svcAddr, opts...)
 	if err == nil {
 		dkvCli := serverpb.NewDKVClient(conn)
 		dkvReplCli := serverpb.NewDKVReplicationClient(conn)
 		dkvBRCli := serverpb.NewDKVBackupRestoreClient(conn)
 		dkvClusCli := serverpb.NewDKVClusterClient(conn)
 		dkvDisCli := serverpb.NewDKVDiscoveryClient(conn)
-		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli, opts}
+		dkvClnt = &DKVClient{conn, dkvCli, dkvReplCli, dkvBRCli, dkvClusCli, dkvDisCli, connectOptions}
 	}
 	return dkvClnt, err
 }
+
 
 // Put takes the key and value as byte arrays and invokes the
 // GRPC Put method. This is a convenience wrapper.
@@ -282,8 +281,8 @@ func (dkvClnt *DKVClient) Iterate(keyPrefix, startKey []byte) (<-chan *KVPair, e
 
 // Close closes the underlying GRPC client connection to DKV service
 func (dkvClnt *DKVClient) Close() error {
-	if dkvClnt.cliConn != nil {
-		return dkvClnt.cliConn.Close()
+	if dkvClnt.CliConn != nil {
+		return dkvClnt.CliConn.Close()
 	}
 	return nil
 }

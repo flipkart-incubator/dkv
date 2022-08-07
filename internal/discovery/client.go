@@ -7,6 +7,8 @@ This class contains the behaviour of propagating a nodes status updates to disco
 import (
 	"context"
 	"github.com/flipkart-incubator/dkv/internal/opts"
+	utils "github.com/flipkart-incubator/dkv/internal"
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"time"
 
 	_ "github.com/Jille/grpc-multi-resolver"
@@ -40,32 +42,29 @@ const (
 	connectTimeout = 10 * time.Second
 )
 
-func NewDiscoveryClient(config *opts.DiscoveryClientConfig, logger *zap.Logger) (Client, error) {
-	conn, err := getDiscoveryClient(config.DiscoveryServiceAddr)
+var DiscoveryClientConnectOpts = ctl.ConnectOpts{
+	ReadBufSize:    readBufSize,
+	WriteBufSize:   writeBufSize,
+	MaxMsgSize:     maxMsgSize,
+	Timeout:        timeout,
+	ConnectTimeout: connectTimeout,
+}
+
+
+func NewDiscoveryClient(config *opts.DiscoveryClientConfig, dkvConfig utils.DKVConfig, logger *zap.Logger) (Client, error) {
+	dkvConfig.SrvrAddr = config.DiscoveryServiceAddr
+	client, err := utils.NewDKVClient(dkvConfig, "", DiscoveryClientConnectOpts)
 	if err != nil {
 		logger.Error("Unable to create DKV client to connect to discovery server", zap.Error(err))
 		return nil, err
 	}
+	conn := client.CliConn
 
 	dkvCli := serverpb.NewDKVDiscoveryClient(conn)
 	storePropagator := &discoveryClient{regions: []serverpb.DKVDiscoveryNodeServer{},
 		dkvClient: dkvCli, logger: logger, config: config, conn: conn}
 	storePropagator.init()
 	return storePropagator, nil
-}
-
-func getDiscoveryClient(discoveryServiceAddr string) (*grpc.ClientConn, error) {
-	// TODO - check if authority is required
-	ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-	return grpc.DialContext(ctx, discoveryServiceAddr,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMsgSize)),
-		grpc.WithReadBufferSize(readBufSize),
-		grpc.WithWriteBufferSize(writeBufSize),
-		grpc.WithAuthority(""),
-		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 }
 
 func (m *discoveryClient) RegisterRegion(server serverpb.DKVDiscoveryNodeServer) {
