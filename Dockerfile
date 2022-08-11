@@ -25,10 +25,9 @@ RUN curl -fsSL https://dl.google.com/go/go1.18.1.linux-$(dpkg --print-architectu
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install Protobuf
-RUN curl -fsSL -O https://github.com/protocolbuffers/protobuf/releases/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip \
-    && unzip protoc-3.15.8-linux-x86_64.zip -d protoc && chown -R root:root ./protoc && mv ./protoc /usr/local \
-    && rm protoc-3.15.8-linux-x86_64.zip
-ENV PATH="/usr/local/protoc/bin:${PATH}"
+#RUN curl -fsSL -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip \
+#    && unzip protoc.zip -d protoc && chown -R root:root ./protoc && mv ./protoc /usr/local && rm protoc.zip
+#ENV PATH="/usr/local/protoc/bin:${PATH}"
 
 # Install DKV (Skipped for CI Pipelines)
 ARG CI
