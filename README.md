@@ -1,5 +1,6 @@
 
 ![dkv logo](https://github.com/flipkart-incubator/dkv/raw/master/docs/dkv.png)
+
 [![DKV CI](https://github.com/flipkart-incubator/dkv/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/flipkart-incubator/dkv/actions/workflows/main.yml) 
 
 DKV is a distributed key value store server written in [Go](https://golang.org). It exposes all its functionality over
