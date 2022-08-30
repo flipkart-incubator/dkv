@@ -38,3 +38,4 @@ RUN if [ -z "$CI" ] ; then git clone --depth=1 https://github.com/flipkart-incub
 ENV PATH="/usr/local/dkv:${PATH}"
 ENV LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
 
+CMD ["dkvsrv"]
