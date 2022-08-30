@@ -31,13 +31,14 @@ jobs:
           password: ${{ secrets.GH_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v4
         with:
           images: ghcr.io/${{ github.repository_owner }}/dkv
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
       - name: Cache Docker layers
         uses: actions/cache@v2
         with:
