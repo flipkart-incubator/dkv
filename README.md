@@ -101,27 +101,7 @@ Please refer to the [wiki instructions](https://github.com/flipkart-incubator/dk
 ## Documentation
 Detailed documentation on specific features, design principles, data guarantees etc. can be found in the [dkv Wiki](https://github.com/flipkart-incubator/dkv/wiki)
 
-## Testing
 
-If you want to execute tests inside DKV, run this command:
-
-```bash
-$ make test
-```
-
-## Packaging
-
-###  Linux
-
-```bash
-$ make GOOS=linux dist
-```
-
-### macOS
-
-```bash
-$ make GOOS=darwin dist
-```
 
 ## Support
 dkv is undergoing active development. Consider joining the [dkv-interest](https://groups.google.com/forum/#!forum/dkv-interest) Google group for updates, design discussions, roadmap etc. in the initial stages of this project.
