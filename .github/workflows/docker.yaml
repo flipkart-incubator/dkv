@@ -46,7 +46,7 @@ jobs:
           key: ${{ runner.os }}-buildx-docker-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-docker-
-      - name: Build Docker Image for ubuntu
+      - name: Build Docker Image
         uses: docker/build-push-action@v3
         with:
           push: true # ${{ github.event_name != 'pull_request' }}
