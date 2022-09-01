@@ -51,6 +51,8 @@ or while using [native binaries](https://github.com/flipkart-incubator/dkv/wiki/
 $ ./bin/dkvsrv --config dkvsrv.yaml  --db-folder <folder_name>  --listen-addr <host:port>
 ```
 
+Any operations can be done using the dkvctl cli, or using the clients:
+
 ```bash
 $ ./bin/dkvctl -a <host:port> --set <key> <value>
 $ ./bin/dkvctl -a <host:port> --get <key>
