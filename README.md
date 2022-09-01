@@ -26,13 +26,6 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - [Badger](https://github.com/dgraph-io/badger) v1.6 as a storage engine
 - [Nexus](https://github.com/flipkart-incubator/nexus) for sync replication over [Raft](https://raft.github.io/) consensus
 
-## DKV on Docker
-Follow these instructions to launch a DKV container using the Dockerfile included.
-
-```bash
-$ curl -fsSL https://raw.githubusercontent.com/flipkart-incubator/dkv/master/Dockerfile | docker build -t dkv/dkv-deb9-amd64 -f - .
-$ docker run -it dkv/dkv-deb9-amd64:latest dkvsrv --help
-```
 
 ## Running 
 
