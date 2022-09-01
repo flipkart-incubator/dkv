@@ -12,9 +12,12 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - Data replication over WANs
 
 ## Supported APIs
-- put(K,V)
-- del(K)
-- get(K,consistency)
+
+- put(Key, Value)
+- cas(Key, Value , oldValue)
+- del(Key)
+- get(Key, Consistency)
+- scan(KeyPrefix, StartKey)
 
 ## Design
 <img src="https://github.com/flipkart-incubator/dkv/raw/master/docs/design.png">
