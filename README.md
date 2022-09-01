@@ -13,13 +13,13 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 
 ## Supported APIs
 
-- Put(Key, Value)
-- MultiPut([]{Key,Value})
-- Get(Key, Consistency)
-- MultiGet([]Keys, Consistency)
-- Delete([]Keys)
-- CompareAndSet(Key, Value, OldValue)
-- Scan(KeyPrefix, StartKey)
+- Put(`Key`, `Value`)
+- MultiPut(`[]{Key, Value}`)
+- Get(`Key`, `Consistency`)
+- MultiGet(`[]Keys`, `Consistency`)
+- Delete(`[]Keys`)
+- CompareAndSet(`Key`, `Value`, `OldValue`)
+- Scan(`KeyPrefix`, `StartKey`)
 
 ## Design
 <img src="https://github.com/flipkart-incubator/dkv/raw/master/docs/design.png">
