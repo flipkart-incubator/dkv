@@ -44,7 +44,7 @@ A single DKV instance can be launched using the following docker command:
 docker run -it -p 8080:8080 ghcr.io/flipkart-incubator/dkv:latest dkvsrv
 ```
 
-or while using native binaries using :
+or while using [native binaries](https://github.com/flipkart-incubator/dkv/wiki/Running-dkv) using :
 
 
 ```bash
