@@ -12,9 +12,8 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - Data replication over WANs
 
 ## Supported APIs
-- createVBucket(replicationFactor)
-- put(K,V,vBucket)
-- del(K,vBucket)
+- put(K,V)
+- del(K)
 - get(K,consistency)
 
 ## Design
@@ -35,41 +34,20 @@ $ curl -fsSL https://raw.githubusercontent.com/flipkart-incubator/dkv/master/Doc
 $ docker run -it dkv/dkv-deb9-amd64:latest dkvsrv --help
 ```
 
-## Building DKV on Mac OSX
-
-### Installing Dependencies 
-
-DKV depends on RocksDB, and its CGo bindings, so we need to install rocksdb along with its dependecies.
-
-- Ensure [HomeBrew](https://brew.sh/) is installed
-- `brew install rocksdb zstd`
-
-
-### Building DKV
-
-```bash
-$ mkdir -p ${GOPATH}/src/github.com/flipkart-incubator
-$ cd ${GOPATH}/src/github.com/flipkart-incubator
-$ git clone https://github.com/flipkart-incubator/dkv
-$ cd dkv
-$ make build
-```
-
-If you want to build for other platform, set `GOOS`, `GOARCH` environment variables. For example, build on macOS for linux like following:
-
-```bash
-$ make GOOS=linux build
-```
-
-## Running
-
-Once DKV is built, the `<PROJECT_ROOT>/bin` folder should contain the following binaries:
-- `dkvsrv` - DKV server program
-- `dkvctl` - DKV client program
+## Running 
 
 ### Launching the DKV server in standalone mode
 
-A single DKV instance can be launched using the following command:
+
+A single DKV instance can be launched using the following docker command:
+
+
+```
+docker run -it -p 8080:8080 ghcr.io/flipkart-incubator/dkv:latest dkvsrv
+```
+
+or while using native binaries using :
+
 
 ```bash
 $ ./bin/dkvsrv --config dkvsrv.yaml  --db-folder <folder_name>  --listen-addr <host:port>
