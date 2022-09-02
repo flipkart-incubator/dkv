@@ -28,6 +28,8 @@ discovery-service:
     push-status-interval: 1
     poll-cluster-info-interval: 1
 
+enable-discovery-client : false # Enable discovery client for auto discovery by replicas and envoy
+
 repl-master-addr : ""         #Service address of DKV master node for replication
 repl-poll-interval : "5s"     #Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.
 
