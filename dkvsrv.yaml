@@ -16,8 +16,8 @@ db-folder : ""                  # DB folder path for storing data files
 diskless : false                # Enables badger diskless mode where data is stored entirely in memory.
 
 dc-id : "default"     # DC / Availability zone identifier
-vbucket : "default"   # Database identifier
-database : "default"  # vBucket identifier
+vbucket : "default"   # vBucket identifier
+database : "default"  # Database identifier
 
 discovery-service:
   server:
