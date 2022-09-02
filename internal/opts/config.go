@@ -41,7 +41,7 @@ type Config struct {
 	//Service discovery related params
 	DiscoveryConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
 	//Enable discovery client
-	EnableDiscoveryClient bool `mapstructure:"enable-discovery-client" desc:"Enable registration to discovery-server"`
+	DisableDiscoveryClient bool `mapstructure:"disable-discovery-client" desc:"Disable registration to discovery-server"`
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
@@ -160,13 +160,11 @@ func (c *Config) validateFlags() {
 		}
 	}
 
-	if c.DbRole != "none" && c.DbRole != "discovery" {
-		if c.EnableDiscoveryClient {
-			if c.DiscoveryConfig.ClientConfig.DiscoveryServiceAddr == "" ||
-				c.DiscoveryConfig.ClientConfig.PushStatusInterval <= 0 ||
-				c.DiscoveryConfig.ClientConfig.PollClusterInfoInterval <= 0 {
-				log.Panicf("Invalid discovery server client configuration")
-			}
+	if c.DbRole != "none" && c.DbRole != "discovery" && !c.DisableDiscoveryClient {
+		if c.DiscoveryConfig.ClientConfig.DiscoveryServiceAddr == "" ||
+			c.DiscoveryConfig.ClientConfig.PushStatusInterval <= 0 ||
+			c.DiscoveryConfig.ClientConfig.PollClusterInfoInterval <= 0 {
+			log.Panicf("Invalid discovery server client configuration")
 		}
 	}
 }
