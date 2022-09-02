@@ -40,7 +40,7 @@ type Config struct {
 
 	//Service discovery related params
 	DiscoveryConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
-	//Enable discovery client
+	//Disable discovery client
 	DisableDiscoveryClient bool `mapstructure:"disable-discovery-client" desc:"Disable registration to discovery-server"`
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
