@@ -22,7 +22,8 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 - Scan(`KeyPrefix`, `StartKey`)
 
 ## Design
-<img src="https://github.com/flipkart-incubator/dkv/raw/master/docs/design.png">
+![Design Diagram](https://user-images.githubusercontent.com/709368/188138895-bb23d0d0-c293-40ff-bc16-31e258ba5c02.jpg)
+
 
 ## Dependencies
 - Go version 1.16+
