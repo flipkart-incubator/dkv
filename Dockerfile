@@ -1,4 +1,4 @@
-ARG BASE=debian:stretch
+ARG BASE=ubuntu:20.04
 FROM $BASE
  
 LABEL maintainer="DKV Developers (dkv-dev@googlegroups.com)"
