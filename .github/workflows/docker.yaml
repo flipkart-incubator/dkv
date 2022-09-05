@@ -12,7 +12,7 @@ on:
 
 jobs:
   oreka_docker_job:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     name: Build Image
 
     steps:
@@ -57,7 +57,8 @@ jobs:
           file: ./Dockerfile
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          # build-args: |
+          build-args: |
+            BASE=ubuntu:20.04
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
