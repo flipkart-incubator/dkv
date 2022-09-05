@@ -7,7 +7,7 @@ RUN apt-get update && \
     # Install basic utilities
     apt-get install --yes --allow-unauthenticated adduser vim sudo git curl unzip build-essential \
     # Install Compression libs
-    zlib1g-dev libbz2-dev libsnappy-dev && \
+    zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev && \
     # Cleanup
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
