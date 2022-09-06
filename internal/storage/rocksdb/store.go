@@ -795,8 +795,7 @@ func (rdb *rocksDB) toChangeRecord(writeBatch *grocksdb.WriteBatch, changeNum ui
 }
 
 func (rdb *rocksDB) openBackupEngine(folder string) (*grocksdb.BackupEngine, error) {
-	opts := rdb.opts.rocksDBOpts
-	return grocksdb.OpenBackupEngine(opts, folder)
+	return grocksdb.CreateBackupEngine(rdb.db, folder)
 }
 
 func (rdb *rocksDB) toTrxnRecord(wbr *grocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
