@@ -46,6 +46,10 @@ jobs:
           key: ${{ runner.os }}-buildx-docker-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-docker-
+      - name: Show GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
       - name: Build Docker Image
         uses: docker/build-push-action@v3
         with:
@@ -59,6 +63,7 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           build-args: |
             BASE=ubuntu:20.04
+            GIT-SHA=${{ github.sha }}
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
