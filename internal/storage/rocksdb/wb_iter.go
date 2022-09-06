@@ -2,7 +2,7 @@ package rocksdb
 
 import (
 	"errors"
-	"github.com/flipkart-incubator/gorocksdb"
+	"github.com/linxGnu/grocksdb"
 	"io"
 )
 
@@ -18,7 +18,7 @@ func NewWriteBatchIterator(wbData []byte) *WriteBatchIterator {
 // WriteBatchIterator represents a iterator to iterator over records.
 type WriteBatchIterator struct {
 	data   []byte
-	record gorocksdb.WriteBatchRecord
+	record grocksdb.WriteBatchRecord
 	err    error
 }
 
@@ -38,30 +38,30 @@ func (iter *WriteBatchIterator) Next() bool {
 
 	switch iter.record.Type {
 	case
-		gorocksdb.WriteBatchDeletionRecord,
-		gorocksdb.WriteBatchSingleDeletionRecord:
+		grocksdb.WriteBatchDeletionRecord,
+		grocksdb.WriteBatchSingleDeletionRecord:
 		iter.record.Key = iter.decodeSlice()
 	case
-		gorocksdb.WriteBatchCFDeletionRecord,
-		gorocksdb.WriteBatchCFSingleDeletionRecord:
+		grocksdb.WriteBatchCFDeletionRecord,
+		grocksdb.WriteBatchCFSingleDeletionRecord:
 		iter.record.CF = int(iter.decodeVarint())
 		if iter.err == nil {
 			iter.record.Key = iter.decodeSlice()
 		}
 	case
-		gorocksdb.WriteBatchValueRecord,
-		gorocksdb.WriteBatchMergeRecord,
-		gorocksdb.WriteBatchRangeDeletion,
-		gorocksdb.WriteBatchBlobIndex:
+		grocksdb.WriteBatchValueRecord,
+		grocksdb.WriteBatchMergeRecord,
+		grocksdb.WriteBatchRangeDeletion,
+		grocksdb.WriteBatchBlobIndex:
 		iter.record.Key = iter.decodeSlice()
 		if iter.err == nil {
 			iter.record.Value = iter.decodeSlice()
 		}
 	case
-		gorocksdb.WriteBatchCFValueRecord,
-		gorocksdb.WriteBatchCFRangeDeletion,
-		gorocksdb.WriteBatchCFMergeRecord,
-		gorocksdb.WriteBatchCFBlobIndex:
+		grocksdb.WriteBatchCFValueRecord,
+		grocksdb.WriteBatchCFRangeDeletion,
+		grocksdb.WriteBatchCFMergeRecord,
+		grocksdb.WriteBatchCFBlobIndex:
 		iter.record.CF = int(iter.decodeVarint())
 		if iter.err == nil {
 			iter.record.Key = iter.decodeSlice()
@@ -69,16 +69,16 @@ func (iter *WriteBatchIterator) Next() bool {
 		if iter.err == nil {
 			iter.record.Value = iter.decodeSlice()
 		}
-	case gorocksdb.WriteBatchLogDataRecord:
+	case grocksdb.WriteBatchLogDataRecord:
 		iter.record.Value = iter.decodeSlice()
 	case
-		gorocksdb.WriteBatchNoopRecord,
-		gorocksdb.WriteBatchBeginPrepareXIDRecord,
-		gorocksdb.WriteBatchBeginPersistedPrepareXIDRecord:
+		grocksdb.WriteBatchNoopRecord,
+		grocksdb.WriteBatchBeginPrepareXIDRecord,
+		grocksdb.WriteBatchBeginPersistedPrepareXIDRecord:
 	case
-		gorocksdb.WriteBatchEndPrepareXIDRecord,
-		gorocksdb.WriteBatchCommitXIDRecord,
-		gorocksdb.WriteBatchRollbackXIDRecord:
+		grocksdb.WriteBatchEndPrepareXIDRecord,
+		grocksdb.WriteBatchCommitXIDRecord,
+		grocksdb.WriteBatchRollbackXIDRecord:
 		iter.record.Value = iter.decodeSlice()
 	default:
 		iter.err = errors.New("unsupported wal record type")
@@ -89,7 +89,7 @@ func (iter *WriteBatchIterator) Next() bool {
 }
 
 // Record returns the current record.
-func (iter *WriteBatchIterator) Record() *gorocksdb.WriteBatchRecord {
+func (iter *WriteBatchIterator) Record() *grocksdb.WriteBatchRecord {
 	return &iter.record
 }
 
@@ -111,14 +111,14 @@ func (iter *WriteBatchIterator) decodeSlice() []byte {
 	return ret
 }
 
-func (iter *WriteBatchIterator) decodeRecType() gorocksdb.WriteBatchRecordType {
+func (iter *WriteBatchIterator) decodeRecType() grocksdb.WriteBatchRecordType {
 	if len(iter.data) == 0 {
 		iter.err = io.ErrShortBuffer
-		return gorocksdb.WriteBatchNotUsedRecord
+		return grocksdb.WriteBatchNotUsedRecord
 	}
 	t := iter.data[0]
 	iter.data = iter.data[1:]
-	return gorocksdb.WriteBatchRecordType(t)
+	return grocksdb.WriteBatchRecordType(t)
 }
 
 func (iter *WriteBatchIterator) decodeVarint() uint64 {
