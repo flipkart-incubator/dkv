@@ -46,6 +46,19 @@ jobs:
           key: ${{ runner.os }}-buildx-docker-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-docker-
+      - name: Extract Commit SHA
+        id: sha_extract
+        run: |
+          if [ $IS_PR == 'pull_request' ]
+          then
+              echo "::set-output name=sha::$PR_REF"
+          else
+              echo "::set-output name=sha::$BRANCH_REF"
+          fi
+        env:
+          IS_PR: ${{ github.event_name }}
+          BRANCH_REF: ${{ github.ref }}
+          PR_REF: ${{ github.event.pull_request.head.sha }}
       - name: Build Docker Image
         uses: docker/build-push-action@v3
         with:
@@ -59,6 +72,7 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           build-args: |
             BASE=ubuntu:20.04
+            GIT_SHA=${{ steps.sha_extract.outputs.sha }}
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
