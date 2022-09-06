@@ -53,7 +53,7 @@ jobs:
       - name: Extract Commit SHA
         id: sha_extract
         run: |
-          if [$IS_PR == 'pull_request']
+          if [ $IS_PR == 'pull_request' ]
           then
               echo "::set-output name=sha::$PR_REF"
           else
