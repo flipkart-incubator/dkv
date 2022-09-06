@@ -896,7 +896,7 @@ func TestLoadChangesForOptimisticTransactions(t *testing.T) {
 	defer tdb.Close()
 
 	ctrKey := []byte("num")
-	bdb := tdb.GetBaseDb()
+	bdb := tdb.GetBaseDB()
 	err = bdb.Put(wo, ctrKey, []byte{0})
 	if err != nil {
 		t.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
