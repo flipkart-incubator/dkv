@@ -76,7 +76,7 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           build-args: |
             BASE=ubuntu:20.04
-            GIT-SHA=${{ steps.sha_extract.outputs.sha }}
+            GIT_SHA=${{ steps.sha_extract.outputs.sha }}
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache

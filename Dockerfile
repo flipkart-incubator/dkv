@@ -31,8 +31,8 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install DKV (Skipped for CI Pipelines)
 ARG CI
-ARG GIT-SHA=master
-RUN if [ -z "$CI" ] ; then git clone --depth=1 --branch $GIT-SHA https://github.com/flipkart-incubator/dkv.git \
+ARG GIT_SHA=master
+RUN if [ -z "$CI" ] ; then git clone --depth=1 --branch $GIT_SHA https://github.com/flipkart-incubator/dkv.git \
     && cd dkv && GOOS=linux GOARCH=$(dpkg --print-architecture) make build \
     && mv ./bin /usr/local/dkv && chown -R root:root /usr/local/dkv; fi
 
