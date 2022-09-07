@@ -10,13 +10,13 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/dgraph-io/ristretto v0.1.0
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13 // indirect
-	github.com/flipkart-incubator/gorocksdb v0.0.0-20210920082714-1f7dcbb7b2e4
 	github.com/flipkart-incubator/nexus v0.0.0-20220725092354-3772bb325062
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/kpango/fastime v1.0.16
+	github.com/linxGnu/grocksdb v1.7.8-0.20220907063002-2aa505c75b25
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
 	github.com/prometheus/client_golang v1.5.1
 	github.com/prometheus/client_model v0.2.0
