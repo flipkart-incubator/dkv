@@ -141,8 +141,7 @@ func main() {
 		PrometheusRegistry:        promRegistry,
 	}
 
-	if srvrRole != noRole && srvrRole != discoveryRole {
-		var err error
+	if (srvrRole == masterRole && !config.DisableDiscoveryClient) || srvrRole == slaveRole {
 		discoveryClient, err = newDiscoveryClient()
 		if err != nil {
 			log.Panicf("Failed to start Discovery Client %v.", err)
@@ -182,7 +181,7 @@ func main() {
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
 			}
-		} else {
+		} else if !config.DisableDiscoveryClient {
 			// Currently nodes can be either discovery server or client. This will change when a node supports multiple regions
 			discoveryClient.RegisterRegion(dkvSvc)
 		}
@@ -484,7 +483,7 @@ func setupHttpServer() {
 	router.HandleFunc("/metrics/json", jsonMetricHandler)
 
 	router.HandleFunc("/metrics/stream", statsStreamHandler)
-	if toDKVSrvrRole(config.DbRole) == masterRole {
+	if toDKVSrvrRole(config.DbRole) == masterRole && !config.DisableDiscoveryClient {
 		// Should be enabled only for discovery server ?
 		router.HandleFunc("/metrics/cluster", clusterMetricsHandler)
 	}
