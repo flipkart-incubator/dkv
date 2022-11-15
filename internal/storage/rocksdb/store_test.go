@@ -802,10 +802,14 @@ func TestPreventParallelRestores(t *testing.T) {
 
 func TestAtomicKeyCreation(t *testing.T) {
 	var (
-		wg             sync.WaitGroup
-		freqs          sync.Map
-		numThrs        = 10
-		casKey, casVal = []byte("casKey"), []byte{0}
+		wg      sync.WaitGroup
+		freqs   sync.Map
+		numThrs = 10
+		casReq  = &serverpb.CompareAndSetRequest{
+			Key:      []byte("casKey"),
+			OldValue: nil,
+			NewValue: []byte{0},
+		}
 	)
 
 	// verify key creation under contention
@@ -813,7 +817,7 @@ func TestAtomicKeyCreation(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			res, err := store.CompareAndSet(casKey, nil, casVal)
+			res, err := store.CompareAndSet(casReq)
 			freqs.Store(id, res && err == nil)
 		}(i)
 	}
@@ -864,7 +868,12 @@ func TestAtomicIncrDecr(t *testing.T) {
 				exist, _ := store.Get(casKey)
 				expect := exist[0].Value
 				update := []byte{expect[0] + delta}
-				res, err := store.CompareAndSet(casKey, expect, update)
+				casReq := &serverpb.CompareAndSetRequest{
+					Key:      casKey,
+					OldValue: expect,
+					NewValue: update,
+				}
+				res, err := store.CompareAndSet(casReq)
 				if res && err == nil {
 					break
 				}
@@ -1106,7 +1115,12 @@ func BenchmarkCompareAndSet(b *testing.B) {
 		}
 		val := cnt[0].Value[0]
 		newVal := val + 1
-		_, err = store.CompareAndSet(ctrKey, cnt[0].Value, []byte{newVal})
+		casReq := &serverpb.CompareAndSetRequest{
+			Key:      ctrKey,
+			OldValue: cnt[0].Value,
+			NewValue: []byte{newVal},
+		}
+		_, err = store.CompareAndSet(casReq)
 		if err != nil {
 			b.Errorf("Unable to CAS. Error: %v", err)
 		}

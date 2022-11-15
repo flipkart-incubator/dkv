@@ -270,17 +270,17 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	return results, err
 }
 
-func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
+func (bdb *badgerDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error) {
 	defer bdb.opts.statsCli.Timing("badger.cas.latency.ms", time.Now())
 	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
 
 	casTrxn := bdb.db.NewTransaction(true)
 	defer casTrxn.Discard()
 
-	exist, err := casTrxn.Get(key)
+	exist, err := casTrxn.Get(request.Key)
 	switch {
 	case err == badger.ErrKeyNotFound:
-		if expect != nil && len(expect) > 0 {
+		if request.OldValue != nil && len(request.OldValue) > 0 {
 			return false, nil
 		}
 	case err != nil:
@@ -289,11 +289,15 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 		return false, err
 	default:
 		existVal, _ := exist.ValueCopy(nil)
-		if !bytes.Equal(existVal, expect) {
+		if !bytes.Equal(existVal, request.OldValue) {
 			return false, nil
 		}
 	}
-	err = casTrxn.Set(key, update)
+	e := badger.NewEntry(request.Key, request.NewValue)
+	if request.ExpireTS > 0 {
+		e.ExpiresAt = request.ExpireTS
+	}
+	err = casTrxn.SetEntry(e)
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.cas.set.errors", 1)
 		bdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
