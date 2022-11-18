@@ -53,6 +53,21 @@ public interface DKVClient extends Closeable {
      */
     boolean compareAndSet(byte[] key, byte[] expect, byte[] update);
 
+
+    /**
+     * Performs the compare and set operation on the specified key. The
+     * given expected value is compared with the existing value and if
+     * there is a match, that value is overwritten with the given value.
+     *
+     * @param key key used for this compare and set operation
+     * @param expect value to be expected as the existing value
+     * @param update new value to be set if the comparison succeeds
+     * @param expiryTS the expiryTS in epoch seconds at which this key should be expired
+     * @return true only if the given value is set against the key
+     */
+    boolean compareAndSet(byte[] key, byte[] expect, byte[] update, long expiryTS);
+
+
     /**
      * Atomically increments the current value associated with the given
      * key and returns that value.
@@ -80,6 +95,17 @@ public interface DKVClient extends Closeable {
      * @return the value after the addition operation
      */
     long addAndGet(byte[] key, long delta);
+
+    /**
+     * Atomically adds the given delta to the current value associated
+     * with the given key and returns that value.
+     *
+     * @param key key used for this operation
+     * @param delta the value used for addition
+     * @param expiryTS the expiryTS in epoch seconds at which this key should be expired
+     * @return the value after the addition operation
+     */
+    long addAndGet(byte[] key, long delta, long expiryTS);
 
     /**
      * Associates the specified value with the specified key
