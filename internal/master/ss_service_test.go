@@ -200,7 +200,6 @@ func testAtomicIncrDecr(t *testing.T) {
 			} else {
 				delta++
 			}
-			loopCount := 0
 			for {
 				exist, _ := dkvCli.Get(rc, casKey)
 				expect := exist.Value
@@ -209,11 +208,7 @@ func testAtomicIncrDecr(t *testing.T) {
 				if res && err == nil {
 					break
 				}
-				loopCount++
-				//time.Sleep(10 * time.Millisecond)
 			}
-			fmt.Println("loopCount", loopCount)
-
 		}(i)
 	}
 	wg.Wait()
@@ -250,8 +245,7 @@ func testAtomicIncrDecrWithTTL(t *testing.T) {
 			} else {
 				delta++
 			}
-			loopCount := 0
-			for loopCount < 100 {
+			for {
 				exist, err := dkvCli.Get(rc, casKey)
 				if err != nil {
 					t.Errorf("failed with error %s", err.Error())
@@ -263,7 +257,6 @@ func testAtomicIncrDecrWithTTL(t *testing.T) {
 				if res && err == nil {
 					break
 				}
-				loopCount++
 			}
 		}(i)
 	}
