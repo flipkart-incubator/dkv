@@ -189,18 +189,18 @@ func (ms *memStore) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	return rss, nil
 }
 
-func (ms *memStore) CompareAndSet(key, expect, update []byte) (bool, error) {
+func (ms *memStore) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 
-	storeKey := string(key)
+	storeKey := string(request.Key)
 	exist, present := ms.store[storeKey]
-	if (!present && expect != nil) || (present && expect == nil) {
+	if (!present && request.OldValue != nil) || (present && request.OldValue == nil) {
 		return false, nil
 	}
 
-	if !present && expect == nil || bytes.Equal(expect, exist.data) {
-		ms.store[storeKey] = memStoreObject{update, 0}
+	if !present && request.OldValue == nil || bytes.Equal(request.OldValue, exist.data) {
+		ms.store[storeKey] = memStoreObject{request.NewValue, 0}
 	}
 	return true, nil
 }
