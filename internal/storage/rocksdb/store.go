@@ -408,7 +408,7 @@ func (rdb *rocksDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool,
 	} else {
 		kv := rdb.extractResult(existVal, existTTLVal, request.Key)
 		if kv == nil {
-			return false, fmt.Errorf("failed to extract result")
+			return false, fmt.Errorf("cas failed to extract result")
 		}
 		if !bytes.Equal(kv.Value, request.OldValue) {
 			return false, nil
