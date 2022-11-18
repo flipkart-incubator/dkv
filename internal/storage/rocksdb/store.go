@@ -857,7 +857,7 @@ func byteArrayCopy(src []byte, dstLen int) []byte {
 }
 
 func toByteArray(value *gorocksdb.Slice) []byte {
-	if value != nil {
+	if value != nil && value.Exists() {
 		src := value.Data()
 		res := byteArrayCopy(src, value.Size())
 		return res
