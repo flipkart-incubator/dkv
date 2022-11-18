@@ -231,7 +231,7 @@ func testAtomicIncrDecrWithTTL(t *testing.T) {
 	var (
 		wg             sync.WaitGroup
 		numThrs        = 10
-		casKey, casVal = []byte("ctrKeyTTL"), []byte{0}
+		casKey, casVal = []byte("AtomicCASKeyTTL"), []byte{0}
 		ttlTime        = uint64(time.Now().Add(5 * time.Minute).Unix())
 	)
 	if err := dkvCli.PutTTL(casKey, casVal, ttlTime); err != nil {
@@ -252,7 +252,11 @@ func testAtomicIncrDecrWithTTL(t *testing.T) {
 			}
 			loopCount := 0
 			for loopCount < 100 {
-				exist, _ := dkvCli.Get(rc, casKey)
+				exist, err := dkvCli.Get(rc, casKey)
+				if err != nil {
+					t.Errorf("failed with error %s", err.Error())
+					break
+				}
 				expect := exist.Value
 				update := []byte{expect[0] + delta}
 				res, err := dkvCli.CompareAndSet(casKey, expect, update, ttlTime)

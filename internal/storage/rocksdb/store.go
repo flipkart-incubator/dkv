@@ -380,24 +380,25 @@ func (rdb *rocksDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool,
 	txn := rdb.optimTrxnDB.TransactionBegin(wo, to, nil)
 	defer txn.Destroy()
 
-	exist, err := txn.GetForUpdateCF(ro, rdb.ttlCF, request.Key)
+	var existVal, existTTLVal []byte
+
+	cf := rdb.ttlCF
+	exist, err := txn.GetForUpdateCF(ro, cf, request.Key)
 	if err != nil {
 		return false, err
 	}
-	existTTLVal := exist.Data()
-	cf := rdb.ttlCF
+	existTTLVal = toByteArray(exist)
 	exist.Free()
-	var existVal []byte
 
 	if existTTLVal == nil {
-		//attempt on ttlCF
-		exist, err = txn.GetForUpdateCF(ro, rdb.normalCF, request.Key)
+		//attempt on normalCF
+		cf = rdb.normalCF
+		exist, err = txn.GetForUpdateCF(ro, cf, request.Key)
 		if err != nil {
 			return false, err
 		}
-		existVal = exist.Data()
+		existVal = toByteArray(exist)
 		exist.Free()
-		cf = rdb.normalCF
 	}
 
 	if request.OldValue == nil || len(request.OldValue) == 0 {
@@ -869,6 +870,9 @@ func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 	var err error
 	if len(valueWithTTL) > 0 {
 		err = msgpack.Unmarshal(valueWithTTL, &row)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &row, err
 }
@@ -909,11 +913,12 @@ func (rdb *rocksDB) extractResult(defaultCFValue []byte, ttlCFValue []byte, key 
 			return nil
 		}
 		if hlc.InThePast(ttlRow.ExpiryTS) {
+			fmt.Println(ttlRow)
 			return nil
 		} else if ttlRow.ExpiryTS > 0 {
 			ttlCFValue = ttlRow.Data
 		}
-		return &serverpb.KVPair{Key: key, Value: ttlCFValue, ExpireTS: ttlRow.ExpiryTS}
+		return &serverpb.KVPair{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}
 	return nil
 
