@@ -44,6 +44,7 @@
     <properties>
         <proto-file-path>../../../pkg/serverpb/</proto-file-path>
         <grpc.version>1.48.0</grpc.version>
+        <gax.version>2.8.1</gax.version>
         <proto.version>3.21.1</proto.version>
     </properties>
 
@@ -62,6 +63,16 @@
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
             <version>${grpc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.api</groupId>
+            <artifactId>gax</artifactId>
+            <version>${gax.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.api</groupId>
+            <artifactId>gax-grpc</artifactId>
+            <version>${gax.version}</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

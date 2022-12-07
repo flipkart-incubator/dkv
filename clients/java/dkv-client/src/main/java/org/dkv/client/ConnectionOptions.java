@@ -17,6 +17,8 @@ public class ConnectionOptions {
     private Long connectTimeout;
     private String metricPrefix;
 
+    private int connectionPoolSize;
+
     private long getRequestTimeout() {
         return requestTimeout != null ? requestTimeout : DEFAULT_REQUEST_TIMEOUT;
     }
