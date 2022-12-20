@@ -30,7 +30,7 @@ var (
 	grpcSrvr   *grpc.Server
 	lgr, _     = zap.NewDevelopment()
 	serverOpts = &opts.ServerOpts{
-		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 		Logger:                    lgr,

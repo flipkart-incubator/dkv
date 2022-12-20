@@ -136,7 +136,7 @@ func main() {
 
 	serveropts := &opts.ServerOpts{
 		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
 		PrometheusRegistry:        promRegistry,
 	}

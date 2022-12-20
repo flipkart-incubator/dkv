@@ -17,5 +17,5 @@ type ServerOpts struct {
 }
 
 const (
-	DefaultHealthCheckTickterInterval = uint(10)
+	DefaultHealthCheckTickerInterval = uint(10)
 )
