@@ -196,7 +196,7 @@ func (ss *standaloneService) CompareAndSet(ctx context.Context, casReq *serverpb
 	defer ss.rwl.RUnlock()
 
 	res := &serverpb.CompareAndSetResponse{Status: newEmptyStatus()}
-	casRes, err := ss.store.CompareAndSet(casReq.Key, casReq.OldValue, casReq.NewValue)
+	casRes, err := ss.store.CompareAndSet(casReq)
 	if err != nil {
 		ss.opts.Logger.Error("Unable to perform CAS", zap.Error(err))
 		res.Status = newErrorStatus(err)

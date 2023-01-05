@@ -228,7 +228,13 @@ public class SimpleDKVClient implements DKVClient {
     @Override
     public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
         ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
-        return cas(copyFrom(key), expectByteStr, copyFrom(update));
+        return cas(copyFrom(key), expectByteStr, copyFrom(update), 0);
+    }
+
+    @Override
+    public boolean compareAndSet(byte[] key, byte[] expect, byte[] update, long expiryTS) {
+        ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
+        return cas(copyFrom(key), expectByteStr, copyFrom(update), expiryTS);
     }
 
     @Override
@@ -245,6 +251,12 @@ public class SimpleDKVClient implements DKVClient {
     public long addAndGet(byte[] key, long delta) {
         ByteString keyByteStr = copyFrom(key);
         return addAndGet(keyByteStr, delta);
+    }
+
+    @Override
+    public long addAndGet(byte[] key, long delta, long expiryTS) {
+        ByteString keyByteStr = copyFrom(key);
+        return addAndGet(keyByteStr, delta, expiryTS);
     }
 
     @Override
@@ -426,20 +438,26 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     private long addAndGet(ByteString keyByteStr, long delta) {
+        return addAndGet(keyByteStr, delta, 0);
+    }
+
+    private long addAndGet(ByteString keyByteStr, long delta, long expiryTS) {
         ByteString expValByteStr, updatedValByteStr;
         long updatedVal;
         do {
             expValByteStr = get(Api.ReadConsistency.LINEARIZABLE, keyByteStr);
             updatedVal = convertToLong(expValByteStr) + delta;
             updatedValByteStr = covertToBytes(updatedVal);
-        } while (!cas(keyByteStr, expValByteStr, updatedValByteStr));
+        } while (!cas(keyByteStr, expValByteStr, updatedValByteStr, expiryTS));
         return updatedVal;
     }
 
-    private boolean cas(ByteString keyByteStr, ByteString expectByteStr, ByteString updateByteStr) {
+
+    private boolean cas(ByteString keyByteStr, ByteString expectByteStr, ByteString updateByteStr, long expiryTS) {
         Api.CompareAndSetRequest.Builder casReqBuilder = Api.CompareAndSetRequest.newBuilder();
         Api.CompareAndSetRequest casReq = casReqBuilder
                 .setKey(keyByteStr).setOldValue(expectByteStr).setNewValue(updateByteStr)
+                .setExpireTS(expiryTS)
                 .build();
         Api.CompareAndSetResponse casRes = blockingStub.withDeadlineAfter(connectionOptions.getWriteTimeout(), TimeUnit.MILLISECONDS).compareAndSet(casReq);
         Api.Status status = casRes.getStatus();

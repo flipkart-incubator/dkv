@@ -370,7 +370,7 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	}
 }
 
-func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
+func (rdb *rocksDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.cas.latency.ms", time.Now())
 	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
 
@@ -380,23 +380,55 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	txn := rdb.optimTrxnDB.TransactionBegin(wo, to, nil)
 	defer txn.Destroy()
 
-	exist, err := txn.GetForUpdate(ro, key)
+	var existVal, existTTLVal []byte
+
+	cf := rdb.ttlCF
+	exist, err := txn.GetForUpdateCF(ro, cf, request.Key)
 	if err != nil {
 		return false, err
 	}
-	defer exist.Free()
+	existTTLVal = toByteArray(exist)
+	exist.Free()
 
-	existVal := exist.Data()
-	if expect == nil || len(expect) == 0 {
-		if len(existVal) > 0 {
+	if existTTLVal == nil {
+		//attempt on normalCF
+		cf = rdb.normalCF
+		exist, err = txn.GetForUpdateCF(ro, cf, request.Key)
+		if err != nil {
+			return false, err
+		}
+		existVal = toByteArray(exist)
+		exist.Free()
+	}
+
+	if request.OldValue == nil || len(request.OldValue) == 0 {
+		if len(existTTLVal) > 0 || len(existVal) > 0 {
 			return false, nil
 		}
 	} else {
-		if !bytes.Equal(existVal, expect) {
+		kv := rdb.extractResult(existVal, existTTLVal, request.Key)
+		if kv == nil {
+			return false, fmt.Errorf("cas failed to extract result")
+		}
+		if !bytes.Equal(kv.Value, request.OldValue) {
 			return false, nil
 		}
 	}
-	err = txn.Put(key, update)
+
+	update := request.NewValue
+	if cf == rdb.ttlCF {
+		dF := ttlDataFormat{
+			ExpiryTS: request.ExpireTS,
+			Data:     request.NewValue,
+		}
+		update, err = msgpack.Marshal(dF)
+		if err != nil {
+			rdb.opts.statsCli.Incr("rocksdb.cas.msgpack.errors", 1)
+			return false, err
+		}
+	}
+
+	err = txn.PutCF(cf, request.Key, update)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.cas.set.errors", 1)
 		rdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
@@ -825,9 +857,12 @@ func byteArrayCopy(src []byte, dstLen int) []byte {
 }
 
 func toByteArray(value *gorocksdb.Slice) []byte {
-	src := value.Data()
-	res := byteArrayCopy(src, value.Size())
-	return res
+	if value != nil && value.Exists() {
+		src := value.Data()
+		res := byteArrayCopy(src, value.Size())
+		return res
+	}
+	return nil
 }
 
 func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
@@ -835,6 +870,9 @@ func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 	var err error
 	if len(valueWithTTL) > 0 {
 		err = msgpack.Unmarshal(valueWithTTL, &row)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &row, err
 }
@@ -850,7 +888,7 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 		return nil, err
 	}
 	value1, value2 := values[0], values[1]
-	kv := rdb.extractResult(value1, value2, key)
+	kv := rdb.extractResult(toByteArray(value1), toByteArray(value2), key)
 	value1.Free()
 	value2.Free()
 	if kv != nil {
@@ -859,17 +897,15 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	return nil, nil
 }
 
-func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *serverpb.KVPair {
-	if value1.Size() > 0 {
+func (rdb *rocksDB) extractResult(defaultCFValue []byte, ttlCFValue []byte, key []byte) *serverpb.KVPair {
+	if len(defaultCFValue) > 0 {
 		//non ttl use-case
-		val := toByteArray(value1)
-		return &serverpb.KVPair{Key: key, Value: val}
+		return &serverpb.KVPair{Key: key, Value: defaultCFValue}
 	}
 
-	if value2.Size() > 0 {
+	if len(ttlCFValue) > 0 {
 		//ttl use-case, check ttl
-		val := toByteArray(value2)
-		ttlRow, err := parseTTLMsgPackData(val)
+		ttlRow, err := parseTTLMsgPackData(ttlCFValue)
 		if err != nil {
 			rdb.opts.lgr.Warn("RocksDB::extractResult Failed to parse msgpack data",
 				zap.String("Key", string(key)), zap.Error(err))
@@ -877,14 +913,15 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 			return nil
 		}
 		if hlc.InThePast(ttlRow.ExpiryTS) {
+			fmt.Println(ttlRow)
 			return nil
 		} else if ttlRow.ExpiryTS > 0 {
-			val = ttlRow.Data
+			ttlCFValue = ttlRow.Data
 		}
-		return &serverpb.KVPair{Key: key, Value: val, ExpireTS: ttlRow.ExpiryTS}
+		return &serverpb.KVPair{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}
-
 	return nil
+
 }
 
 func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
@@ -908,7 +945,7 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	var results []*serverpb.KVPair
 	for i := 0; i < kl; i++ {
 		value1, value2 := values[i], values[i+kl]
-		kv := rdb.extractResult(value1, value2, keys[i])
+		kv := rdb.extractResult(toByteArray(value1), toByteArray(value2), keys[i])
 		value1.Free()
 		value2.Free()
 		if kv != nil {

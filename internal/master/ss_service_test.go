@@ -66,6 +66,7 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testPutTTLAndGet", testPutTTLAndGet)
 		t.Run("testAtomicKeyCreation", testAtomicKeyCreation)
 		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
+		t.Run("testAtomicIncrDecrWithTTL", testAtomicIncrDecrWithTTL)
 		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testIteration", testIteration)
@@ -150,7 +151,7 @@ func testAtomicKeyCreation(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			res, err := dkvCli.CompareAndSet(casKey, nil, casVal)
+			res, err := dkvCli.CompareAndSet(casKey, nil, casVal, 0)
 			freqs.Store(id, res && err == nil)
 		}(i)
 	}
@@ -203,7 +204,56 @@ func testAtomicIncrDecr(t *testing.T) {
 				exist, _ := dkvCli.Get(rc, casKey)
 				expect := exist.Value
 				update := []byte{expect[0] + delta}
-				res, err := dkvCli.CompareAndSet(casKey, expect, update)
+				res, err := dkvCli.CompareAndSet(casKey, expect, update, 0)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := dkvCli.Get(rc, casKey)
+	actVal := actual.Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
+	}
+}
+
+func testAtomicIncrDecrWithTTL(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("AtomicCASKeyTTL"), []byte{0}
+		ttlTime        = uint64(time.Now().Add(5 * time.Minute).Unix())
+	)
+	if err := dkvCli.PutTTL(casKey, casVal, ttlTime); err != nil {
+		t.Fatalf("Unable to Put key, %s. Error: %v", casKey, err)
+	}
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, err := dkvCli.Get(rc, casKey)
+				if err != nil {
+					t.Errorf("failed with error %s", err.Error())
+					break
+				}
+				expect := exist.Value
+				update := []byte{expect[0] + delta}
+				res, err := dkvCli.CompareAndSet(casKey, expect, update, ttlTime)
 				if res && err == nil {
 					break
 				}

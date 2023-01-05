@@ -146,7 +146,7 @@ func testDistAtomicKeyCreation(t *testing.T) {
 		cliID = 1 + (cliID+1)%clusterSize
 		go func(id, clId int) {
 			defer wg.Done()
-			res, err := dkvClis[clId].CompareAndSet(casKey, nil, casVal)
+			res, err := dkvClis[clId].CompareAndSet(casKey, nil, casVal, 0)
 			freqs.Store(id, res && err == nil)
 		}(i, cliID)
 	}
@@ -205,7 +205,7 @@ func testDistAtomicIncrDecr(t *testing.T) {
 				expect := exist.Value
 				if len(expect) > 0 {
 					update := []byte{expect[0] + delta}
-					res, err := dkvCli.CompareAndSet(casKey, expect, update)
+					res, err := dkvCli.CompareAndSet(casKey, expect, update, 0)
 					if res && err == nil {
 						break
 					}
