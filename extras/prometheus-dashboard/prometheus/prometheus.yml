@@ -1,6 +1,11 @@
 global:
   scrape_interval: 100ms
 scrape_configs:
+  - job_name : "megh"
+    file_sd_configs:
+      - refresh_interval: 60s
+        files:
+          - /etc/prometheus/file_targets/*.json
   - job_name: "dkv"
     static_configs:
       - targets: [ "host.docker.internal:7081" ]
