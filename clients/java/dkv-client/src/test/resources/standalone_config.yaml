@@ -2,6 +2,7 @@ db-engine : "rocksdb"
 db-engine-ini : ""
 block-cache-size : 3221225472
 root-folder : "/tmp/dkvsrv"
+cluster-name : "test"
 dc-id : "dc1"
 diskless : false
 pprof : false

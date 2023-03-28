@@ -21,19 +21,19 @@ func newRocksDBCollector(rdb *rocksDB) *rocksDBCollector {
 		memTableTotalGauge: prometheus.NewDesc(
 			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_memtable_total"),
 			"Rocksdb MemTableTotal estimates memory usage of all mem-tables",
-			nil, nil),
+			nil, stats.ConstLabels),
 		memTableUnflushedGauge: prometheus.NewDesc(
 			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_memtable_unflushed"),
 			"Rocksdb MemTableUnflushed estimates memory usage of unflushed mem-tables",
-			nil, nil),
+			nil, stats.ConstLabels),
 		memTableReadersTotalGauge: prometheus.NewDesc(
 			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_memtable_readers_total"),
 			"Rocksdb MemTableReadersTotal memory usage of table readers (indexes and bloom filters)",
-			nil, nil),
+			nil, stats.ConstLabels),
 		cacheTotalGauge: prometheus.NewDesc(
 			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_cache_total"),
 			"Rocksdb CacheTotal memory usage of cache",
-			nil, nil),
+			nil, stats.ConstLabels),
 		db:  rdb.db,
 		lgr: rdb.opts.lgr,
 	}

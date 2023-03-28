@@ -382,12 +382,18 @@ func setFlagsForNexusDirs() {
 }
 
 func setupStats() {
+	//default tags.
+	tags := []stats.Tag{stats.NewTag("cluster-name", config.ClusterName)}
+	if config.NodeName != "" {
+		tags = append(tags, stats.NewTag("node-name", config.NodeName))
+	}
+
 	if config.StatsdAddr != "" {
-		statsCli = stats.NewStatsDClient(config.StatsdAddr, "dkv.")
+		statsCli = stats.NewStatsDClient(config.StatsdAddr, "dkv.", tags...)
 	} else {
 		statsCli = stats.NewNoOpClient()
 	}
-	promRegistry = stats.NewPromethousRegistry()
+	promRegistry = stats.NewPromethousRegistry(tags)
 	statsStreamer = stats.NewStatStreamer()
 	statAggregatorRegistry = aggregate.NewStatAggregatorRegistry()
 	go statsStreamer.Run()

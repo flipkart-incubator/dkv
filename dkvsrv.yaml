@@ -1,5 +1,7 @@
 
 node-name : ""                    #Name of the current Node Name
+cluster-name : "dkv"              # Cluster Identifier, used for reporting all/tags
+
 listen-addr : "0.0.0.0:8080"      #listen address
 http-listen-addr : "0.0.0.0:8081" # http listen address
 role : "none"                     #Role of the node - master|slave|standalone
@@ -18,6 +20,7 @@ diskless : false                # Enables badger diskless mode where data is sto
 dc-id : "default"     # DC / Availability zone identifier
 vbucket : "default"   # vBucket identifier
 database : "default"  # Database identifier
+
 
 discovery-service:
   server:

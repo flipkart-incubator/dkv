@@ -83,25 +83,29 @@ type stat struct {
 
 func newStat(registry prometheus.Registerer) *stat {
 	replicationLag := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: stats.Namespace,
-		Name:      "slave_replication_lag",
-		Help:      "replication lag of the slave",
+		Namespace:   stats.Namespace,
+		Name:        "slave_replication_lag",
+		Help:        "replication lag of the slave",
+		ConstLabels: stats.ConstLabels,
 	})
 	replicationDelay := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: stats.Namespace,
-		Name:      "slave_replication_delay",
-		Help:      "replication delay of the slave",
+		Namespace:   stats.Namespace,
+		Name:        "slave_replication_delay",
+		Help:        "replication delay of the slave",
+		ConstLabels: stats.ConstLabels,
 	})
 	replicationStatus := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: stats.Namespace,
-		Name:      "slave_replication_status",
-		Help:      "replication status of the slave",
-		MaxAge:    5 * time.Second,
+		Namespace:   stats.Namespace,
+		Name:        "slave_replication_status",
+		Help:        "replication status of the slave",
+		MaxAge:      5 * time.Second,
+		ConstLabels: stats.ConstLabels,
 	}, []string{"masterAddr"})
 	replicationSpeed := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: stats.Namespace,
-		Name:      "slave_replication_speed",
-		Help:      "replication speed of the slave",
+		Namespace:   stats.Namespace,
+		Name:        "slave_replication_speed",
+		Help:        "replication speed of the slave",
+		ConstLabels: stats.ConstLabels,
 	})
 	registry.MustRegister(replicationLag, replicationDelay, replicationSpeed, replicationStatus)
 	return &stat{

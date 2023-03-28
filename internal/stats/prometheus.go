@@ -9,6 +9,8 @@ import (
 
 type promethousRegistry struct{}
 
+var ConstLabels prometheus.Labels
+
 func (*promethousRegistry) Register(c prometheus.Collector) error {
 	return prometheus.DefaultRegisterer.Register(c)
 }
@@ -29,7 +31,11 @@ func (*promethousRegistry) Unregister(c prometheus.Collector) bool {
 	return prometheus.DefaultRegisterer.Unregister(c)
 }
 
-func NewPromethousRegistry() prometheus.Registerer {
+func NewPromethousRegistry(tags []Tag) prometheus.Registerer {
+	ConstLabels = map[string]string{}
+	for _, tag := range tags {
+		ConstLabels[tag.key] = tag.val
+	}
 	return &promethousRegistry{}
 }
 
@@ -44,6 +50,7 @@ func (*noopClient) Unregister(collector prometheus.Collector) bool {
 }
 
 func NewPromethousNoopRegistry() prometheus.Registerer {
+	ConstLabels = map[string]string{}
 	return &noopClient{}
 }
 
