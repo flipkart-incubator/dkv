@@ -492,8 +492,6 @@ public class SimpleDKVClient implements DKVClient {
         checkf(dkvTarget != null && !dkvTarget.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
         return  NettyChannelBuilder
                 .forTarget(dkvTarget)
-//                .executor(grpcExecutor)
-//                .eventLoopGroup(eventLoopGroup)
                 .usePlaintext()
                 .withOption(ChannelOption.SO_REUSEADDR, true)
                 .withOption(ChannelOption.SO_SNDBUF, DEFAULT_BUF_SIZE)
