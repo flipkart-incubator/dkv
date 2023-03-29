@@ -5,6 +5,7 @@ import (
 	"github.com/flipkart-incubator/gorocksdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"time"
 )
 
 type rocksDBCollector struct {
@@ -65,6 +66,10 @@ func (collector *rocksDBCollector) Collect(ch chan<- prometheus.Metric) {
 
 // metricsCollector collects rocksdB metrics.
 func (rdb *rocksDB) metricsCollector() {
-	collector := newRocksDBCollector(rdb)
-	rdb.opts.promRegistry.MustRegister(collector)
+	// apply a 2sec timer. Why? Throws segfault error of the rdb if called right after opening..
+	// TODO: find a better option to handle this.
+	time.AfterFunc(2*time.Second, func() {
+		collector := newRocksDBCollector(rdb)
+		rdb.opts.promRegistry.MustRegister(collector)
+	})
 }
