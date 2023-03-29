@@ -1,6 +1,7 @@
 package badger
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

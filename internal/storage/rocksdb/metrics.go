@@ -1,6 +1,7 @@
 package rocksdb
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/gorocksdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
