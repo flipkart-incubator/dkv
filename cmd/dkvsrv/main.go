@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"io/ioutil"
 	"log"
@@ -50,10 +52,6 @@ const (
 	masterRole    dkvSrvrRole = "master"
 	slaveRole     dkvSrvrRole = "slave"
 	discoveryRole dkvSrvrRole = "discovery"
-
-	defBlockCacheSize     = 3 << 30
-	discoveryServerConfig = "serverConfig"
-	discoveryClientConfig = "clientConfig"
 )
 
 var (
@@ -136,7 +134,7 @@ func main() {
 
 	serveropts := &opts.ServerOpts{
 		Logger:                    dkvLogger,
-		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval, //to be exposed later via app.conf
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval, //to be exposed later via app.conf
 		StatsCli:                  statsCli,
 		PrometheusRegistry:        promRegistry,
 	}
@@ -181,6 +179,7 @@ func main() {
 			if err != nil {
 				log.Panicf("Failed to start Discovery Service %v.", err)
 			}
+			//
 		} else if !config.DisableDiscoveryClient {
 			// Currently nodes can be either discovery server or client. This will change when a node supports multiple regions
 			discoveryClient.RegisterRegion(dkvSvc)
@@ -292,12 +291,54 @@ func newGrpcServerListener() (*grpc.Server, net.Listener) {
 	return grpcSrvr, newListener()
 }
 
-func newListener() (lis net.Listener) {
+func rawControl(rawConn syscall.RawConn) error {
 	var err error
-	if lis, err = net.Listen("tcp", config.ListenAddr); err != nil {
+	// See syscall.RawConn.Control
+	rawConn.Control(func(fd uintptr) {
+		// Set SO_REUSEADDR
+		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+		if err != nil {
+			return
+		}
+
+		// Set SO_REUSEPORT
+		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+		if err != nil {
+			return
+		}
+
+		// Set SO_RCVBUF
+		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_RCVBUF, opts.DefaultSORCVBuffer)
+		if err != nil {
+			return
+		}
+
+		// Set SO_SNDBUF
+		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_SNDBUF, opts.DefaultSOSNDBuffer)
+		if err != nil {
+			return
+		}
+	})
+	return err
+}
+
+func newListener() (lis net.Listener) {
+	lc := net.ListenConfig{
+		Control: func(network, address string, conn syscall.RawConn) error {
+			// See syscall.RawConn.Control
+			if err := rawControl(conn); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+
+	var err error
+	if lis, err = lc.Listen(context.Background(), "tcp", config.ListenAddr); err != nil {
 		log.Panicf("failed to listen: %v", err)
 		return
 	}
+
 	return
 }
 

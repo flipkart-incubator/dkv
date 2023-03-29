@@ -7,6 +7,8 @@ import dkv.serverpb.Api;
 import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
 import lombok.NonNull;
 import org.dkv.client.metrics.MetricsInterceptor;
 
@@ -39,6 +41,8 @@ public class SimpleDKVClient implements DKVClient {
     private final JmxReporter reporter;
     
     private final ConnectionOptions connectionOptions;
+
+    private static final int DEFAULT_BUF_SIZE = 1024*1024;
 
     /**
      * Creates an instance with the underlying GRPC conduit to the DKV database
@@ -470,7 +474,12 @@ public class SimpleDKVClient implements DKVClient {
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort) {
         checkf(dkvHost != null && !dkvHost.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
         checkf(dkvPort > 0, IllegalArgumentException.class, "Valid DKV port must be provided");
-        return ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext();
+        return  NettyChannelBuilder
+                .forAddress(dkvHost, dkvPort)
+                .usePlaintext()
+                .withOption(ChannelOption.SO_REUSEADDR, true)
+                .withOption(ChannelOption.SO_SNDBUF, DEFAULT_BUF_SIZE)
+                .withOption(ChannelOption.SO_RCVBUF, DEFAULT_BUF_SIZE);
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort, String authority) {
@@ -478,9 +487,15 @@ public class SimpleDKVClient implements DKVClient {
         return getManagedChannelBuilder(dkvHost, dkvPort).overrideAuthority(authority);
     }
 
+
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget) {
         checkf(dkvTarget != null && !dkvTarget.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
-        return ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext();
+        return  NettyChannelBuilder
+                .forTarget(dkvTarget)
+                .usePlaintext()
+                .withOption(ChannelOption.SO_REUSEADDR, true)
+                .withOption(ChannelOption.SO_SNDBUF, DEFAULT_BUF_SIZE)
+                .withOption(ChannelOption.SO_RCVBUF, DEFAULT_BUF_SIZE);
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget, String authority) {
