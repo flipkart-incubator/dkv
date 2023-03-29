@@ -424,6 +424,7 @@ func (ds *distributedService) Put(ctx context.Context, putReq *serverpb.PutReque
 }
 
 func (ds *distributedService) MultiPut(ctx context.Context, multiPutReq *serverpb.MultiPutRequest) (*serverpb.PutResponse, error) {
+	defer stats.MeasureLatency(ds.stat.Latency.WithLabelValues(stats.MultiPut), time.Now())
 	reqBts, err := proto.Marshal(&raftpb.InternalRaftRequest{MultiPut: multiPutReq})
 	res := &serverpb.PutResponse{Status: newEmptyStatus()}
 	if err != nil {
