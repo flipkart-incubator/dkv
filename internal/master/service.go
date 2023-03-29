@@ -49,16 +49,18 @@ type dkvServiceStat struct {
 
 func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace:  stats.Namespace,
-		Name:       "latency",
-		Help:       "Latency statistics for dkv service",
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
-		MaxAge:     10 * time.Second,
+		Namespace:   stats.Namespace,
+		Name:        "latency",
+		Help:        "Latency statistics for dkv service",
+		Objectives:  map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		MaxAge:      10 * time.Second,
+		ConstLabels: stats.ConstLabels,
 	}, []string{"Ops"})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: stats.Namespace,
-		Name:      "error",
-		Help:      "Error count for storage operations",
+		Namespace:   stats.Namespace,
+		Name:        "error",
+		Help:        "Error count for storage operations",
+		ConstLabels: stats.ConstLabels,
 	}, []string{"Ops"})
 	registry.MustRegister(RequestLatency, ResponseError)
 	return &dkvServiceStat{RequestLatency, ResponseError}

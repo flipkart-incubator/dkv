@@ -18,8 +18,9 @@ import (
 type Config struct {
 
 	// region level configuration.
-	DisklessMode           bool   `mapstructure:"diskless"  desc:"Enables badger diskless mode where data is stored entirely in memory. "`
 	NodeName               string `mapstructure:"node-name" desc:"Node Name"`
+	ClusterName            string `mapstructure:"cluster-name" desc:"Cluster Name"`
+	DisklessMode           bool   `mapstructure:"diskless"  desc:"Enables badger diskless mode where data is stored entirely in memory. "`
 	DbEngine               string `mapstructure:"db-engine" desc:"Underlying DB engine for storing data - badger|rocksdb"`
 	DbEngineIni            string `mapstructure:"db-engine-ini" desc:"An .ini file for configuring the underlying storage engine. Refer badger.ini or rocks.ini for more details."`
 	DbRole                 string `mapstructure:"role" desc:"Role of the node - master|slave|standalone|discovery"`
