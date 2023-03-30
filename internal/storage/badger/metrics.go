@@ -8,6 +8,7 @@ import (
 
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
 func (bdb *badgerDB) metricsCollector() {
+	bdb.stat = storage.NewStat("badger")
 	bdb.stat.StoreMetricsCollector = prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
 		"badger_v3_disk_reads_total": prometheus.NewDesc(
 			prometheus.BuildFQName(stats.Namespace, "badger", "disk_reads_total"),
@@ -80,7 +81,6 @@ func (bdb *badgerDB) metricsCollector() {
 			nil, nil,
 		),
 	})
-	bdb.stat = storage.NewStat("badger")
 	bdb.opts.promRegistry.MustRegister(bdb.stat.RequestLatency, bdb.stat.ResponseError)
 	bdb.opts.promRegistry.MustRegister(bdb.stat.StoreMetricsCollector)
 }
