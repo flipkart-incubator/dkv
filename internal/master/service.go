@@ -47,9 +47,10 @@ type dkvServiceStat struct {
 	ResponseError *prometheus.CounterVec
 }
 
-func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
+func newDKVServiceStat(registry prometheus.Registerer, mode string) *dkvServiceStat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  stats.Namespace,
+		Subsystem:  mode,
 		Name:       "latency",
 		Help:       "Latency statistics for dkv service",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
@@ -57,6 +58,7 @@ func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
 	}, []string{"Ops"})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: stats.Namespace,
+		Subsystem: mode,
 		Name:      "error",
 		Help:      "Error count for storage operations",
 	}, []string{"Ops"})
@@ -111,14 +113,9 @@ func (ss *standaloneService) Watch(req *health.HealthCheckRequest, watcher healt
 // NewStandaloneService creates a standalone variant of the DKVService
 // that works only with the local storage.
 func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVService {
-	serviceStat := newDKVServiceStat(opts.PrometheusRegistry)
-	return NewStandaloneServiceWithStats(store, cp, br, regionInfo, opts, serviceStat)
-}
-
-func NewStandaloneServiceWithStats(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts, stat *dkvServiceStat) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store: store, cp: cp, br: br, rwl: rwl, regionInfo: regionInfo, shutdown: make(chan struct{}, 1), opts: opts, stat: stat}
+	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts, newDKVServiceStat(opts.PrometheusRegistry, "standalone")}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -403,13 +400,12 @@ type distributedService struct {
 // that attempts to replicate data across multiple replicas over Nexus.
 func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br storage.Backupable,
 	raftRepl nexus_api.RaftReplicator, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVClusterService {
-	dkvStats := newDKVServiceStat(opts.PrometheusRegistry)
 	return &distributedService{
-		DKVService: NewStandaloneServiceWithStats(kvs, cp, br, regionInfo, opts, dkvStats),
+		DKVService: NewStandaloneService(kvs, cp, br, regionInfo, opts),
 		raftRepl:   raftRepl,
 		shutdown:   make(chan struct{}, 1),
 		opts:       opts,
-		stat:       dkvStats,
+		stat:       newDKVServiceStat(opts.PrometheusRegistry, "distributed"),
 	}
 }
 
