@@ -64,18 +64,16 @@ func (collector *rocksDBCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-var collector prometheus.Collector
-
 // metricsCollector collects rocksdB metrics.
 func (rdb *rocksDB) metricsCollector() {
 	rdb.stat = storage.NewStat("rocksdb")
 	rdb.opts.promRegistry.MustRegister(rdb.stat.RequestLatency, rdb.stat.ResponseError)
-	collector = newRocksDBCollector(rdb)
-	rdb.opts.promRegistry.MustRegister(collector)
+	rdb.stat.StoreMetricsCollector = newRocksDBCollector(rdb)
+	rdb.opts.promRegistry.MustRegister(rdb.stat.StoreMetricsCollector)
 }
 
 func (rdb *rocksDB) unRegisterMetricsCollector() {
-	rdb.opts.promRegistry.Unregister(collector)
+	rdb.opts.promRegistry.Unregister(rdb.stat.StoreMetricsCollector)
 	rdb.opts.promRegistry.Unregister(rdb.stat.RequestLatency)
 	rdb.opts.promRegistry.Unregister(rdb.stat.ResponseError)
 }
