@@ -2,12 +2,14 @@ package badger
 
 import (
 	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
 func (bdb *badgerDB) metricsCollector() {
-	collector := prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
+	bdb.stat = storage.NewStat("badger")
+	bdb.stat.StoreMetricsCollector = prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
 		"badger_v3_disk_reads_total": prometheus.NewDesc(
 			prometheus.BuildFQName(stats.Namespace, "badger", "disk_reads_total"),
 			"Number of cumulative reads by Badger",
@@ -79,6 +81,12 @@ func (bdb *badgerDB) metricsCollector() {
 			nil, nil,
 		),
 	})
+	bdb.opts.promRegistry.MustRegister(bdb.stat.RequestLatency, bdb.stat.ResponseError)
+	bdb.opts.promRegistry.MustRegister(bdb.stat.StoreMetricsCollector)
+}
 
-	bdb.opts.promRegistry.MustRegister(collector)
+func (bdb *badgerDB) unRegisterMetricsCollector() {
+	bdb.opts.promRegistry.Unregister(bdb.stat.StoreMetricsCollector)
+	bdb.opts.promRegistry.Unregister(bdb.stat.RequestLatency)
+	bdb.opts.promRegistry.Unregister(bdb.stat.ResponseError)
 }

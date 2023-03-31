@@ -237,7 +237,6 @@ func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 		optimTrxnDB:    optimTrxnDB,
 		opts:           opts,
 		globalMutation: 0,
-		stat:           storage.NewStat(opts.promRegistry, "rocksdb"),
 	}
 	rocksdb.metricsCollector()
 
@@ -266,6 +265,7 @@ func (rdb *rocksDB) Compaction() error {
 }
 
 func (rdb *rocksDB) Close() error {
+	rdb.unRegisterMetricsCollector()
 	rdb.optimTrxnDB.Close()
 	//rdb.opts.destroy()
 	return nil

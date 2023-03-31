@@ -2,6 +2,7 @@ package rocksdb
 
 import (
 	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/gorocksdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -65,6 +66,14 @@ func (collector *rocksDBCollector) Collect(ch chan<- prometheus.Metric) {
 
 // metricsCollector collects rocksdB metrics.
 func (rdb *rocksDB) metricsCollector() {
-	collector := newRocksDBCollector(rdb)
-	rdb.opts.promRegistry.MustRegister(collector)
+	rdb.stat = storage.NewStat("rocksdb")
+	rdb.opts.promRegistry.MustRegister(rdb.stat.RequestLatency, rdb.stat.ResponseError)
+	rdb.stat.StoreMetricsCollector = newRocksDBCollector(rdb)
+	rdb.opts.promRegistry.MustRegister(rdb.stat.StoreMetricsCollector)
+}
+
+func (rdb *rocksDB) unRegisterMetricsCollector() {
+	rdb.opts.promRegistry.Unregister(rdb.stat.StoreMetricsCollector)
+	rdb.opts.promRegistry.Unregister(rdb.stat.RequestLatency)
+	rdb.opts.promRegistry.Unregister(rdb.stat.ResponseError)
 }

@@ -47,9 +47,10 @@ type dkvServiceStat struct {
 	ResponseError *prometheus.CounterVec
 }
 
-func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
+func newDKVServiceStat(registry prometheus.Registerer, mode string) *dkvServiceStat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  stats.Namespace,
+		Subsystem:  mode,
 		Name:       "latency",
 		Help:       "Latency statistics for dkv service",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
@@ -57,6 +58,7 @@ func newDKVServiceStat(registry prometheus.Registerer) *dkvServiceStat {
 	}, []string{"Ops"})
 	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: stats.Namespace,
+		Subsystem: mode,
 		Name:      "error",
 		Help:      "Error count for storage operations",
 	}, []string{"Ops"})
@@ -113,7 +115,7 @@ func (ss *standaloneService) Watch(req *health.HealthCheckRequest, watcher healt
 func NewStandaloneService(store storage.KVStore, cp storage.ChangePropagator, br storage.Backupable, regionInfo *serverpb.RegionInfo, opts *opts.ServerOpts) DKVService {
 	rwl := &sync.RWMutex{}
 	regionInfo.Status = serverpb.RegionStatus_LEADER
-	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts, newDKVServiceStat(opts.PrometheusRegistry)}
+	return &standaloneService{store, cp, br, rwl, regionInfo, false, make(chan struct{}, 1), opts, newDKVServiceStat(opts.PrometheusRegistry, "standalone")}
 }
 
 func (ss *standaloneService) Put(ctx context.Context, putReq *serverpb.PutRequest) (*serverpb.PutResponse, error) {
@@ -403,7 +405,7 @@ func NewDistributedService(kvs storage.KVStore, cp storage.ChangePropagator, br 
 		raftRepl:   raftRepl,
 		shutdown:   make(chan struct{}, 1),
 		opts:       opts,
-		stat:       newDKVServiceStat(stats.NewPromethousNoopRegistry()),
+		stat:       newDKVServiceStat(opts.PrometheusRegistry, "distributed"),
 	}
 }
 
