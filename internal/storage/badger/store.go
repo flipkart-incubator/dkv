@@ -186,12 +186,13 @@ func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 		return nil, err
 	}
 
-	bdb := badgerDB{db, bdbOpts, storage.NewStat(bdbOpts.promRegistry, "badger"), 0}
+	bdb := badgerDB{db: db, opts: bdbOpts, globalMutation: 0}
 	bdb.metricsCollector()
 	return &bdb, nil
 }
 
 func (bdb *badgerDB) Close() error {
+	bdb.unRegisterMetricsCollector()
 	bdb.db.Close()
 	return nil
 }
