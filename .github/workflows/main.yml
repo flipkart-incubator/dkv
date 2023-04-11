@@ -21,24 +21,24 @@ jobs:
       # To use this repository's private action,
       # you must check out the repository
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Prepopulate Docker file
         run:  |
           echo "COPY . /code" >> Dockerfile
           cat ./Dockerfile
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           driver-opts: network=host
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
       - name: Build Docker Container
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           # using "load: true" forces the docker driver
           # not necessary here, because we set it before
@@ -62,7 +62,7 @@ jobs:
           chmod 777 bin
           docker run -v $(pwd)/bin:/code/bin -i localhost:5000/${{ github.repository_owner }}/dkv:latest bash -c "cd /code && GOOS=linux GOARCH=amd64 make build"
       - name: Upload dkvsrv binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: bin-dkvsrv
           path: bin/dkvsrv
@@ -77,14 +77,14 @@ jobs:
     needs: dkv_server_job
     name: Build Java Client
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up JDK
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v3
         with:
           java-version: '8'
           distribution: 'adopt'
       - name: Cache Maven packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
@@ -94,7 +94,7 @@ jobs:
           mkdir -p bin
           chmod 777 bin
       - name: Download dkvsrv binary
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: bin-dkvsrv
           path: bin
@@ -104,11 +104,8 @@ jobs:
           ls -lRth bin
       - name : Install goreman
         run : |
-          set -x
-          cd /tmp
-          go get -u github.com/mattn/goreman
+          go install github.com/mattn/goreman@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
-          cd -
       - name : Start DKV Cluster
         run : |
           echo "$PATH"

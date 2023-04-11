@@ -17,14 +17,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           driver-opts: network=host
       - name: Log in to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ secrets.CONTAINER_REGISTRY_USERNAME }}
@@ -40,7 +40,7 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}
       - name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-docker-${{ github.sha }}
@@ -51,9 +51,9 @@ jobs:
         run: |
           if [ $IS_PR == 'pull_request' ]
           then
-              echo "::set-output name=sha::$PR_REF"
+              echo "sha=$PR_REF" >> $GITHUB_OUTPUT
           else
-              echo "::set-output name=sha::$BRANCH_REF"
+              echo "sha=$BRANCH_REF" >> $GITHUB_OUTPUT
           fi
         env:
           IS_PR: ${{ github.event_name }}
