@@ -51,9 +51,9 @@ jobs:
         run: |
           if [ $IS_PR == 'pull_request' ]
           then
-              echo "sha={$PR_REF}" >> $GITHUB_OUTPUT
+              echo "sha=$PR_REF" >> $GITHUB_OUTPUT
           else
-              echo "sha={$BRANCH_REF}" >> $GITHUB_OUTPUT
+              echo "sha=$BRANCH_REF" >> $GITHUB_OUTPUT
           fi
         env:
           IS_PR: ${{ github.event_name }}
