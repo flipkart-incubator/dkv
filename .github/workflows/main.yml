@@ -104,11 +104,8 @@ jobs:
           ls -lRth bin
       - name : Install goreman
         run : |
-          set -x
-          cd /tmp
-          go get -u github.com/mattn/goreman
+          go install github.com/mattn/goreman@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
-          cd -
       - name : Start DKV Cluster
         run : |
           echo "$PATH"
