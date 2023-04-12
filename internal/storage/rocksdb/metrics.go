@@ -1,6 +1,8 @@
 package rocksdb
 
 import (
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/gorocksdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -18,19 +20,19 @@ type rocksDBCollector struct {
 func newRocksDBCollector(rdb *rocksDB) *rocksDBCollector {
 	return &rocksDBCollector{
 		memTableTotalGauge: prometheus.NewDesc(
-			prometheus.BuildFQName("rocksdb", "", "memory_usage_memtable_total"),
+			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_memtable_total"),
 			"Rocksdb MemTableTotal estimates memory usage of all mem-tables",
 			nil, nil),
 		memTableUnflushedGauge: prometheus.NewDesc(
-			prometheus.BuildFQName("rocksdb", "", "memory_usage_memtable_unflushed"),
+			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_memtable_unflushed"),
 			"Rocksdb MemTableUnflushed estimates memory usage of unflushed mem-tables",
 			nil, nil),
 		memTableReadersTotalGauge: prometheus.NewDesc(
-			prometheus.BuildFQName("rocksdb", "", "memory_usage_memtable_readers_total"),
+			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_memtable_readers_total"),
 			"Rocksdb MemTableReadersTotal memory usage of table readers (indexes and bloom filters)",
 			nil, nil),
 		cacheTotalGauge: prometheus.NewDesc(
-			prometheus.BuildFQName("rocksdb", "", "memory_usage_cache_total"),
+			prometheus.BuildFQName(stats.Namespace, "rocksdb", "memory_usage_cache_total"),
 			"Rocksdb CacheTotal memory usage of cache",
 			nil, nil),
 		db:  rdb.db,
@@ -39,8 +41,8 @@ func newRocksDBCollector(rdb *rocksDB) *rocksDBCollector {
 
 }
 
-//Each and every collector must implement the Describe function.
-//It essentially writes all descriptors to the prometheus desc channel.
+// Each and every collector must implement the Describe function.
+// It essentially writes all descriptors to the prometheus desc channel.
 func (collector *rocksDBCollector) Describe(ch chan<- *prometheus.Desc) {
 	//Update this section with the each metric you create for a given collector
 	ch <- collector.memTableTotalGauge
@@ -49,7 +51,7 @@ func (collector *rocksDBCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.cacheTotalGauge
 }
 
-//Collect implements required collect function for all promehteus collectors
+// Collect implements required collect function for all promehteus collectors
 func (collector *rocksDBCollector) Collect(ch chan<- prometheus.Metric) {
 	memoryUsage, err := gorocksdb.GetApproximateMemoryUsageByType([]*gorocksdb.DB{collector.db}, nil)
 	if err != nil {
@@ -64,6 +66,14 @@ func (collector *rocksDBCollector) Collect(ch chan<- prometheus.Metric) {
 
 // metricsCollector collects rocksdB metrics.
 func (rdb *rocksDB) metricsCollector() {
-	collector := newRocksDBCollector(rdb)
-	rdb.opts.promRegistry.MustRegister(collector)
+	rdb.stat = storage.NewStat("rocksdb")
+	rdb.opts.promRegistry.MustRegister(rdb.stat.RequestLatency, rdb.stat.ResponseError)
+	rdb.stat.StoreMetricsCollector = newRocksDBCollector(rdb)
+	rdb.opts.promRegistry.MustRegister(rdb.stat.StoreMetricsCollector)
+}
+
+func (rdb *rocksDB) unRegisterMetricsCollector() {
+	rdb.opts.promRegistry.Unregister(rdb.stat.StoreMetricsCollector)
+	rdb.opts.promRegistry.Unregister(rdb.stat.RequestLatency)
+	rdb.opts.promRegistry.Unregister(rdb.stat.ResponseError)
 }

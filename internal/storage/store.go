@@ -14,11 +14,12 @@ import (
 )
 
 type Stat struct {
-	RequestLatency *prometheus.SummaryVec
-	ResponseError  *prometheus.CounterVec
+	RequestLatency        *prometheus.SummaryVec
+	ResponseError         *prometheus.CounterVec
+	StoreMetricsCollector prometheus.Collector
 }
 
-func NewStat(registry prometheus.Registerer, engine string) *Stat {
+func NewStat(engine string) *Stat {
 	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  stats.Namespace,
 		Name:       fmt.Sprintf("storage_latency_%s", engine),
@@ -31,8 +32,7 @@ func NewStat(registry prometheus.Registerer, engine string) *Stat {
 		Name:      fmt.Sprintf("storage_error_%s", engine),
 		Help:      fmt.Sprintf("Error count for %s storage operations", engine),
 	}, []string{stats.Ops})
-	registry.MustRegister(RequestLatency, ResponseError)
-	return &Stat{RequestLatency, ResponseError}
+	return &Stat{RequestLatency: RequestLatency, ResponseError: ResponseError}
 }
 
 // A KVStore represents the key value store that provides
@@ -67,7 +67,7 @@ type KVStore interface {
 	// hence is safe from a concurrency perspective.
 	// If the expected value is `nil`, then the key is created and
 	// initialized with the given value, atomically.
-	CompareAndSet(key, expect, update []byte) (bool, error)
+	CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error)
 }
 
 // A Backupable represents the capability of the underlying store

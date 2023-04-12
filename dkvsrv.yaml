@@ -16,8 +16,8 @@ db-folder : ""                  # DB folder path for storing data files
 diskless : false                # Enables badger diskless mode where data is stored entirely in memory.
 
 dc-id : "default"     # DC / Availability zone identifier
-vbucket : "default"   # Database identifier
-database : "default"  # vBucket identifier
+vbucket : "default"   # vBucket identifier
+database : "default"  # Database identifier
 
 discovery-service:
   server:
@@ -27,6 +27,8 @@ discovery-service:
     discovery-service-addr: "multi:///127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003"
     push-status-interval: 1
     poll-cluster-info-interval: 1
+
+disable-discovery-client : false # Disable discovery client for auto discovery by replicas and envoy (for local only)
 
 repl-master-addr : ""         #Service address of DKV master node for replication
 repl-poll-interval : "5s"     #Interval used for polling changes from master. Eg., 10s, 5ms, 2h, etc.

@@ -44,6 +44,8 @@ message CompareAndSetRequest {
   bytes oldValue = 2;
   // NewValue is the value set once the comparison is successful.
   bytes newValue = 3;
+  //expireTS
+  uint64 expireTS = 4;
 }
 
 message CompareAndSetResponse {

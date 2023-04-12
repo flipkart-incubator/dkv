@@ -110,10 +110,10 @@ func (dkvClnt *DKVClient) PutTTL(key []byte, value []byte, expireTS uint64) erro
 // CompareAndSet provides the wrapper for the standard CAS primitive.
 // It invokes the underlying GRPC CompareAndSet method. This is a
 // convenience wrapper.
-func (dkvClnt *DKVClient) CompareAndSet(key []byte, expect []byte, update []byte) (bool, error) {
+func (dkvClnt *DKVClient) CompareAndSet(key []byte, expect []byte, update []byte, expireTS uint64) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
-	casReq := &serverpb.CompareAndSetRequest{Key: key, OldValue: expect, NewValue: update}
+	casReq := &serverpb.CompareAndSetRequest{Key: key, OldValue: expect, NewValue: update, ExpireTS: expireTS}
 	casRes, err := dkvClnt.dkvCli.CompareAndSet(ctx, casReq)
 	if err != nil {
 		return false, err
