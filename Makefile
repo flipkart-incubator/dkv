@@ -56,7 +56,7 @@ test:
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   ADD_LDFLAGS = $(ALDFLAGS)"
-	@$(GO) test -v --count=1 -tags="$(BUILD_TAGS)" $(ALDFLAGS) $(PACKAGES)
+	@$(GO) test -v --count=1 -coverprofile=coverage.out -tags="$(BUILD_TAGS)" $(ALDFLAGS) $(PACKAGES)
 
 .PHONY: bench
 bench:
