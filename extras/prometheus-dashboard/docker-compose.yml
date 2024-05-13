@@ -11,6 +11,8 @@ services:
     command:
       --web.enable-lifecycle
       --config.file=/etc/prometheus/prometheus.yml
+      --storage.tsdb.retention.time=7d
+      --storage.tsdb.wal-compression
     volumes:
       - ${PROM_DIR:?err}:/etc/prometheus
       - prometheus_data:/var/lib/prometheus
