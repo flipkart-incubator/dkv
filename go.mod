@@ -3,7 +3,7 @@ module github.com/flipkart-incubator/dkv
 go 1.27.1
 
 require (
-	github.com/Jille/grpc-multi-resolver v1.0.0
+	github.com/Jille/grpc-multi-resolver v1.3.0
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/dgraph-io/ristretto v0.1.1
@@ -71,7 +71,6 @@ require (
 )
 
 replace (
-	github.com/Jille/grpc-multi-resolver => github.com/mqy/grpc-multi-resolver v1.0.1-0.20211016000115-097a4c652dad
 	github.com/spf13/pflag => github.com/TiboStev/pflag v1.0.6-0.20200918204434-33dec6aac494
 	honnef.co/go/tools => github.com/dominikh/go-tools v0.0.1-2020.1.3
 )
