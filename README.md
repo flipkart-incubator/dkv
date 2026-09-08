@@ -25,7 +25,6 @@ DKV is a distributed key value store server written in [Go](https://golang.org).
 ![Design Diagram](https://user-images.githubusercontent.com/709368/188138895-bb23d0d0-c293-40ff-bc16-31e258ba5c02.jpg)
 
 ## Dependencies
-- Go version 1.16+
 - [RocksDB](https://github.com/facebook/rocksdb) v6.22.1 as a storage engine
 - [GoRocksDB](https://github.com/flipkart-incubator/gorocksdb) provides the CGo bindings with RocksDB
 - [Badger](https://github.com/dgraph-io/badger) v1.6 as a storage engine
