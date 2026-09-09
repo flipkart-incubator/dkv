@@ -1,9 +1,9 @@
 package rocksdb
 
 import (
+	"github.com/linxGnu/grocksdb"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
-	"github.com/flipkart-incubator/gorocksdb"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
@@ -13,7 +13,7 @@ type rocksDBCollector struct {
 	memTableUnflushedGauge    *prometheus.Desc
 	memTableReadersTotalGauge *prometheus.Desc
 	cacheTotalGauge           *prometheus.Desc
-	db                        *gorocksdb.DB
+	db                        *grocksdb.DB
 	lgr                       *zap.Logger
 }
 
@@ -53,7 +53,7 @@ func (collector *rocksDBCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements required collect function for all promehteus collectors
 func (collector *rocksDBCollector) Collect(ch chan<- prometheus.Metric) {
-	memoryUsage, err := gorocksdb.GetApproximateMemoryUsageByType([]*gorocksdb.DB{collector.db}, nil)
+	memoryUsage, err := grocksdb.GetApproximateMemoryUsageByType([]*grocksdb.DB{collector.db}, nil)
 	if err != nil {
 		collector.lgr.Error("Failed to get rocksgb memory usage", zap.Error(err))
 	} else {
