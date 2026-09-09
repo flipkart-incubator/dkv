@@ -15,9 +15,9 @@ RUN apt-get update && \
 RUN curl -fsSL https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar xz \
     && cd zstd-1.4.4 && make install
 
-# Install RocksDB v6.5.3
-RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v6.22.1.tar.gz | tar xz \
-    && cd rocksdb-6.22.1 && make install
+# Install RocksDB
+RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v7.5.3.tar.gz | tar xz \
+    && cd rocksdb-7.5.3 && make install
 
 # Install GoLang
 RUN curl -fsSL https://dl.google.com/go/go1.18.1.linux-$(dpkg --print-architecture).tar.gz | tar xz \
