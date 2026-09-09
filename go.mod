@@ -18,9 +18,8 @@ require (
 	github.com/kpango/fastime v1.0.16
 	github.com/linxGnu/grocksdb v1.7.8-0.20220907063002-2aa505c75b25
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
-	github.com/prometheus/client_golang v1.5.1
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/procfs v0.0.10 // indirect
 	github.com/smira/go-statsd v1.3.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1

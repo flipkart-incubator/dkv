@@ -69,7 +69,7 @@ var (
 		Logger:                    lgr,
 		StatsCli:                  stats.NewNoOpClient(),
 		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
-		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval,
 	}
 
 	// for creating a distribute server cluster

@@ -75,7 +75,7 @@ func (dr *dkvReplStore) multiPut(multiPutReq *serverpb.MultiPutRequest) ([]byte,
 }
 
 func (dr *dkvReplStore) cas(casReq *serverpb.CompareAndSetRequest) ([]byte, error) {
-	res, err := dr.kvs.CompareAndSet(casReq.Key, casReq.OldValue, casReq.NewValue)
+	res, err := dr.kvs.CompareAndSet(casReq)
 	succ, fail := []byte{0}, []byte{1}
 	if res && err == nil {
 		return succ, nil

@@ -22,7 +22,7 @@ var (
 	lgr, _     = zap.NewDevelopment()
 	serveropts = &opts.ServerOpts{
 		Logger:                    lgr,
-		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 	}

@@ -91,6 +91,25 @@ public class SimpleDKVClientTest {
     }
 
     @Test
+    public void shouldPerformAtomicAdditionWithTTL() throws InterruptedException {
+        byte[] key = ("atomicAdditionTTS" + System.currentTimeMillis()).getBytes();
+        long expiryTS = (System.currentTimeMillis() / 1000) + 120;
+        int numThrs = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(numThrs);
+        for (int i = 1; i <= numThrs; i++) {
+            final int id = i;
+            pool.execute(() -> {
+                int delta = (id & 1) == 1 ? 1 : -1;
+                dkvCli.addAndGet(key, delta, expiryTS);
+            });
+        }
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        byte[] actualBts = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(0L, convertToLong(actualBts));
+    }
+
+    @Test
     public void shouldPerformAtomicIncrDecr() throws InterruptedException {
         byte[] key = ("myCtr" + System.currentTimeMillis()).getBytes();
         int numThrs = 10;
