@@ -1,0 +1,6 @@
+###### Requirements without Version Specifiers ######`
+locust
+locust-plugins
+grpcio
+grpcio-tools
+asyncio
