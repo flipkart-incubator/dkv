@@ -1,4 +1,4 @@
-ARG BASE=ubuntu:20.04
+ARG BASE=ubuntu:22.04
 FROM $BASE
  
 LABEL maintainer="DKV Developers (dkv-dev@googlegroups.com)"
@@ -16,11 +16,11 @@ RUN curl -fsSL https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.
     && cd zstd-1.4.4 && make install
 
 # Install RocksDB
-RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v7.5.3.tar.gz | tar xz \
-    && cd rocksdb-7.5.3 && make install
+RUN curl -fsSL https://github.com/facebook/rocksdb/archive/v11.8.1.tar.gz | tar xz \
+    && cd rocksdb-11.8.1 && make install
 
 # Install GoLang
-RUN curl -fsSL https://dl.google.com/go/go1.18.1.linux-$(dpkg --print-architecture).tar.gz | tar xz \
+RUN curl -fsSL https://dl.google.com/go/go1.27.1.linux-$(dpkg --print-architecture).tar.gz | tar xz \
     && chown -R root:root ./go && mv ./go /usr/local
 ENV PATH="/usr/local/go/bin:${PATH}"
 

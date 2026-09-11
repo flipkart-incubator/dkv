@@ -391,17 +391,17 @@ func (rdb *rocksDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool,
 	var existVal, existTTLVal []byte
 
 	cf := rdb.ttlCF
-	exist, err := txn.GetForUpdateCF(ro, cf, request.Key)
+	exist, err := txn.GetForUpdateWithCF(ro, cf, request.Key)
 	if err != nil {
 		return false, err
 	}
 	existTTLVal = toByteArray(exist)
 	exist.Free()
 
-	if existTTLVal == nil {
+	if len(existTTLVal) == 0 {
 		//attempt on normalCF
 		cf = rdb.normalCF
-		exist, err = txn.GetForUpdateCF(ro, cf, request.Key)
+		exist, err = txn.GetForUpdateWithCF(ro, cf, request.Key)
 		if err != nil {
 			return false, err
 		}
@@ -901,8 +901,8 @@ func (rdb *rocksDB) getSingleKey(ro *grocksdb.ReadOptions, key []byte) ([]*serve
 	return nil, nil
 }
 
-func (rdb *rocksDB) extractResult(value1 *grocksdb.Slice, value2 *grocksdb.Slice, key []byte) *serverpb.KVPair {
-	if value1.Size() > 0 {
+func (rdb *rocksDB) extractResult(defaultCFValue []byte, ttlCFValue []byte, key []byte) *serverpb.KVPair {
+	if len(defaultCFValue) > 0 {
 		//non ttl use-case
 		return &serverpb.KVPair{Key: key, Value: defaultCFValue}
 	}
@@ -919,8 +919,6 @@ func (rdb *rocksDB) extractResult(value1 *grocksdb.Slice, value2 *grocksdb.Slice
 		if hlc.InThePast(ttlRow.ExpiryTS) {
 			fmt.Println(ttlRow)
 			return nil
-		} else if ttlRow.ExpiryTS > 0 {
-			ttlCFValue = ttlRow.Data
 		}
 		return &serverpb.KVPair{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}

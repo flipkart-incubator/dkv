@@ -51,33 +51,33 @@ func TestDKVDiscoveryService(t *testing.T) {
 		MasterHost:      nil,
 		NexusClusterUrl: nil,
 	}
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 
 	masterHost := "host1:port"
 	regionInfo.MasterHost = &masterHost
 	regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	regionInfo.NodeAddress = "host2:port"
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 
 	regionInfo.Status = serverpb.RegionStatus_INACTIVE
 	regionInfo.NodeAddress = "host3:port"
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 
 	regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	regionInfo.Database = "db2"
 	regionInfo.NodeAddress = "host4:port"
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 
 	regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	regionInfo.Database = "db1"
 	regionInfo.VBucket = "vbucket2"
 	regionInfo.NodeAddress = "host5:port"
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 
 	regionInfo.Status = serverpb.RegionStatus_ACTIVE_SLAVE
 	regionInfo.DcID = "dc2"
 	regionInfo.NodeAddress = "host6:port"
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 
 	// Test status entry
 	regionInfos, _ := dkvCli.GetClusterInfo("dc2", "", "")
@@ -126,7 +126,7 @@ func TestDKVDiscoveryService(t *testing.T) {
 
 	// Test status update of a node to inactive
 	regionInfo.Status = serverpb.RegionStatus_INACTIVE
-	dkvCli.UpdateStatus(regionInfo)
+	dkvCli.UpdateStatus(&regionInfo)
 	regionInfos, _ = dkvCli.GetClusterInfo("", "db1", "vbucket2")
 	if len(regionInfos) != 1 {
 		t.Errorf("GET Cluster Info mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "DB and VBucket 2", 2, len(regionInfos))

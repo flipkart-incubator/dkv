@@ -43,8 +43,8 @@
 
     <properties>
         <proto-file-path>../../../pkg/serverpb/</proto-file-path>
-        <grpc.version>1.48.0</grpc.version>
-        <proto.version>3.21.1</proto.version>
+        <grpc.version>1.75.0</grpc.version>
+        <proto.version>3.25.5</proto.version>
     </properties>
 
     <dependencies>

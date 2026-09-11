@@ -225,11 +225,11 @@ func (dkvClnt *DKVClient) ListNodes() (uint64, map[uint64]*models.NodeInfo, erro
 	return 0, nil, err
 }
 
-func (dkvClnt *DKVClient) UpdateStatus(info serverpb.RegionInfo) error {
+func (dkvClnt *DKVClient) UpdateStatus(info *serverpb.RegionInfo) error {
 	ctx, cancel := context.WithTimeout(context.Background(), dkvClnt.opts.Timeout)
 	defer cancel()
 	_, err := dkvClnt.dkvDisCli.UpdateStatus(ctx, &serverpb.UpdateStatusRequest{
-		RegionInfo: &info,
+		RegionInfo: info,
 		Timestamp:  hlc.UnixNow(),
 	})
 	return err

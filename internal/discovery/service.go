@@ -64,7 +64,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 		d.logger.Error("Unable to get cluster info", zap.Error(err))
 		return nil, err
 	}
-	var clusterInfo []serverpb.KVPair
+	var clusterInfo []*serverpb.KVPair
 	for {
 		itRes, err := kvStrm.Recv()
 		if err == io.EOF {
@@ -76,7 +76,7 @@ func (d *discoverService) GetClusterInfo(ctx context.Context, request *serverpb.
 		} else if bytes.Contains(itRes.Key, []byte("dkv_meta")) {
 			continue
 		} else {
-			clusterInfo = append(clusterInfo, serverpb.KVPair{
+			clusterInfo = append(clusterInfo, &serverpb.KVPair{
 				Key:   itRes.Key,
 				Value: itRes.Value,
 			})

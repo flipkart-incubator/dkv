@@ -304,8 +304,6 @@ func testIteration(t *testing.T) {
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
 	} else {
-		// insert after iterator creation
-		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
 			count++
@@ -321,6 +319,9 @@ func testIteration(t *testing.T) {
 			}
 		}
 	}
+	// insert after iteration completes: the store gives no snapshot isolation,
+	// so inserting concurrently with iteration is inherently racy.
+	putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 
 	if count == 0 {
 		t.Error("Iterate didn't return any rows")
