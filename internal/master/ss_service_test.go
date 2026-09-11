@@ -304,6 +304,9 @@ func testIteration(t *testing.T) {
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
 	} else {
+		// Iterate binds a RocksDB snapshot before returning, so keys put
+		// after this point must never surface in this iteration.
+		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
 			count++
@@ -319,9 +322,6 @@ func testIteration(t *testing.T) {
 			}
 		}
 	}
-	// insert after iteration completes: the store gives no snapshot isolation,
-	// so inserting concurrently with iteration is inherently racy.
-	putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 
 	if count == 0 {
 		t.Error("Iterate didn't return any rows")

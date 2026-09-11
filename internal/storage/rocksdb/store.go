@@ -731,6 +731,11 @@ type iter struct {
 	iterOpts storage.IterationOptions
 	rdbIter  *grocksdb.Iterator
 	ttlCF    bool
+	// db/snapshot/readOpts are non-nil only on the iterator that owns them,
+	// so they're released exactly once when that iterator is closed.
+	db       *grocksdb.DB
+	snapshot *grocksdb.Snapshot
+	readOpts *grocksdb.ReadOptions
 }
 
 func (rdb *rocksDB) newIterCF(readOpts *grocksdb.ReadOptions, iterOpts storage.IterationOptions, cf *grocksdb.ColumnFamilyHandle) *iter {
@@ -740,7 +745,7 @@ func (rdb *rocksDB) newIterCF(readOpts *grocksdb.ReadOptions, iterOpts storage.I
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, it, cf == rdb.ttlCF}
+	return &iter{iterOpts: iterOpts, rdbIter: it, ttlCF: cf == rdb.ttlCF}
 }
 
 func (rdbIter *iter) verifyTTLValidity() bool {
@@ -799,13 +804,27 @@ func (rdbIter *iter) Err() error {
 
 func (rdbIter *iter) Close() error {
 	rdbIter.rdbIter.Close()
+	if rdbIter.readOpts != nil {
+		rdbIter.readOpts.Destroy()
+	}
+	if rdbIter.snapshot != nil {
+		rdbIter.db.ReleaseSnapshot(rdbIter.snapshot)
+	}
 	return nil
 }
 
+// Iterate binds a fresh RocksDB snapshot for every call so that concurrent
+// writes made after Iterate is invoked are never visible to the returned
+// iterator, matching the isolation the backup path (generateSST) already
+// relies on.
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	readOpts := rdb.opts.readOpts
+	snap := rdb.db.NewSnapshot()
+	readOpts := grocksdb.NewDefaultReadOptions()
+	readOpts.SetSnapshot(snap)
+
 	baseIter := rdb.newIterCF(readOpts, iterOpts, rdb.normalCF)
 	ttlIter := rdb.newIterCF(readOpts, iterOpts, rdb.ttlCF)
+	baseIter.db, baseIter.snapshot, baseIter.readOpts = rdb.db, snap, readOpts
 	return iterators.Concat(baseIter, ttlIter)
 }
 
