@@ -398,7 +398,7 @@ func (rdb *rocksDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool,
 	existTTLVal = toByteArray(exist)
 	exist.Free()
 
-	if existTTLVal == nil {
+	if len(existTTLVal) == 0 {
 		//attempt on normalCF
 		cf = rdb.normalCF
 		exist, err = txn.GetForUpdateWithCF(ro, cf, request.Key)
