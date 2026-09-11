@@ -1,4 +1,4 @@
-ARG BASE=ubuntu:20.04
+ARG BASE=ubuntu:22.04
 FROM $BASE
  
 LABEL maintainer="DKV Developers (dkv-dev@googlegroups.com)"
