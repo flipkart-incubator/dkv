@@ -50,14 +50,11 @@ public class ShardedDKVClientTest {
             dkvClient.put(keys[i], expVals[i]);
         }
 
-        // SEQUENTIAL reads below hit slaves, which poll the master for changes
-        // every repl-poll-interval (5s in test config); wait for that to elapse
-        // so the last-written keys have replicated before we read them back.
-        try {
-            Thread.sleep(6000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // SEQUENTIAL reads below hit slaves, which pull only one batch of
+        // changes per repl-poll-interval tick; with NUM_KEYS this large,
+        // catching up can take several ticks, so poll for replication to
+        // actually complete instead of assuming a fixed sleep suffices.
+        waitForReplication(keys, expVals);
 
         for (int i = 0; i < NUM_KEYS; i++) {
             String actVal = dkvClient.get(READ_CONSISTENCY, keys[i]);
@@ -77,6 +74,33 @@ public class ShardedDKVClientTest {
 //            fail("expecting an exception");
         } catch (Exception e) {
             assertTrue(e instanceof UnsupportedOperationException);
+        }
+    }
+
+    // Polls SEQUENTIAL reads for every key until all values have replicated to
+    // the slaves, or fails the test if replication doesn't finish in time.
+    private void waitForReplication(String[] keys, String[] expVals) {
+        long deadlineMs = System.currentTimeMillis() + 120_000;
+        while (true) {
+            boolean allReplicated = true;
+            for (int i = 0; i < keys.length; i++) {
+                if (!expVals[i].equals(dkvClient.get(READ_CONSISTENCY, keys[i]))) {
+                    allReplicated = false;
+                    break;
+                }
+            }
+            if (allReplicated) {
+                return;
+            }
+            if (System.currentTimeMillis() >= deadlineMs) {
+                fail("Replication did not complete within the allotted time");
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail("Interrupted while waiting for replication");
+            }
         }
     }
 
