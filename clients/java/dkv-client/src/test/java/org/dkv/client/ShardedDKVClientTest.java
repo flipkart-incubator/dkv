@@ -50,6 +50,15 @@ public class ShardedDKVClientTest {
             dkvClient.put(keys[i], expVals[i]);
         }
 
+        // SEQUENTIAL reads below hit slaves, which poll the master for changes
+        // every repl-poll-interval (5s in test config); wait for that to elapse
+        // so the last-written keys have replicated before we read them back.
+        try {
+            Thread.sleep(6000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         for (int i = 0; i < NUM_KEYS; i++) {
             String actVal = dkvClient.get(READ_CONSISTENCY, keys[i]);
             assertEquals(format("Invalid value for key: %s", keys[i]), expVals[i], actVal);
