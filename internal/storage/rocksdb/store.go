@@ -727,10 +727,38 @@ func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error
 	return appldChngNum, nil
 }
 
+// sharedSnapshot releases a RocksDB snapshot (and the read options bound to
+// it) exactly once, only after every iterator holding a reference to it has
+// released its own reference. This lets multiple native iterators share one
+// snapshot safely regardless of the order in which they're closed.
+type sharedSnapshot struct {
+	db       *grocksdb.DB
+	snapshot *grocksdb.Snapshot
+	readOpts *grocksdb.ReadOptions
+	refCount int32
+}
+
+func newSharedSnapshot(db *grocksdb.DB, snapshot *grocksdb.Snapshot, readOpts *grocksdb.ReadOptions, refCount int32) *sharedSnapshot {
+	return &sharedSnapshot{db: db, snapshot: snapshot, readOpts: readOpts, refCount: refCount}
+}
+
+// release decrements the reference count and, once it reaches zero,
+// destroys the read options and releases the underlying snapshot.
+func (s *sharedSnapshot) release() {
+	if atomic.AddInt32(&s.refCount, -1) == 0 {
+		s.readOpts.Destroy()
+		s.db.ReleaseSnapshot(s.snapshot)
+	}
+}
+
 type iter struct {
 	iterOpts storage.IterationOptions
 	rdbIter  *grocksdb.Iterator
 	ttlCF    bool
+	// shared is non-nil only when this iterator's native iterator was
+	// created against a snapshot shared with sibling iterators (e.g. the
+	// base/ttl pair from Iterate); it's released once all siblings close.
+	shared *sharedSnapshot
 }
 
 func (rdb *rocksDB) newIterCF(readOpts *grocksdb.ReadOptions, iterOpts storage.IterationOptions, cf *grocksdb.ColumnFamilyHandle) *iter {
@@ -740,7 +768,7 @@ func (rdb *rocksDB) newIterCF(readOpts *grocksdb.ReadOptions, iterOpts storage.I
 	} else {
 		it.SeekToFirst()
 	}
-	return &iter{iterOpts, it, cf == rdb.ttlCF}
+	return &iter{iterOpts: iterOpts, rdbIter: it, ttlCF: cf == rdb.ttlCF}
 }
 
 func (rdbIter *iter) verifyTTLValidity() bool {
@@ -799,13 +827,27 @@ func (rdbIter *iter) Err() error {
 
 func (rdbIter *iter) Close() error {
 	rdbIter.rdbIter.Close()
+	if rdbIter.shared != nil {
+		rdbIter.shared.release()
+	}
 	return nil
 }
 
+// Iterate binds a fresh RocksDB snapshot for every call so that concurrent
+// writes made after Iterate is invoked are never visible to the returned
+// iterator, matching the isolation the backup path (generateSST) already
+// relies on. baseIter and ttlIter both read through the same snapshot, so
+// the snapshot/read options are tracked via a shared refcount and released
+// exactly once, only after both iterators have been closed.
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	readOpts := rdb.opts.readOpts
+	snap := rdb.db.NewSnapshot()
+	readOpts := grocksdb.NewDefaultReadOptions()
+	readOpts.SetSnapshot(snap)
+
 	baseIter := rdb.newIterCF(readOpts, iterOpts, rdb.normalCF)
 	ttlIter := rdb.newIterCF(readOpts, iterOpts, rdb.ttlCF)
+	shared := newSharedSnapshot(rdb.db, snap, readOpts, 2)
+	baseIter.shared, ttlIter.shared = shared, shared
 	return iterators.Concat(baseIter, ttlIter)
 }
 
