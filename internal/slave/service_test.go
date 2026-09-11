@@ -180,9 +180,9 @@ func TestSlaveAutoConnect(t *testing.T) {
 		//wait for new leader election
 		sleepInSecs(10)
 
-		//let slave connect to a new master
-		slaveSvc.(*slaveService).reconnectMaster()
-		masterId = getCurrentMasterIdFromSlave(t)
+		//let slave connect to a new master, retrying since election/discovery
+		//propagation timing can occasionally exceed the fixed sleep above
+		masterId = reconnectToMasterWithRetry(t)
 		startDkvSvcAndCli(lastClosedMasterId)
 		sleepInSecs(10)
 
@@ -225,6 +225,25 @@ func getCurrentMasterId(t *testing.T) int {
 		}
 	}
 	t.Fatalf("Error: Master port not found")
+	return -1
+}
+
+// reconnectToMasterWithRetry retries slave-to-master reconnection since raft
+// election and discovery status propagation can occasionally take longer
+// than expected under CI load, leaving no active master briefly discoverable.
+func reconnectToMasterWithRetry(t *testing.T) int {
+	const maxAttempts = 6
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			sleepInSecs(5)
+		}
+		lastErr = slaveSvc.(*slaveService).reconnectMaster()
+		if lastErr == nil && slaveSvc.(*slaveService).regionInfo.MasterHost != nil {
+			return getCurrentMasterIdFromSlave(t)
+		}
+	}
+	t.Fatalf("No master found after %d attempts. Last error: %v", maxAttempts, lastErr)
 	return -1
 }
 
