@@ -19,3 +19,13 @@ func UnixNow() uint64 {
 func InThePast(epoch uint64) bool {
 	return epoch > 0 && epoch < UnixNow()
 }
+
+// GetTimeAgo returns time difference between current and provided unix time
+func GetTimeAgo(epoch uint64) uint64 {
+	return UnixNow() - epoch
+}
+
+// GetUnixTimeFromNow add delta (in seconds) to current time and return new unix time
+func GetUnixTimeFromNow(delta uint64) uint64 {
+	return UnixNow() + delta
+}

@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strconv"
@@ -15,14 +15,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	badger_pb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/ristretto/v2/z"
+
+	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/dgraph-io/badger/v4"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	ini "gopkg.in/ini.v1"
+	"gopkg.in/ini.v1"
 )
 
 // DB interface represents the capabilities exposed
@@ -37,6 +41,7 @@ type DB interface {
 type badgerDB struct {
 	db   *badger.DB
 	opts *bdgrOpts
+	stat *storage.Stat
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
@@ -44,9 +49,11 @@ type badgerDB struct {
 }
 
 type bdgrOpts struct {
-	opts     badger.Options
-	lgr      *zap.Logger
-	statsCli stats.Client
+	opts         badger.Options
+	lgr          *zap.Logger
+	statsCli     stats.Client
+	sstDirectory string
+	promRegistry prometheus.Registerer
 }
 
 // DBOption is used to configure the Badger
@@ -74,6 +81,17 @@ func WithStats(statsCli stats.Client) DBOption {
 	}
 }
 
+// WithPromStats is used to inject a prometheus metrics instance
+func WithPromStats(registry prometheus.Registerer) DBOption {
+	return func(opts *bdgrOpts) {
+		if registry != nil {
+			opts.promRegistry = registry
+		} else {
+			opts.promRegistry = stats.NewPromethousNoopRegistry()
+		}
+	}
+}
+
 // WithSyncWrites configures Badger to ensure every
 // write is flushed to disk before acking back.
 func WithSyncWrites() DBOption {
@@ -87,25 +105,6 @@ func WithSyncWrites() DBOption {
 func WithoutSyncWrites() DBOption {
 	return func(opts *bdgrOpts) {
 		opts.opts = opts.opts.WithSyncWrites(false)
-	}
-}
-
-// WithKeepL0InMemory configures Badger to place
-// the L0 SSTable in memory for better write performance.
-// However, replaying the value log during startup
-// can take longer with this option set. This is
-// enabled by default in DKV.
-func WithKeepL0InMemory() DBOption {
-	return func(opts *bdgrOpts) {
-		opts.opts = opts.opts.WithKeepL0InMemory(true)
-	}
-}
-
-// WithoutKeepL0InMemory configures Badger to prevent
-// placing L0 SSTable in memory.
-func WithoutKeepL0InMemory() DBOption {
-	return func(opts *bdgrOpts) {
-		opts.opts = opts.opts.WithKeepL0InMemory(false)
 	}
 }
 
@@ -142,6 +141,14 @@ func WithDBDir(dir string) DBOption {
 	}
 }
 
+// WithSSTDir configures the directory to be used
+// for SST Operation on Badger.
+func WithSSTDir(sstDir string) DBOption {
+	return func(opts *bdgrOpts) {
+		opts.sstDirectory = sstDir
+	}
+}
+
 // WithInMemory sets Badger storage to operate entirely
 // in memory. No files are created on disk whatsoever.
 func WithInMemory() DBOption {
@@ -150,14 +157,22 @@ func WithInMemory() DBOption {
 	}
 }
 
+// WithMemTableSize sets Badger storage to use the desired mem table size.
+func WithMemTableSize(size int64) DBOption {
+	return func(opts *bdgrOpts) {
+		opts.opts = opts.opts.WithMemTableSize(size)
+	}
+}
+
 // OpenDB initializes a new instance of BadgerDB with the specified
 // options.
 func OpenDB(dbOpts ...DBOption) (kvs DB, err error) {
 	noopLgr := zap.NewNop()
 	opts := &bdgrOpts{
-		opts:     badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}),
-		lgr:      noopLgr,
-		statsCli: stats.NewNoOpClient(),
+		opts:         badger.DefaultOptions("").WithLogger(&zapBadgerLogger{lgr: noopLgr}).WithMetricsEnabled(true),
+		lgr:          noopLgr,
+		statsCli:     stats.NewNoOpClient(),
+		promRegistry: stats.NewPromethousNoopRegistry(),
 	}
 	for _, dbOpt := range dbOpts {
 		dbOpt(opts)
@@ -170,53 +185,69 @@ func openStore(bdbOpts *bdgrOpts) (*badgerDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &badgerDB{db, bdbOpts, 0}, nil
+
+	bdb := badgerDB{db: db, opts: bdbOpts, globalMutation: 0}
+	bdb.metricsCollector()
+	return &bdb, nil
 }
 
 func (bdb *badgerDB) Close() error {
+	bdb.unRegisterMetricsCollector()
 	bdb.db.Close()
 	return nil
 }
 
-func (bdb *badgerDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
-	defer bdb.opts.statsCli.Timing("badger.putTTL.latency.ms", time.Now())
-	err := bdb.db.Update(func(txn *badger.Txn) error {
-		kv := badger.NewEntry(key, value)
-		if expireTS > 0 {
-			kv.ExpiresAt = expireTS
-		}
-		return txn.SetEntry(kv)
-	})
-	if err != nil {
-		bdb.opts.statsCli.Incr("badger.putTTL.errors", 1)
+func (bdb *badgerDB) Put(pairs ...*serverpb.KVPair) error {
+	/* todo stat computation */
+	metricsPrefix := "badger.put.multi"
+	metricsLabel := stats.MultiPut
+	if len(pairs) == 1 {
+		metricsPrefix = "badger.put.single"
+		metricsLabel = stats.Put
 	}
-	return err
-}
+	defer bdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(metricsLabel), time.Now())
 
-func (bdb *badgerDB) Put(key []byte, value []byte) error {
-	defer bdb.opts.statsCli.Timing("badger.put.latency.ms", time.Now())
-	err := bdb.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, value)
-	})
+	wb := bdb.db.NewWriteBatch()
+	defer wb.Cancel()
+	for _, kv := range pairs {
+		if kv == nil {
+			continue //skip nil entries
+		}
+		e := badger.NewEntry(kv.Key, kv.Value)
+		if kv.ExpireTS > 0 {
+			e.ExpiresAt = kv.ExpireTS
+		}
+		err := wb.SetEntry(e)
+		if err != nil {
+			bdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
+		}
+	}
+	err := wb.Flush()
 	if err != nil {
-		bdb.opts.statsCli.Incr("badger.put.errors", 1)
+		bdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
 	}
 	return err
 }
 
 func (bdb *badgerDB) Delete(key []byte) error {
 	defer bdb.opts.statsCli.Timing("badger.delete.latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.Delete), time.Now())
+
 	err := bdb.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete(key)
 	})
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.delete.errors", 1)
+		bdb.stat.ResponseError.WithLabelValues(stats.Delete).Inc()
 	}
 	return err
 }
 
 func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	defer bdb.opts.statsCli.Timing("badger.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.Get), time.Now())
+
 	var results []*serverpb.KVPair
 	err := bdb.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
@@ -235,33 +266,42 @@ func (bdb *badgerDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	})
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.get.errors", 1)
+		bdb.stat.ResponseError.WithLabelValues(stats.Get).Inc()
 	}
 	return results, err
 }
 
-func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
+func (bdb *badgerDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error) {
 	defer bdb.opts.statsCli.Timing("badger.cas.latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
+
 	casTrxn := bdb.db.NewTransaction(true)
 	defer casTrxn.Discard()
 
-	exist, err := casTrxn.Get(key)
+	exist, err := casTrxn.Get(request.Key)
 	switch {
 	case err == badger.ErrKeyNotFound:
-		if expect != nil && len(expect) > 0 {
+		if request.OldValue != nil && len(request.OldValue) > 0 {
 			return false, nil
 		}
 	case err != nil:
 		bdb.opts.statsCli.Incr("badger.cas.get.errors", 1)
+		bdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	default:
 		existVal, _ := exist.ValueCopy(nil)
-		if !bytes.Equal(existVal, expect) {
+		if !bytes.Equal(existVal, request.OldValue) {
 			return false, nil
 		}
 	}
-	err = casTrxn.Set(key, update)
+	e := badger.NewEntry(request.Key, request.NewValue)
+	if request.ExpireTS > 0 {
+		e.ExpiresAt = request.ExpireTS
+	}
+	err = casTrxn.SetEntry(e)
 	if err != nil {
 		bdb.opts.statsCli.Incr("badger.cas.set.errors", 1)
+		bdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	}
 	err = casTrxn.Commit()
@@ -271,14 +311,35 @@ func (bdb *badgerDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
-func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
+const (
+	badgerSSTPrefix = "badger-snapshot-"
+)
+
+func (bdb *badgerDB) GetSnapshot() (io.ReadCloser, error) {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.GetSnapShot), time.Now())
+
+	sstFile, err := storage.CreateTempFile(bdb.opts.sstDirectory, badgerSSTPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(sstFile.Name())
+
 	// TODO: Check if any options need to be set on stream
 	strm := bdb.db.NewStream()
-	snap := make(map[string][]byte)
-	strm.Send = func(list *badger_pb.KVList) error {
+	w := bufio.NewWriter(sstFile)
+
+	strm.Send = func(buf *z.Buffer) error {
+		list, err := badger.BufferToKVList(buf)
+		if err != nil {
+			return err
+		}
 		for _, kv := range list.Kv {
-			snap[string(kv.Key)] = kv.Value
+			entry := serverpb.PutRequest{Key: kv.Key, Value: kv.Value, ExpireTS: kv.ExpiresAt}
+			_, err := pbutil.WriteDelimited(w, &entry)
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -286,23 +347,33 @@ func (bdb *badgerDB) GetSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(snap)
-	return buf.Bytes(), err
+	w.Flush()
+	sstFile.Close()
+
+	return os.Open(sstFile.Name())
 }
 
-func (bdb *badgerDB) PutSnapshot(snap []byte) error {
+func (bdb *badgerDB) PutSnapshot(snap io.ReadCloser) error {
 	defer bdb.opts.statsCli.Timing("badger.snapshot.put.latency.ms", time.Now())
-	buf := bytes.NewBuffer(snap)
-	data := make(map[string][]byte)
-	if err := gob.NewDecoder(buf).Decode(&data); err != nil {
-		return err
-	}
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.PutSnapShot), time.Now())
 
 	wb := bdb.db.NewWriteBatch()
 	defer wb.Cancel()
-	for key, val := range data {
-		if err := wb.Set([]byte(key), val); err != nil {
+
+	entry := &serverpb.PutRequest{}
+	for {
+		entry.Reset()
+		if _, err := pbutil.ReadDelimited(snap, entry); err != nil {
+			if err == io.EOF {
+				break
+			}
+		}
+
+		kv := badger.NewEntry(entry.Key, entry.Value)
+		if entry.ExpireTS > 0 {
+			kv.ExpiresAt = entry.ExpireTS
+		}
+		if err := wb.SetEntry(kv); err != nil {
 			return err
 		}
 	}
@@ -443,6 +514,8 @@ func (bdb *badgerDB) GetLatestAppliedChangeNumber() (uint64, error) {
 
 func (bdb *badgerDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer bdb.opts.statsCli.Timing("badger.save.changes.latency.ms", time.Now())
+	defer stats.MeasureLatency(bdb.stat.RequestLatency.WithLabelValues(stats.SaveChange), time.Now())
+
 	var appldChngNum uint64
 	var lastErr error
 
@@ -540,7 +613,7 @@ func (bdbIter *iter) HasNext() bool {
 	return bdbIter.it.Valid()
 }
 
-func (bdbIter *iter) Next() ([]byte, []byte) {
+func (bdbIter *iter) Next() *serverpb.KVPair {
 	defer bdbIter.it.Next()
 	item := bdbIter.it.Item()
 	key := item.KeyCopy(nil)
@@ -548,7 +621,7 @@ func (bdbIter *iter) Next() ([]byte, []byte) {
 	if err != nil {
 		bdbIter.iterErr = err
 	}
-	return key, val
+	return &serverpb.KVPair{Key: key, Value: val, ExpireTS: item.ExpiresAt()}
 }
 
 func (bdbIter *iter) Err() error {

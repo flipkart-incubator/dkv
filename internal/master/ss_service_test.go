@@ -2,6 +2,7 @@ package master
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
@@ -10,15 +11,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/opts"
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/internal/storage/badger"
 	"github.com/flipkart-incubator/dkv/internal/storage/rocksdb"
-	"github.com/flipkart-incubator/dkv/pkg/ctl"
-	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+	"github.com/flipkart-incubator/dkv/pkg/health"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	"github.com/flipkart-incubator/dkv/pkg/ctl"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
+
+var (
+	dkvCli     *ctl.DKVClient
+	dkvSvc     DKVService
+	grpcSrvr   *grpc.Server
+	lgr, _     = zap.NewDevelopment()
+	serverOpts = &opts.ServerOpts{
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval,
+		StatsCli:                  stats.NewNoOpClient(),
+		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
+		Logger:                    lgr,
+	}
+)
+
+type HealthCheckClient struct {
+	cliConn        *grpc.ClientConn
+	healthCheckCli health.HealthClient
+}
 
 const (
 	dbFolder   = "/tmp/dkv_test_db"
@@ -29,17 +51,11 @@ const (
 	// engine = "badger"
 )
 
-var (
-	dkvCli   *ctl.DKVClient
-	dkvSvc   DKVService
-	grpcSrvr *grpc.Server
-)
-
 func TestStandaloneService(t *testing.T) {
 	go serveStandaloneDKV()
 	sleepInSecs(3)
 	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
-	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, ""); err != nil {
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
 		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
 	} else {
 		dkvCli = client
@@ -50,13 +66,40 @@ func TestStandaloneService(t *testing.T) {
 		t.Run("testPutTTLAndGet", testPutTTLAndGet)
 		t.Run("testAtomicKeyCreation", testAtomicKeyCreation)
 		t.Run("testAtomicIncrDecr", testAtomicIncrDecr)
+		t.Run("testAtomicIncrDecrWithTTL", testAtomicIncrDecrWithTTL)
 		t.Run("testDelete", testDelete)
 		t.Run("testMultiGet", testMultiGet)
 		t.Run("testIteration", testIteration)
 		t.Run("testMissingGet", testMissingGet)
 		t.Run("testGetChanges", testGetChanges)
 		t.Run("testBackupRestore", testBackupRestore)
+		t.Run("testStandaloneHealthCheckUnary", testStandaloneHealthCheckUnary)
 	}
+}
+
+// test for streaming health check. Caution: this test will take a long time to run ~90s as it tests
+// the watch API 10 times and watch internally responds every 10 seconds.
+func TestStreamingHealthCheck(t *testing.T) {
+	go serveStandaloneDKV()
+	sleepInSecs(3)
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
+	if client, err := ctl.NewInSecureDKVClient(dkvSvcAddr, "", ctl.DefaultConnectOpts); err != nil {
+		t.Fatalf("Unable to connect to DKV service at %s. Error: %v", dkvSvcAddr, err)
+	} else {
+		dkvCli = client
+		t.Run("testHealthCheckStreaming", testStandaloneHealthCheckStreaming)
+	}
+}
+
+func getHealthCheckClient(svcAddr string, options []grpc.DialOption) (*HealthCheckClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, svcAddr, options...)
+	if err != nil {
+		return nil, err
+	}
+	client := health.NewHealthClient(conn)
+	return &HealthCheckClient{cliConn: conn, healthCheckCli: client}, nil
 }
 
 func testPutAndGet(t *testing.T) {
@@ -108,7 +151,7 @@ func testAtomicKeyCreation(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			res, err := dkvCli.CompareAndSet(casKey, nil, casVal)
+			res, err := dkvCli.CompareAndSet(casKey, nil, casVal, 0)
 			freqs.Store(id, res && err == nil)
 		}(i)
 	}
@@ -161,7 +204,56 @@ func testAtomicIncrDecr(t *testing.T) {
 				exist, _ := dkvCli.Get(rc, casKey)
 				expect := exist.Value
 				update := []byte{expect[0] + delta}
-				res, err := dkvCli.CompareAndSet(casKey, expect, update)
+				res, err := dkvCli.CompareAndSet(casKey, expect, update, 0)
+				if res && err == nil {
+					break
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	actual, _ := dkvCli.Get(rc, casKey)
+	actVal := actual.Value
+	// since even and odd increments cancel out completely
+	// we should expect `actVal` to be 0 (i.e., `casVal`)
+	if !bytes.Equal(casVal, actVal) {
+		t.Errorf("Mismatch in values for key: %s. Expected: %d, Actual: %d", string(casKey), casVal[0], actVal[0])
+	}
+}
+
+func testAtomicIncrDecrWithTTL(t *testing.T) {
+	var (
+		wg             sync.WaitGroup
+		numThrs        = 10
+		casKey, casVal = []byte("AtomicCASKeyTTL"), []byte{0}
+		ttlTime        = uint64(time.Now().Add(5 * time.Minute).Unix())
+	)
+	if err := dkvCli.PutTTL(casKey, casVal, ttlTime); err != nil {
+		t.Fatalf("Unable to Put key, %s. Error: %v", casKey, err)
+	}
+
+	// even threads increment, odd threads decrement
+	// a given key
+	for i := 0; i < numThrs; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			delta := byte(0)
+			if (id & 1) == 1 { // odd
+				delta--
+			} else {
+				delta++
+			}
+			for {
+				exist, err := dkvCli.Get(rc, casKey)
+				if err != nil {
+					t.Errorf("failed with error %s", err.Error())
+					break
+				}
+				expect := exist.Value
+				update := []byte{expect[0] + delta}
+				res, err := dkvCli.CompareAndSet(casKey, expect, update, ttlTime)
 				if res && err == nil {
 					break
 				}
@@ -212,8 +304,6 @@ func testIteration(t *testing.T) {
 	if ch, err := dkvCli.Iterate(nil, nil); err != nil {
 		t.Fatal(err)
 	} else {
-		// insert after iterator creation
-		putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 		for kvp := range ch {
 			k, v := string(kvp.Key), string(kvp.Val)
 			count++
@@ -229,6 +319,9 @@ func testIteration(t *testing.T) {
 			}
 		}
 	}
+	// insert after iteration completes: the store gives no snapshot isolation,
+	// so inserting concurrently with iteration is inherently racy.
+	putKeys(t, numNewKeys, newKeyPrefix, newValPrefix)
 
 	if count == 0 {
 		t.Error("Iterate didn't return any rows")
@@ -314,20 +407,20 @@ func testBackupRestore(t *testing.T) {
 	}
 }
 
-func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
-	if err := exec.Command("rm", "-rf", dbFolder).Run(); err != nil {
+func newKVStore(dir string) (storage.KVStore, storage.ChangePropagator, storage.Backupable) {
+	if err := exec.Command("rm", "-rf", dir).Run(); err != nil {
 		panic(err)
 	}
 	switch engine {
 	case "rocksdb":
-		rocksDb, err := rocksdb.OpenDB(dbFolder,
+		rocksDb, err := rocksdb.OpenDB(dir,
 			rocksdb.WithSyncWrites(), rocksdb.WithCacheSize(cacheSize))
 		if err != nil {
 			panic(err)
 		}
 		return rocksDb, rocksDb, rocksDb
 	case "badger":
-		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dbFolder))
+		bdgrDb, err := badger.OpenDB(badger.WithSyncWrites(), badger.WithDBDir(dir))
 		if err != nil {
 			panic(err)
 		}
@@ -338,13 +431,13 @@ func newKVStore() (storage.KVStore, storage.ChangePropagator, storage.Backupable
 }
 
 func serveStandaloneDKV() {
-	kvs, cp, ba := newKVStore()
-	lgr, _ := zap.NewDevelopment()
-	dkvSvc = NewStandaloneService(kvs, cp, ba, lgr, stats.NewNoOpClient())
+	kvs, cp, ba := newKVStore(dbFolder)
+	dkvSvc = NewStandaloneService(kvs, cp, ba, &serverpb.RegionInfo{}, serverOpts)
 	grpcSrvr = grpc.NewServer()
 	serverpb.RegisterDKVServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVReplicationServer(grpcSrvr, dkvSvc)
 	serverpb.RegisterDKVBackupRestoreServer(grpcSrvr, dkvSvc)
+	health.RegisterHealthServer(grpcSrvr, dkvSvc)
 	listenAndServe(grpcSrvr, dkvSvcPort)
 }
 
@@ -385,6 +478,61 @@ func getKeys(t *testing.T, numKeys int, keyPrefix, valPrefix string) {
 			t.Errorf("GET mismatch. Key: %s, Expected Value: %s, Actual Value: %s", key, expectedValue, res.Value)
 		}
 	}
+}
+
+// standalone server should always be running in leader mode
+func testStandaloneHealthCheckUnary(t *testing.T) {
+	healthCheckResponse, err := dkvSvc.Check(nil, nil)
+	if err != nil {
+		t.Errorf("Error occurred while running health check: %v", err)
+	}
+	if healthCheckResponse.Status != health.HealthCheckResponse_SERVING {
+		t.Errorf("Error in health check response. Expected Value: %s Actual Value: %s", health.HealthCheckResponse_SERVING.String(), healthCheckResponse.Status.String())
+	}
+}
+
+func testStandaloneHealthCheckStreaming(t *testing.T) {
+	dkvSvcAddr := fmt.Sprintf("%s:%d", dkvSvcHost, dkvSvcPort)
+	var options []grpc.DialOption
+	options = append(options, grpc.WithInsecure())
+	options = append(options, grpc.WithBlock())
+	healthCheckClient, err := getHealthCheckClient(dkvSvcAddr, options)
+	defer healthCheckClient.cliConn.Close()
+	if err != nil {
+		t.Fatalf("Error while creating dkvDiscoveryNodeClient: %v", err)
+	}
+
+	watch, err := healthCheckClient.healthCheckCli.Watch(context.Background(), &health.HealthCheckRequest{})
+
+	if err != nil {
+		t.Errorf("Error received while watching. Error %v", err)
+	}
+	iterations := 10
+	for i := 0; i < iterations; i++ {
+		//at last close the service
+		if i == iterations-1 {
+			dkvCli.Close()
+			dkvSvc.Close()
+		}
+		recv, err := watch.Recv()
+		if err != nil {
+			t.Errorf("Recevied error response from the server during health check: %v", err)
+		}
+		if recv == nil {
+			t.Errorf("Recevied null message from the server during health check")
+		}
+
+		//at last iteration i is closed
+		if i == iterations-1 {
+			if recv.GetStatus() != health.HealthCheckResponse_NOT_SERVING {
+				t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", health.HealthCheckResponse_NOT_SERVING.String(), recv.GetStatus().String())
+			}
+		} else if recv.GetStatus() != health.HealthCheckResponse_SERVING {
+			t.Errorf("Received wrong health check resposne from the server. Expected Value: %s Actual Value: %s", health.HealthCheckResponse_SERVING.String(), recv.GetStatus().String())
+		}
+	}
+	t.Logf("Stopping grpc server")
+	grpcSrvr.Stop()
 }
 
 func sleepInSecs(duration int) {

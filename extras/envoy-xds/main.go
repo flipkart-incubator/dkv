@@ -4,10 +4,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
-	"github.com/flipkart-incubator/dkv/extras/envoy-xds/pkg"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -16,20 +13,23 @@ import (
 	"syscall"
 	"time"
 
-	api "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	cluster "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	listener "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/v2"
-	xds "github.com/envoyproxy/go-control-plane/pkg/server/v2"
+	"github.com/flipkart-incubator/dkv/extras/envoy-xds/pkg"
+
+	cluster "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
+	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	endpoint "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
+	listener "github.com/envoyproxy/go-control-plane/envoy/service/listener/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	xds "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 var (
-	configPath   string
-	listenAddr   string
-	pollInterval time.Duration
+	configPath      string
+	listenAddr      string
+	pollInterval    time.Duration
+	discoveryClient *pkg.DiscoveryClient
 )
 
 func init() {
@@ -48,6 +48,7 @@ func main() {
 	defer grpcServer.Stop()
 	go grpcServer.Serve(lis)
 
+	discoveryClient = pkg.InitServiceDiscoveryClient(configPath)
 	tckr := time.NewTicker(pollInterval)
 	defer tckr.Stop()
 	go pollForConfigUpdates(tckr, snapshotCache)
@@ -57,39 +58,17 @@ func main() {
 }
 
 func pollForConfigUpdates(tckr *time.Ticker, snapshotCache cache.SnapshotCache) {
-	lastModTime := int64(0)
 	snapVersion := uint(1)
 	for range tckr.C {
-
-		fi, err := os.Stat(configPath)
+		envoyConfig, err := discoveryClient.GetEnvoyConfig()
 		if err != nil {
-			log.Panicf("Unable to stat given config file: %s. Error: %v", configPath, err)
-		}
-
-		if fi.IsDir() {
-			log.Panicf("Given config path: %s points to a directory. This must be a file.", configPath)
-		}
-
-		currModTime := fi.ModTime().Unix()
-		if currModTime <= lastModTime {
-			continue
-		}
-
-		config, err := ioutil.ReadFile(configPath)
-		if err != nil {
-			log.Panicf("Unable to read given config file: %s. Error: %v", configPath, err)
-		}
-
-		kvs := make(map[string]interface{})
-		err = json.Unmarshal(config, &kvs)
-		if err != nil {
-			log.Panicf("Unable to convert the contents of config file: %s into JSON. Error: %v", configPath, err)
-		}
-
-		if err = pkg.EnvoyDKVConfig(kvs).ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
-			log.Panicf("Unable to compute and set snapshot. Error: %v", err)
+			log.Printf("Unable to get cluster info: Error: %v \n", err)
 		} else {
-			snapVersion++
+			if err = envoyConfig.ComputeAndSetSnapshot(snapVersion, snapshotCache); err != nil {
+				log.Printf("Unable to compute and set snapshot. Error: %v \n", err)
+			} else {
+				snapVersion++
+			}
 		}
 	}
 }
@@ -111,7 +90,7 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 	grpcServer := grpc.NewServer()
 	reflection.Register(grpcServer)
 	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, server)
-	api.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
+	endpoint.RegisterEndpointDiscoveryServiceServer(grpcServer, server)
 	listener.RegisterListenerDiscoveryServiceServer(grpcServer, server)
 	cluster.RegisterClusterDiscoveryServiceServer(grpcServer, server)
 	lis, err := net.Listen("tcp", listenAddr)
@@ -119,7 +98,7 @@ func setupXDSService(snapshotCache cache.SnapshotCache) (*grpc.Server, net.Liste
 		log.Panicf("Unable to create listener for xDS GRPC service. Error: %v", err)
 		return nil, nil
 	}
-	log.Printf("Successfully setup the xDS GRPC service at %s...", listenAddr)
+	log.Printf("Successfully setup the xDS GRPC service at %s... \n", listenAddr)
 	return grpcServer, lis
 }
 

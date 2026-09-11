@@ -10,6 +10,7 @@ import site.ycsb.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.String.format;
@@ -24,7 +25,7 @@ public class DKVClient extends DB {
   static final String ENABLE_LINEARIZED_READS_PROPERTY = "enable.linearized.reads";
   private static final String ENABLE_LINEARIZED_READS_DEFAULT = "false";
 
-  private ShardedDKVClient dkvClient;
+  private static final AtomicReference<org.dkv.client.DKVClient> CLIENT_REF = new AtomicReference<>();
   private Api.ReadConsistency readConsistency;
 
   @Override
@@ -38,7 +39,8 @@ public class DKVClient extends DB {
 
     Reader confReader = loadConfigReader(dkvConfigFile);
     ShardConfiguration shardConf = new Gson().fromJson(confReader, ShardConfiguration.class);
-    dkvClient = new ShardedDKVClient(new KeyHashBasedShardProvider(shardConf));
+    KeyHashBasedShardProvider shardProvider = new KeyHashBasedShardProvider(shardConf);
+    CLIENT_REF.compareAndSet(null, new ShardedDKVClient(shardProvider));
 
     String linearizedReads = props.getProperty(ENABLE_LINEARIZED_READS_PROPERTY, ENABLE_LINEARIZED_READS_DEFAULT);
     boolean enableLinearizedReads = parseBoolean(linearizedReads);
@@ -67,7 +69,7 @@ public class DKVClient extends DB {
   @Override
   public Status read(String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     try {
-      byte[] value = dkvClient.get(readConsistency, toDKVKey(table, key));
+      byte[] value = CLIENT_REF.get().get(readConsistency, toDKVKey(table, key));
       Map<String, ByteIterator> resultValues = fromDKVValue(value);
       if (fields == null || fields.isEmpty()) {
         result.putAll(resultValues);
@@ -87,7 +89,7 @@ public class DKVClient extends DB {
                      Vector<HashMap<String, ByteIterator>> result) {
     try {
       byte[] startKeyBytes = toDKVKey(table, startkey);
-      Iterator<DKVEntry> itrtr = dkvClient.iterate(startKeyBytes);
+      Iterator<DKVEntry> itrtr = CLIENT_REF.get().iterate(startKeyBytes);
       while (recordcount > 0 && itrtr.hasNext()) {
         DKVEntry entry = itrtr.next();
         entry.checkStatus();
@@ -113,7 +115,7 @@ public class DKVClient extends DB {
   @Override
   public Status update(String table, String key, Map<String, ByteIterator> values) {
     try {
-      dkvClient.put(toDKVKey(table, key), toDKVValue(values));
+      CLIENT_REF.get().put(toDKVKey(table, key), toDKVValue(values));
       return Status.OK;
     } catch (Exception e) {
       return handleErrStatus(e);
@@ -127,12 +129,22 @@ public class DKVClient extends DB {
 
   @Override
   public Status delete(String table, String key) {
-    throw new UnsupportedOperationException("Delete not implemented in DKV");
+    try {
+      CLIENT_REF.get().delete(toDKVKey(table, key));
+      return Status.OK;
+    } catch (Exception e) {
+      return handleErrStatus(e);
+    }
   }
 
   @Override
   public void cleanup() throws DBException {
-    dkvClient.close();
+    /*
+    Given that this method is invoked on the ClientThread which has the shared
+    DKVClient instance, we can not simply close() this instance, given that
+    other threads might still be using it.
+     */
+    //    CLIENT_REF.get().close();
     super.cleanup();
   }
 

@@ -2,11 +2,13 @@ package org.dkv.client;
 
 import com.github.benmanes.caffeine.cache.*;
 import com.google.common.collect.Iterables;
+import com.google.protobuf.ByteString;
 import dkv.serverpb.Api;
 
 import java.io.Closeable;
 import java.util.*;
 
+import static com.google.protobuf.ByteString.copyFrom;
 import static java.util.Collections.addAll;
 import static org.dkv.client.DKVNodeType.*;
 import static org.dkv.client.Utils.checkf;
@@ -32,10 +34,10 @@ public class ShardedDKVClient implements DKVClient {
     private final ShardProvider shardProvider;
     private final DKVClientPool pool;
 
-    public ShardedDKVClient(ShardProvider shardProvider) {
+    public ShardedDKVClient(ShardProvider shardProvider, ConnectionOptions options) {
         checkf(shardProvider != null, IllegalArgumentException.class, "Shard provider must be provided");
         this.shardProvider = shardProvider;
-        this.pool = new DKVClientPool(POOL_SIZE);
+        this.pool = new DKVClientPool(POOL_SIZE, options);
     }
 
     @Override
@@ -66,6 +68,15 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
+    public boolean compareAndSet(byte[] key, byte[] expect, byte[] update, long expiryTS) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.compareAndSet(key, expect, update, expiryTS);
+    }
+
+    @Override
     public long incrementAndGet(byte[] key) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
@@ -93,6 +104,15 @@ public class ShardedDKVClient implements DKVClient {
     }
 
     @Override
+    public long addAndGet(byte[] key, long delta, long expiryTS) {
+        DKVShard dkvShard = shardProvider.provideShard(key);
+        checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key");
+        //noinspection ConstantConditions
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        return dkvClient.addAndGet(key, delta, expiryTS);
+    }
+
+    @Override
     public void put(String key, String value, long expiryTS) {
         DKVShard dkvShard = shardProvider.provideShard(key);
         checkf(dkvShard != null, IllegalArgumentException.class, "unable to compute shard for the given key: %s", key);
@@ -108,6 +128,30 @@ public class ShardedDKVClient implements DKVClient {
         //noinspection ConstantConditions
         DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
         dkvClient.put(key, value, expiryTS);
+    }
+
+    @Override
+    public void put(KV.Strings... items) {
+        checkf(items != null && items.length > 0, IllegalArgumentException.class, "must provide at least one kv for multi put");
+        String[] keys = Arrays.stream(items).map(KV::getKey).toArray(String[]::new);
+        Map<DKVShard, List<String>> dkvShards = shardProvider.provideShards(keys);
+        checkf(dkvShards != null && !dkvShards.isEmpty(), IllegalArgumentException.class, "unable to compute shard(s) for the given keys");
+        checkf(dkvShards != null && dkvShards.size() == 1, UnsupportedOperationException.class,"DKV does not yet support cross shard multi put" );
+        DKVShard dkvShard = Iterables.get(dkvShards.keySet(), 0);
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.put(items);
+    }
+
+    @Override
+    public void put(KV.Bytes... items) {
+        checkf(items != null && items.length > 0, IllegalArgumentException.class, "must provide at least one kv for multi put");
+        byte[][] keys = Arrays.stream(items).map(KV::getKey).toArray(byte[][]::new);
+        Map<DKVShard, List<byte[]>> dkvShards = shardProvider.provideShards(keys);
+        checkf(dkvShards != null && !dkvShards.isEmpty(), IllegalArgumentException.class, "unable to compute shard(s) for the given keys");
+        checkf(dkvShards != null && dkvShards.size() == 1, UnsupportedOperationException.class,"DKV does not yet support cross shard multi put" );
+        DKVShard dkvShard = Iterables.get(dkvShards.keySet(), 0);
+        DKVClient dkvClient = pool.getDKVClient(dkvShard, MASTER, UNKNOWN);
+        dkvClient.put(items);
     }
 
     @Override
@@ -271,8 +315,11 @@ public class ShardedDKVClient implements DKVClient {
 
         private final LoadingCache<Key, SimpleDKVClient> internalPool;
 
-        private DKVClientPool(long poolSize) {
+        private final ConnectionOptions connectionOptions;
+
+        private DKVClientPool(long poolSize, ConnectionOptions options) {
             internalPool = Caffeine.newBuilder().maximumSize(poolSize).removalListener(this).build(this);
+            connectionOptions = options;
         }
 
         SimpleDKVClient getDKVClient(DKVShard dkvShard, DKVNodeType... nodeTypes) {
@@ -295,7 +342,8 @@ public class ShardedDKVClient implements DKVClient {
 
         @Override
         public SimpleDKVClient load(ShardedDKVClient.DKVClientPool.Key key) {
-            return new SimpleDKVClient(key.dkvNode.getHost(), key.dkvNode.getPort(), key.authority, key.shardName);
+            connectionOptions.setMetricPrefix(key.shardName);
+            return new SimpleDKVClient(key.dkvNode.getAddress(), key.authority, connectionOptions);
         }
 
         @Override

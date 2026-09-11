@@ -1,9 +1,9 @@
 
 GOOS ?= darwin
-GOARCH ?= amd64
+GOARCH ?= 
 CGO_ENABLED ?= 1
-CGO_CFLAGS ?=
-CGO_LDFLAGS ?= "-lrocksdb -lm -lzstd -lz -lbz2 -lsnappy"
+CGO_CFLAGS ?= "$(CFLAGS)"
+CGO_LDFLAGS ?= "$(LDFLAGS) -lrocksdb -lm -lzstd -lz -lbz2 -lsnappy -llz4"
 VERSION ?=
 BIN_EXT ?=
 JAVA_CLI_PATH = ./clients/java
@@ -17,17 +17,15 @@ PROTOBUFS = $(shell find . -name '*.proto' -print0 | xargs -0 -n1 dirname | sort
 
 TARGET_PACKAGES = $(shell find . -name 'main.go' -print0 | xargs -0 -n1 dirname | sort | uniq | grep -v /vendor/ | grep -v /extras/)
 
-PROTO_VER = $(shell $(GO) list -m all | grep "github.com/golang/protobuf" | awk '{print $$2}')
-
 ifeq ($(VERSION),)
   VERSION = latest
 endif
 
 BUILD_TAGS = 'osusergo netgo static_build'
-LDFLAGS = -ldflags '-linkmode external -extldflags "-static" -X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
+ALDFLAGS = -ldflags '-linkmode external -extldflags "-static" -X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
 
 ifeq ($(GOOS),darwin)
-	LDFLAGS = -ldflags '-X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
+	ALDFLAGS = -ldflags '-X "github.com/flipkart-incubator/dkv/version.Version=$(VERSION)"'
 	BUILD_TAGS = 'osusergo netgo'
 endif
 
@@ -40,9 +38,8 @@ endif
 
 .PHONY: protoc
 protoc:
-	@echo ">> generating proto code using Proto version $(PROTO_VER)"
-	@$(GO) get -u github.com/golang/protobuf/protoc-gen-go@$(PROTO_VER)
-	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ --go_out=Mpkg/serverpb/api.proto=github.com/flipkart-incubator/dkv/pkg/serverpb,plugins=grpc,paths=source_relative:. $$proto_dir/*.proto || exit 1; done
+	@echo ">> generating proto code"
+	@for proto_dir in $(PROTOBUFS); do echo $$proto_dir; protoc --proto_path=./ -I`go list -f '{{ .Dir }}' -m github.com/flipkart-incubator/nexus`/ --go_out=paths=source_relative:. --go-grpc_out=require_unimplemented_servers=false,paths=source_relative:.  $$proto_dir/*.proto || exit 1; done
 
 .PHONY: format
 format:
@@ -58,7 +55,8 @@ test:
 	@echo "   CGO_CFLAGS  = $(CGO_CFLAGS)"
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
-	@$(GO) test -v --count=1 -tags="$(BUILD_TAGS)" $(LDFLAGS) $(PACKAGES)
+	@echo "   ADD_LDFLAGS = $(ALDFLAGS)"
+	@$(GO) test -v --count=1 -coverprofile=coverage.out -tags="$(BUILD_TAGS)" $(ALDFLAGS) $(PACKAGES)
 
 .PHONY: bench
 bench:
@@ -69,7 +67,8 @@ bench:
 	@echo "   CGO_CFLAGS  = $(CGO_CFLAGS)"
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
-	@$(GO) test -v --run=xxx --bench=. --count=1 -tags="$(BUILD_TAGS)" $(LDFLAGS) $(PACKAGES)
+	@echo "   ADD_LDFLAGS = $(ALDFLAGS)"
+	@$(GO) test -v --run=xxx --bench=. --count=1 -tags="$(BUILD_TAGS)" $(ALDFLAGS) $(PACKAGES)
 
 .PHONY: build
 build:
@@ -81,7 +80,8 @@ build:
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   VERSION     = $(VERSION)"
-	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) build -tags="$(BUILD_TAGS)" $(LDFLAGS) -o ./bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
+	@echo "   ADD_LDFLAGS = $(ALDFLAGS)"
+	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) build -tags="$(BUILD_TAGS)" $(ALDFLAGS) -o ./bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
 
 .PHONY: install
 install:
@@ -93,7 +93,8 @@ install:
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   VERSION     = $(VERSION)"
-	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) install -tags="$(BUILD_TAGS)" $(LDFLAGS) $$target_pkg || exit 1; done
+	@echo "   ADD_LDFLAGS = $(ALDFLAGS)"
+	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) install -tags="$(BUILD_TAGS)" $(ALDFLAGS) $$target_pkg || exit 1; done
 
 .PHONY: dist
 dist:
@@ -105,8 +106,9 @@ dist:
 	@echo "   CGO_LDFLAGS = $(CGO_LDFLAGS)"
 	@echo "   BUILD_TAGS  = $(BUILD_TAGS)"
 	@echo "   VERSION     = $(VERSION)"
+	@echo "   ADD_LDFLAGS = $(ALDFLAGS)"
 	mkdir -p ./dist/$(GOOS)-$(GOARCH)/bin
-	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) build -tags="$(BUILD_TAGS)" $(LDFLAGS) -o ./dist/$(GOOS)-$(GOARCH)/bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
+	@for target_pkg in $(TARGET_PACKAGES); do echo $$target_pkg; $(GO) build -tags="$(BUILD_TAGS)" $(ALDFLAGS) -o ./dist/$(GOOS)-$(GOARCH)/bin/`basename $$target_pkg`$(BIN_EXT) $$target_pkg || exit 1; done
 	(cd ./dist/$(GOOS)-$(GOARCH); tar zcfv ../dkv-${VERSION}.$(GOOS)-$(GOARCH).tar.gz .)
 
 .PHONY: git-tag

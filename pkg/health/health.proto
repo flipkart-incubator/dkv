@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package grpc.health.v1;
+option go_package = "github.com/flipkart-incubator/dkv/pkg/health";
+
+// This hosts the grpc methods for checking the health of various different
+// kinds of dkv servers i.e. slave, raft leader, raft follower
+service Health {
+  // Check offers the standard GRPC health checks on the underlying implementation
+  // of the key value store.
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Watch offers standard GRPC streaming health check on the underlying implementation
+  // of the key value store
+  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+
+
+message HealthCheckRequest {
+
+  // Specifies the name of the service whose health the client needs to check
+  optional string service = 1;
+}
+
+message HealthCheckResponse {
+
+  enum ServingStatus {
+
+    // The status of the service is unknown. This state is often seen at the startup of the service.
+    UNKNOWN = 0;
+
+    // The service is up and ready to serve requests
+    SERVING = 1;
+
+    // The service is unable to serve any requests at the time.
+    NOT_SERVING = 2;
+
+    // The service name passed by the client is not known
+    // Used only by the Watch method.
+    SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+}
+

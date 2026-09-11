@@ -79,7 +79,7 @@ func statsdFlushInterval(s *bufio.Scanner, w *bufio.Writer) time.Duration {
 	return 10 * time.Millisecond
 }
 
-func connectToStatsD(t *testing.T, statsdAdminURL string) (net.Conn , error){
+func connectToStatsD(t *testing.T, statsdAdminURL string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", statsdAdminURL)
 	if err != nil {
 		t.Logf("Unable to connect to StatsD admin endpoint: %s.", statsdAdminURL)
@@ -96,7 +96,7 @@ func sendCommand(cmd string, w *bufio.Writer) {
 func logOutput(t *testing.T, scanner *bufio.Scanner) {
 	for scanner.Scan() {
 		msg := scanner.Text()
-		t.Logf(msg)
+		t.Log(msg)
 		if msg == "END" {
 			break
 		}

@@ -7,6 +7,9 @@ import dkv.serverpb.Api;
 import dkv.serverpb.DKVGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption;
+import lombok.NonNull;
 import org.dkv.client.metrics.MetricsInterceptor;
 
 import java.util.Iterator;
@@ -31,12 +34,15 @@ import static org.dkv.client.Utils.*;
  * @see DKVException
  */
 public class SimpleDKVClient implements DKVClient {
-    private static final String DEF_METRIC_PREFIX = "dkv-client-java";
     private static final MetricRegistry metrics = new MetricRegistry();
 
     private final DKVGrpc.DKVBlockingStub blockingStub;
     private final ManagedChannel channel;
     private final JmxReporter reporter;
+    
+    private final ConnectionOptions connectionOptions;
+
+    private static final int DEFAULT_BUF_SIZE = 1024*1024;
 
     /**
      * Creates an instance with the underlying GRPC conduit to the DKV database
@@ -51,8 +57,9 @@ public class SimpleDKVClient implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
+    @Deprecated
     public SimpleDKVClient(String dkvHost, int dkvPort, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvHost, dkvPort), metricPrefix);
+        this(getManagedChannelBuilder(dkvHost, dkvPort), ConnectionOptions.builder().metricPrefix(metricPrefix).build());
     }
 
     /**
@@ -75,8 +82,9 @@ public class SimpleDKVClient implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
+    @Deprecated
     public SimpleDKVClient(String dkvHost, int dkvPort, String authority, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvHost, dkvPort, authority), metricPrefix);
+        this(getManagedChannelBuilder(dkvHost, dkvPort, authority), ConnectionOptions.builder().metricPrefix(metricPrefix).build());
     }
 
     /**
@@ -91,8 +99,9 @@ public class SimpleDKVClient implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
+    @Deprecated
     public SimpleDKVClient(String dkvTarget, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvTarget), metricPrefix);
+        this(getManagedChannelBuilder(dkvTarget), ConnectionOptions.builder().metricPrefix(metricPrefix).build());
     }
 
     /**
@@ -114,9 +123,51 @@ public class SimpleDKVClient implements DKVClient {
      * is invalid
      * @throws RuntimeException in case of any connection failures
      */
+    @Deprecated
     public SimpleDKVClient(String dkvTarget, String authority, String metricPrefix) {
-        this(getManagedChannelBuilder(dkvTarget, authority), metricPrefix);
+        this(getManagedChannelBuilder(dkvTarget, authority), ConnectionOptions.builder().metricPrefix(metricPrefix).build());
     }
+
+    /**
+     * Creates an instance with the underlying GRPC conduit to the DKV database
+     * running on the specified <tt>dkvTarget</tt>. Currently
+     * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
+     * implementations will support additional options for securing these exchanges.
+     *
+     * @param dkvTarget location (in the form host:port) at which DKV database is running
+     * @param options ConnectionOptions for this client
+     * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>options</tt>
+     * is invalid
+     * @throws RuntimeException in case of any connection failures
+     */
+    public SimpleDKVClient(String dkvTarget,@NonNull ConnectionOptions options){
+        this(getManagedChannelBuilder(dkvTarget), options);
+    }
+
+
+    /**
+     * Creates an instance with the underlying GRPC conduit to the DKV database
+     * running on the specified <tt>dkvTarget</tt>. Currently
+     * all GRPC exchanges happen over an in-secure (non-TLS) based channel. Future
+     * implementations will support additional options for securing these exchanges.
+     *
+     * <p><tt>authority</tt> parameter can be used to send a user defined value inside
+     * the HTTP/2 authority psuedo header as defined by
+     * <a href="https://tools.ietf.org/html/rfc7540">RFC 7540</a>. A typical use case
+     * for setting this parameter is the virtual host based routing to upstream DKV
+     * clusters via an HTTP proxy such as NGINX or Envoy.
+     *
+     * @param dkvTarget location (in the form host:port) at which DKV database is running
+     * @param authority value to be sent inside the HTTP/2 authority header
+     * @param options ConnectionOptions for this client
+     * @throws IllegalArgumentException if the specified <tt>dkvHost</tt> or <tt>dkvPort</tt>
+     * is invalid
+     * @throws RuntimeException in case of any connection failures
+     */
+    public SimpleDKVClient(String dkvTarget,@NonNull String authority,@NonNull ConnectionOptions options){
+        this(getManagedChannelBuilder(dkvTarget, authority), options);
+    }
+
 
     @Override
     public void put(String key, String value) {
@@ -139,9 +190,55 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     @Override
+    public void put(KV.Strings... items) {
+        Api.MultiPutRequest.Builder multiPutReqBuilder = Api.MultiPutRequest.newBuilder();
+        for (KV.Strings kv : items){
+            Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
+            Api.PutRequest putReq = putReqBuilder
+                    .setKey(copyFromUtf8(kv.getKey()))
+                    .setValue(copyFromUtf8(kv.getValue()))
+                    .setExpireTS(kv.getExpiryTS())
+                    .build();
+            multiPutReqBuilder.addPutRequest(putReq);
+        }
+        Api.MultiPutRequest multiPutReq = multiPutReqBuilder.build();
+        Api.PutResponse response = blockingStub.withDeadlineAfter(connectionOptions.getWriteTimeout(), TimeUnit.MILLISECONDS).multiPut(multiPutReq);
+        Api.Status status = response.getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "MultiPut", new Object[]{items});
+        }
+    }
+
+    @Override
+    public void put(KV.Bytes... items) {
+        Api.MultiPutRequest.Builder multiPutReqBuilder = Api.MultiPutRequest.newBuilder();
+        for (KV.Bytes kv : items){
+            Api.PutRequest.Builder putReqBuilder = Api.PutRequest.newBuilder();
+            Api.PutRequest putReq = putReqBuilder
+                    .setKey(copyFrom(kv.getKey()))
+                    .setValue(copyFrom(kv.getValue()))
+                    .setExpireTS(kv.getExpiryTS())
+                    .build();
+            multiPutReqBuilder.addPutRequest(putReq);
+        }
+        Api.MultiPutRequest multiPutReq = multiPutReqBuilder.build();
+        Api.PutResponse response = blockingStub.withDeadlineAfter(connectionOptions.getWriteTimeout(), TimeUnit.MILLISECONDS).multiPut(multiPutReq);
+        Api.Status status = response.getStatus();
+        if (status.getCode() != 0) {
+            throw new DKVException(status, "MultiPut", new Object[]{items});
+        }
+    }
+
+    @Override
     public boolean compareAndSet(byte[] key, byte[] expect, byte[] update) {
         ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
-        return cas(copyFrom(key), expectByteStr, copyFrom(update));
+        return cas(copyFrom(key), expectByteStr, copyFrom(update), 0);
+    }
+
+    @Override
+    public boolean compareAndSet(byte[] key, byte[] expect, byte[] update, long expiryTS) {
+        ByteString expectByteStr = expect != null ? copyFrom(expect) : EMPTY;
+        return cas(copyFrom(key), expectByteStr, copyFrom(update), expiryTS);
     }
 
     @Override
@@ -158,6 +255,12 @@ public class SimpleDKVClient implements DKVClient {
     public long addAndGet(byte[] key, long delta) {
         ByteString keyByteStr = copyFrom(key);
         return addAndGet(keyByteStr, delta);
+    }
+
+    @Override
+    public long addAndGet(byte[] key, long delta, long expiryTS) {
+        ByteString keyByteStr = copyFrom(key);
+        return addAndGet(keyByteStr, delta, expiryTS);
     }
 
     @Override
@@ -243,15 +346,16 @@ public class SimpleDKVClient implements DKVClient {
         }
     }
 
-    private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, String metricPrefix) {
+    private SimpleDKVClient(ManagedChannelBuilder<?> channelBuilder, ConnectionOptions options) {
         this.reporter = JmxReporter.forRegistry(metrics)
-                .inDomain(metricPrefix != null ? metricPrefix.trim() : DEF_METRIC_PREFIX)
+                .inDomain(options.getMetricPrefix())
                 .convertRatesTo(TimeUnit.MILLISECONDS)
                 .convertDurationsTo(TimeUnit.MILLISECONDS)
                 .build();
         this.reporter.start();
         this.channel = channelBuilder.build();
         this.blockingStub = DKVGrpc.newBlockingStub(channel).withInterceptors(new MetricsInterceptor(metrics));
+        this.connectionOptions = options;
     }
 
     private Iterator<DKVEntry> iterate(ByteString startKey, ByteString keyPref) {
@@ -290,7 +394,7 @@ public class SimpleDKVClient implements DKVClient {
         Api.DeleteRequest delReq = delReqBuilder
                 .setKey(keyByteStr)
                 .build();
-        Api.Status status = blockingStub.delete(delReq).getStatus();
+        Api.Status status = blockingStub.withDeadlineAfter(connectionOptions.getWriteTimeout(), TimeUnit.MILLISECONDS).delete(delReq).getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "Delete", new Object[]{keyByteStr.toByteArray()});
         }
@@ -303,7 +407,7 @@ public class SimpleDKVClient implements DKVClient {
                 .setValue(valByteStr)
                 .setExpireTS(expiryTS)
                 .build();
-        Api.Status status = blockingStub.put(putReq).getStatus();
+        Api.Status status = blockingStub.withDeadlineAfter(connectionOptions.getWriteTimeout(), TimeUnit.MILLISECONDS).put(putReq).getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "Put", new Object[]{keyByteStr.toByteArray(), valByteStr.toByteArray()});
         }
@@ -315,7 +419,7 @@ public class SimpleDKVClient implements DKVClient {
                 .setKey(keyByteStr)
                 .setReadConsistency(consistency)
                 .build();
-        Api.GetResponse getRes = blockingStub.get(getReq);
+        Api.GetResponse getRes = blockingStub.withDeadlineAfter(connectionOptions.getReadTimeout(), TimeUnit.MILLISECONDS).get(getReq);
         Api.Status status = getRes.getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "Get", new Object[]{consistency, keyByteStr.toByteArray()});
@@ -329,7 +433,7 @@ public class SimpleDKVClient implements DKVClient {
                 .addAllKeys(keyByteStrs)
                 .setReadConsistency(consistency)
                 .build();
-        Api.MultiGetResponse multiGetRes = blockingStub.multiGet(multiGetReq);
+        Api.MultiGetResponse multiGetRes = blockingStub.withDeadlineAfter(connectionOptions.getReadTimeout(), TimeUnit.MILLISECONDS).multiGet(multiGetReq);
         Api.Status status = multiGetRes.getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "MultiGet", new Object[]{consistency, keyByteStrs});
@@ -338,22 +442,28 @@ public class SimpleDKVClient implements DKVClient {
     }
 
     private long addAndGet(ByteString keyByteStr, long delta) {
+        return addAndGet(keyByteStr, delta, 0);
+    }
+
+    private long addAndGet(ByteString keyByteStr, long delta, long expiryTS) {
         ByteString expValByteStr, updatedValByteStr;
         long updatedVal;
         do {
             expValByteStr = get(Api.ReadConsistency.LINEARIZABLE, keyByteStr);
             updatedVal = convertToLong(expValByteStr) + delta;
             updatedValByteStr = covertToBytes(updatedVal);
-        } while (!cas(keyByteStr, expValByteStr, updatedValByteStr));
+        } while (!cas(keyByteStr, expValByteStr, updatedValByteStr, expiryTS));
         return updatedVal;
     }
 
-    private boolean cas(ByteString keyByteStr, ByteString expectByteStr, ByteString updateByteStr) {
+
+    private boolean cas(ByteString keyByteStr, ByteString expectByteStr, ByteString updateByteStr, long expiryTS) {
         Api.CompareAndSetRequest.Builder casReqBuilder = Api.CompareAndSetRequest.newBuilder();
         Api.CompareAndSetRequest casReq = casReqBuilder
                 .setKey(keyByteStr).setOldValue(expectByteStr).setNewValue(updateByteStr)
+                .setExpireTS(expiryTS)
                 .build();
-        Api.CompareAndSetResponse casRes = blockingStub.compareAndSet(casReq);
+        Api.CompareAndSetResponse casRes = blockingStub.withDeadlineAfter(connectionOptions.getWriteTimeout(), TimeUnit.MILLISECONDS).compareAndSet(casReq);
         Api.Status status = casRes.getStatus();
         if (status.getCode() != 0) {
             throw new DKVException(status, "CompareAndSet", new Object[]{keyByteStr, expectByteStr, updateByteStr});
@@ -364,7 +474,12 @@ public class SimpleDKVClient implements DKVClient {
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort) {
         checkf(dkvHost != null && !dkvHost.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
         checkf(dkvPort > 0, IllegalArgumentException.class, "Valid DKV port must be provided");
-        return ManagedChannelBuilder.forAddress(dkvHost, dkvPort).usePlaintext();
+        return  NettyChannelBuilder
+                .forAddress(dkvHost, dkvPort)
+                .usePlaintext()
+                .withOption(ChannelOption.SO_REUSEADDR, true)
+                .withOption(ChannelOption.SO_SNDBUF, DEFAULT_BUF_SIZE)
+                .withOption(ChannelOption.SO_RCVBUF, DEFAULT_BUF_SIZE);
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvHost, int dkvPort, String authority) {
@@ -372,9 +487,15 @@ public class SimpleDKVClient implements DKVClient {
         return getManagedChannelBuilder(dkvHost, dkvPort).overrideAuthority(authority);
     }
 
+
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget) {
         checkf(dkvTarget != null && !dkvTarget.trim().isEmpty(), IllegalArgumentException.class, "Valid DKV hostname must be provided");
-        return ManagedChannelBuilder.forTarget(dkvTarget).usePlaintext();
+        return  NettyChannelBuilder
+                .forTarget(dkvTarget)
+                .usePlaintext()
+                .withOption(ChannelOption.SO_REUSEADDR, true)
+                .withOption(ChannelOption.SO_SNDBUF, DEFAULT_BUF_SIZE)
+                .withOption(ChannelOption.SO_RCVBUF, DEFAULT_BUF_SIZE);
     }
 
     private static ManagedChannelBuilder<?> getManagedChannelBuilder(String dkvTarget, String authority) {

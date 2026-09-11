@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -9,10 +8,13 @@ import (
 
 	"github.com/flipkart-incubator/dkv/pkg/ctl"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
+
+	flag "github.com/spf13/pflag"
 )
 
 type cmd struct {
 	name       string
+	shorthand  string
 	argDesc    string
 	cmdDesc    string
 	fn         func(*cmd, *ctl.DKVClient, ...string)
@@ -21,24 +23,31 @@ type cmd struct {
 }
 
 var cmds = []*cmd{
-	{"set", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
-	{"del", "<key>", "Delete the given key", (*cmd).del, "", false},
-	{"get", "<key>", "Get value for the given key", (*cmd).get, "", false},
-	{"iter", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
-	{"keys", "\"*\" | <prefix> [<startKey>]", "Get keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).keys, "", false},
-	{"backup", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
-	{"restore", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
-	{"addNode", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
-	{"removeNode", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
-	{"listNodes", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", false},
+	{"set", "s", "<key> <value>", "Set a key value pair", (*cmd).set, "", false},
+	{"del", "d", "<key>", "Delete the given key", (*cmd).del, "", false},
+	{"get", "g", "<key>", "Get value for the given key", (*cmd).get, "", false},
+	{"iter", "i", "\"*\" | <prefix> [<startKey>]", "Iterate keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).iter, "", false},
+	{"keys", "k", "\"*\" | <prefix> [<startKey>]", "Get keys matching the <prefix>, starting with <startKey> or \"*\" for all keys", (*cmd).keys, "", false},
+	{"backup", "", "<path>", "Backs up data to the given path", (*cmd).backup, "", false},
+	{"restore", "", "<path>", "Restores data from the given path", (*cmd).restore, "", false},
+	{"addNode", "", "<nexusUrl>", "Add another master node to DKV cluster", (*cmd).addNode, "", false},
+	{"removeNode", "", "<nexusUrl>", "Remove a master node from DKV cluster", (*cmd).removeNode, "", false},
+	{"listNodes", "", "", "Lists the various DKV nodes that are part of the Nexus cluster", (*cmd).listNodes, "", true},
+	{"clusterInfo", "", "[dcId] [database] [vBucket]", "Lists the various members of the cluster", (*cmd).clusterInfo, "", true},
 }
 
 func (c *cmd) usage() {
-	if c.argDesc == "" {
-		fmt.Printf("  -%s - %s\n", c.name, c.cmdDesc)
+	fmt.Fprintf(os.Stderr, "Error: Invalid Syntax. Usage of %s:\n", os.Args[0])
+	line := ""
+	if c.shorthand != "" {
+		line = fmt.Sprintf("  -%s, --%s", c.shorthand, c.name)
 	} else {
-		fmt.Printf("  -%s %s - %s\n", c.name, c.argDesc, c.cmdDesc)
+		line = fmt.Sprintf("      --%s", c.name)
 	}
+	if c.argDesc != "" {
+		line += fmt.Sprintf(" %s \t\t%s", c.argDesc, c.cmdDesc)
+	}
+	fmt.Fprintf(os.Stderr, "%s\n", line)
 }
 
 func (c *cmd) set(client *ctl.DKVClient, args ...string) {
@@ -171,25 +180,50 @@ func (c *cmd) removeNode(client *ctl.DKVClient, args ...string) {
 }
 
 func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
-	if leader, nodes, err := client.ListNodes(); err != nil {
+	if leaderId, members, err := client.ListNodes(); err != nil {
 		fmt.Printf("Unable to retrieve the nodes of DKV cluster. Error: %v\n", err)
 	} else {
 		var ids []uint64
-		for id := range nodes {
-			if id != leader {
-				ids = append(ids, id)
-			}
+		for id := range members {
+			ids = append(ids, id)
 		}
 		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-		if leaderURL, present := nodes[leader]; present {
+		if _, present := members[leaderId]; present {
 			fmt.Println("Current DKV cluster members:")
-			fmt.Printf("%x => %s (leader)\n", leader, leaderURL)
 		} else {
-			fmt.Println("WARNING: DKV cluster unhealthy, leader unknown")
-			fmt.Println("Current cluster members:")
+			fmt.Println("WARNING: DKV Cluster unhealthy, leader unknown")
+			fmt.Println("Current DKV cluster members:")
 		}
 		for _, id := range ids {
-			fmt.Printf("%x => %s\n", id, nodes[id])
+			fmt.Printf("%x => %s (%s) \n", id, members[id].NodeUrl, members[id].Status)
+		}
+	}
+}
+
+func (c *cmd) clusterInfo(client *ctl.DKVClient, args ...string) {
+	dcId := ""
+	database := ""
+	vBucket := ""
+	if len(args) > 0 {
+		dcId = args[0]
+	}
+	if len(args) > 1 {
+		database = args[1]
+	}
+	if len(args) > 2 {
+		vBucket = args[2]
+	}
+	vBuckets, err := client.GetClusterInfo(dcId, database, vBucket)
+	if err != nil {
+		fmt.Printf("Unable to get Status: Error: %v\n", err)
+	} else {
+		if len(vBuckets) == 0 {
+			fmt.Println("Found no nodes with the provided filters")
+		} else {
+			fmt.Println("Current DKV cluster nodes:")
+			for _, bucket := range vBuckets {
+				fmt.Println(bucket.String())
+			}
 		}
 	}
 }
@@ -197,36 +231,35 @@ func (c *cmd) listNodes(client *ctl.DKVClient, args ...string) {
 var dkvAddr, dkvAuthority string
 
 func init() {
-	flag.StringVar(&dkvAddr, "dkvAddr", "127.0.0.1:8080", "<host>:<port> - DKV server address")
+	flag.StringVarP(&dkvAddr, "dkvAddr", "a", "127.0.0.1:8080", "<host>:<port> - DKV server address")
 	flag.StringVar(&dkvAuthority, "authority", "", "Override :authority pseudo header for routing purposes. Useful while accessing DKV via service mesh.")
 	for _, c := range cmds {
 		if c.argDesc == "" {
 			flag.BoolVar(&c.emptyValue, c.name, c.emptyValue, c.cmdDesc)
 		} else {
-			flag.StringVar(&c.value, c.name, c.value, c.cmdDesc)
+			if c.shorthand == "" {
+				flag.StringVar(&c.value, c.name, c.value, fmt.Sprintf("%s \x00 \x00 %s", c.argDesc, c.cmdDesc))
+			} else {
+				flag.StringVarP(&c.value, c.name, c.shorthand, c.value, fmt.Sprintf("%s \x00 \x00 %s", c.argDesc, c.cmdDesc))
+			}
 		}
 	}
-	flag.Usage = usage
+	flag.CommandLine.SortFlags = false
 }
 
-func usage() {
-	fmt.Printf("Usage of %s:\n", os.Args[0])
-	for _, flagName := range []string{"dkvAddr", "authority"} {
-		dkvFlag := flag.Lookup(flagName)
-		fmt.Printf("  -%s %s (default: %s)\n", dkvFlag.Name, dkvFlag.Usage, dkvFlag.DefValue)
-	}
-	for _, cmd := range cmds {
-		cmd.usage()
-	}
-}
-
-func trimLower(str string) string {
-	return strings.ToLower(strings.TrimSpace(str))
+func isFlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
+		flag.Usage()
 		return
 	}
 
@@ -236,7 +269,7 @@ func main() {
 		fmt.Printf(" (:authority = %s)", dkvAuthority)
 	}
 	fmt.Printf("...")
-	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority)
+	client, err := ctl.NewInSecureDKVClient(dkvAddr, dkvAuthority, ctl.DefaultConnectOpts)
 	if err != nil {
 		fmt.Printf("\nUnable to create DKV client. Error: %v\n", err)
 		return
@@ -246,6 +279,9 @@ func main() {
 
 	var validCmd bool
 	for _, c := range cmds {
+		if !isFlagPassed(c.name) {
+			continue
+		}
 		if c.value != "" || c.emptyValue {
 			args := []string{c.value}
 			args = append(args, flag.Args()...)
@@ -255,6 +291,6 @@ func main() {
 		}
 	}
 	if !validCmd {
-		usage()
+		flag.Usage()
 	}
 }

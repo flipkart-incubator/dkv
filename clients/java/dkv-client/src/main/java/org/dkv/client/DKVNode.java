@@ -30,6 +30,11 @@ public class DKVNode {
         return port;
     }
 
+
+    public String getAddress(){
+        return String.format("%s:%d", host, port);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

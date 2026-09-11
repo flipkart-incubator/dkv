@@ -1,24 +1,48 @@
 package storage
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/stats"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
+
+type Stat struct {
+	RequestLatency        *prometheus.SummaryVec
+	ResponseError         *prometheus.CounterVec
+	StoreMetricsCollector prometheus.Collector
+}
+
+func NewStat(engine string) *Stat {
+	RequestLatency := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace:  stats.Namespace,
+		Name:       fmt.Sprintf("storage_latency_%s", engine),
+		Help:       fmt.Sprintf("Latency statistics for %s storage operations", engine),
+		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001},
+		MaxAge:     10 * time.Second,
+	}, []string{stats.Ops})
+	ResponseError := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: stats.Namespace,
+		Name:      fmt.Sprintf("storage_error_%s", engine),
+		Help:      fmt.Sprintf("Error count for %s storage operations", engine),
+	}, []string{stats.Ops})
+	return &Stat{RequestLatency: RequestLatency, ResponseError: ResponseError}
+}
 
 // A KVStore represents the key value store that provides
 // the underlying storage implementation for the various
 // DKV operations.
 type KVStore interface {
 	io.Closer
-	// Put stores the association between the given key and value
-	Put(key []byte, value []byte) error
-	// PutTTL stores the association between the given key and value
-	// and sets the expireTS of the key to the provided epoch in seconds
-	PutTTL(key []byte, value []byte, expireTS uint64) error
+	// Put stores the association between the given key and value and
+	// optionally sets the expireTS of the key to the provided epoch in seconds
+	Put(pairs ...*serverpb.KVPair) error
 	// Get bulk fetches the associated values for the given keys.
 	// Note that during partial failures, any successful results
 	// are discarded and an error is returned instead.
@@ -27,11 +51,11 @@ type KVStore interface {
 	Delete(key []byte) error
 	// GetSnapshot retrieves the entire keyspace representation
 	// with latest value against every key.
-	GetSnapshot() ([]byte, error)
+	GetSnapshot() (io.ReadCloser, error)
 	// PutSnapshot ingests the given keyspace representation wholly
 	// into the current state. Any existing state will be discarded
 	// or replaced with the given state.
-	PutSnapshot([]byte) error
+	PutSnapshot(io.ReadCloser) error
 	// Iterate iterates through the entire keyspace in no particular
 	// order. IterationOptions can be used to control where to begin
 	// iteration as well as what keys are iterated by their prefix.
@@ -43,7 +67,7 @@ type KVStore interface {
 	// hence is safe from a concurrency perspective.
 	// If the expected value is `nil`, then the key is created and
 	// initialized with the given value, atomically.
-	CompareAndSet(key, expect, update []byte) (bool, error)
+	CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error)
 }
 
 // A Backupable represents the capability of the underlying store
@@ -108,13 +132,13 @@ const timeFormatTempPath = "20060102150405"
 // It attempts to also appends a timestamp to the given prefix so as
 // to better avoid collisions. Under the hood, it delegates to the
 // GoLang API for temporary folder creation.
-func CreateTempFile(dir string, prefix string) (string, error) {
+func CreateTempFile(dir string, prefix string) (*os.File, error) {
 	tempFilePrefix := time.Now().AppendFormat([]byte(prefix), timeFormatTempPath)
 	tempFile, err := ioutil.TempFile(dir, string(tempFilePrefix))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return tempFile.Name(), nil
+	return tempFile, nil
 }
 
 // CreateTempFolder creates a temporary folder with the given prefix.

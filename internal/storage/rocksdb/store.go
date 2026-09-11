@@ -4,20 +4,25 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/flipkart-incubator/dkv/internal/hlc"
-	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
-	"github.com/shamaton/msgpack"
-	"io/ioutil"
+	"io"
+	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/flipkart-incubator/dkv/internal/hlc"
+	"github.com/flipkart-incubator/dkv/internal/storage/iterators"
+	"github.com/flipkart-incubator/dkv/internal/storage/utils"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/vmihailenco/msgpack/v5"
+
 	"github.com/flipkart-incubator/dkv/internal/stats"
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"github.com/flipkart-incubator/gorocksdb"
+	"github.com/linxGnu/grocksdb"
 	"go.uber.org/zap"
 	"gopkg.in/ini.v1"
 )
@@ -32,11 +37,12 @@ type DB interface {
 }
 
 type rocksDB struct {
-	db          *gorocksdb.DB
-	normalCF    *gorocksdb.ColumnFamilyHandle
-	ttlCF       *gorocksdb.ColumnFamilyHandle
-	optimTrxnDB *gorocksdb.OptimisticTransactionDB
+	db          *grocksdb.DB
+	normalCF    *grocksdb.ColumnFamilyHandle
+	ttlCF       *grocksdb.ColumnFamilyHandle
+	optimTrxnDB *grocksdb.OptimisticTransactionDB
 	opts        *rocksDBOpts
+	stat        *storage.Stat
 
 	// Indicates a global mutation like backup and restore that
 	// require exclusivity. Shall be manipulated using atomics.
@@ -44,16 +50,17 @@ type rocksDB struct {
 }
 
 type rocksDBOpts struct {
-	readOpts       *gorocksdb.ReadOptions
-	writeOpts      *gorocksdb.WriteOptions
-	blockTableOpts *gorocksdb.BlockBasedTableOptions
-	rocksDBOpts    *gorocksdb.Options
-	restoreOpts    *gorocksdb.RestoreOptions
+	readOpts       *grocksdb.ReadOptions
+	writeOpts      *grocksdb.WriteOptions
+	blockTableOpts *grocksdb.BlockBasedTableOptions
+	rocksDBOpts    *grocksdb.Options
+	restoreOpts    *grocksdb.RestoreOptions
 	folderName     string
 	sstDirectory   string
 	lgr            *zap.Logger
 	statsCli       stats.Client
 	cfNames        []string
+	promRegistry   prometheus.Registerer
 }
 
 // DBOption is used to configure the RocksDB
@@ -67,6 +74,17 @@ func WithLogger(lgr *zap.Logger) DBOption {
 			opts.lgr = lgr
 		} else {
 			opts.lgr = zap.NewNop()
+		}
+	}
+}
+
+// WithPromStats is used to inject a prometheus stats instance
+func WithPromStats(registry prometheus.Registerer) DBOption {
+	return func(opts *rocksDBOpts) {
+		if registry != nil {
+			opts.promRegistry = registry
+		} else {
+			opts.promRegistry = stats.NewPromethousNoopRegistry()
 		}
 	}
 }
@@ -102,7 +120,7 @@ func WithSSTDir(sstDir string) DBOption {
 func WithCacheSize(size uint64) DBOption {
 	return func(opts *rocksDBOpts) {
 		if size > 0 {
-			opts.blockTableOpts.SetBlockCache(gorocksdb.NewLRUCache(size))
+			opts.blockTableOpts.SetBlockCache(grocksdb.NewLRUCache(size))
 		} else {
 			opts.blockTableOpts.SetNoBlockCache(true)
 		}
@@ -123,7 +141,7 @@ func WithRocksDBConfig(iniFile string) DBOption {
 				for key, val := range sectConf {
 					fmt.Fprintf(&buff, "%s=%s;", key, val)
 				}
-				if rdbOpts, err := gorocksdb.GetOptionsFromString(opts.rocksDBOpts, buff.String()); err != nil {
+				if rdbOpts, err := grocksdb.GetOptionsFromString(opts.rocksDBOpts, buff.String()); err != nil {
 					panic(fmt.Errorf("unable to parge RocksDB configuration from given file: %s, error: %v", iniFile, err))
 				} else {
 					opts.rocksDBOpts = rdbOpts
@@ -166,15 +184,24 @@ func (m *ttlCompactionFilter) Filter(level int, key, val []byte) (remove bool, n
 	return false, nil
 }
 
+func (m *ttlCompactionFilter) SetIgnoreSnapshots(value bool) {
+
+}
+
+func (m *ttlCompactionFilter) Destroy() {
+
+}
+
 func newOptions(dbFolder string) *rocksDBOpts {
-	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
-	opts := gorocksdb.NewDefaultOptions()
+	bbto := grocksdb.NewDefaultBlockBasedTableOptions()
+	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	opts.SetCreateIfMissingColumnFamilies(true)
+	opts.SetWALTtlSeconds(uint64(600))
 	opts.SetBlockBasedTableFactory(bbto)
-	rstOpts := gorocksdb.NewRestoreOptions()
-	wrOpts := gorocksdb.NewDefaultWriteOptions()
-	rdOpts := gorocksdb.NewDefaultReadOptions()
+	rstOpts := grocksdb.NewRestoreOptions()
+	wrOpts := grocksdb.NewDefaultWriteOptions()
+	rdOpts := grocksdb.NewDefaultReadOptions()
 	cfNames := []string{"default", "ttl"}
 	return &rocksDBOpts{
 		folderName:     dbFolder,
@@ -186,6 +213,7 @@ func newOptions(dbFolder string) *rocksDBOpts {
 		writeOpts:      wrOpts,
 		statsCli:       stats.NewNoOpClient(),
 		cfNames:        cfNames,
+		promRegistry:   stats.NewPromethousNoopRegistry(),
 	}
 }
 
@@ -199,25 +227,27 @@ func (rdbOpts *rocksDBOpts) destroy() {
 
 func openStore(opts *rocksDBOpts) (*rocksDB, error) {
 	normalOpts := opts.rocksDBOpts
-	ttlOpts, err := gorocksdb.GetOptionsFromString(normalOpts, "")
+	ttlOpts, err := grocksdb.GetOptionsFromString(normalOpts, "")
 	if err != nil {
 		return nil, err
 	}
 	ttlOpts.SetCompactionFilter(&ttlCompactionFilter{opts.lgr})
-	optimTrxnDB, cfh, err := gorocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts,
-		opts.folderName, opts.cfNames, []*gorocksdb.Options{normalOpts, ttlOpts})
+	optimTrxnDB, cfh, err := grocksdb.OpenOptimisticTransactionDbColumnFamilies(opts.rocksDBOpts,
+		opts.folderName, opts.cfNames, []*grocksdb.Options{normalOpts, ttlOpts})
 	if err != nil {
 		return nil, err
 	}
 
 	rocksdb := rocksDB{
-		db:             optimTrxnDB.GetBaseDb(),
+		db:             optimTrxnDB.GetBaseDB(),
 		normalCF:       cfh[0],
 		ttlCF:          cfh[1],
 		optimTrxnDB:    optimTrxnDB,
 		opts:           opts,
 		globalMutation: 0,
 	}
+	rocksdb.metricsCollector()
+
 	//TODO: revisit this later after understanding what is the impact of manually triggered compaction
 	//go rocksdb.Compaction()
 	return &rocksdb, nil
@@ -236,62 +266,104 @@ func (rdb *rocksDB) Compaction() error {
 		case <-tick:
 			// trigger a compaction
 			rdb.opts.lgr.Info("Triggering RocksDB Compaction")
-			rdb.db.CompactRangeCF(rdb.ttlCF, gorocksdb.Range{nil, nil})
+			rdb.db.CompactRangeCF(rdb.ttlCF, grocksdb.Range{nil, nil})
 		}
 	}
 	return nil
 }
 
 func (rdb *rocksDB) Close() error {
+	rdb.unRegisterMetricsCollector()
 	rdb.optimTrxnDB.Close()
 	//rdb.opts.destroy()
 	return nil
 }
 
-func (rdb *rocksDB) PutTTL(key []byte, value []byte, expireTS uint64) error {
-	if expireTS > 0 {
-		defer rdb.opts.statsCli.Timing("rocksdb.putTTL.latency.ms", time.Now())
-		dF := ttlDataFormat{
-			ExpiryTS: expireTS,
-			Data:     value,
-		}
-		msgPack, err := msgpack.Marshal(dF)
-		if err != nil {
-			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-			return err
-		}
-		wb := gorocksdb.NewWriteBatch()
-		wb.Delete(key)
-		wb.PutCF(rdb.ttlCF, key, msgPack)
-		err = rdb.db.Write(rdb.opts.writeOpts, wb)
-		if err != nil {
-			rdb.opts.statsCli.Incr("rocksdb.putTTL.errors", 1)
-		}
+func (rdb *rocksDB) replaceDB(checkpointDir string) error {
+	backupDir := fmt.Sprintf("%s.bak", rdb.opts.folderName)
+	rdb.Close()
+
+	err := storage.RenameFolder(rdb.opts.folderName, backupDir)
+	if err != nil {
+		rdb.opts.lgr.Error("Failed to backup existing db", zap.Error(err))
 		return err
 	}
-	return rdb.Put(key, value)
+
+	err = storage.RenameFolder(checkpointDir, rdb.opts.folderName)
+	if err != nil {
+		rdb.opts.lgr.Error("Failed to replace with new db", zap.Error(err))
+		return err
+	}
+
+	// In any case, reopen a new DB
+	if finalDB, openErr := openStore(rdb.opts); openErr != nil {
+		rdb.opts.lgr.Error("Failed to open new db", zap.Error(openErr))
+		return openErr
+	} else {
+		rdb.db = finalDB.db
+		rdb.optimTrxnDB = finalDB.optimTrxnDB
+		rdb.normalCF = finalDB.normalCF
+		rdb.ttlCF = finalDB.ttlCF
+
+		_ = os.RemoveAll(backupDir) //remove old db.
+	}
+
+	return nil
 }
 
-func (rdb *rocksDB) Put(key []byte, value []byte) error {
-	defer rdb.opts.statsCli.Timing("rocksdb.put.latency.ms", time.Now())
-	wb := gorocksdb.NewWriteBatch()
-	wb.DeleteCF(rdb.ttlCF, key)
-	wb.Put(key, value)
+func (rdb *rocksDB) Put(pairs ...*serverpb.KVPair) error {
+	metricsPrefix := "rocksdb.put.multi"
+	metricsLabel := stats.MultiPut
+	if len(pairs) == 1 {
+		metricsPrefix = "rocksdb.put.single"
+		metricsLabel = stats.Put
+	}
+
+	defer rdb.opts.statsCli.Timing(metricsPrefix+".latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(metricsLabel), time.Now())
+
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	for _, kv := range pairs {
+		if kv == nil {
+			continue //skip nil entries
+		}
+		if kv.ExpireTS > 0 {
+			dF := ttlDataFormat{
+				ExpiryTS: kv.ExpireTS,
+				Data:     kv.Value,
+			}
+			msgPack, err := msgpack.Marshal(dF)
+			if err != nil {
+				rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
+				return err
+			}
+			wb.DeleteCF(rdb.normalCF, kv.Key)
+			wb.PutCF(rdb.ttlCF, kv.Key, msgPack)
+		} else {
+			wb.DeleteCF(rdb.ttlCF, kv.Key)
+			wb.PutCF(rdb.normalCF, kv.Key, kv.Value)
+		}
+	}
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
-		rdb.opts.statsCli.Incr("rocksdb.put.errors", 1)
+		rdb.opts.statsCli.Incr(metricsPrefix+".errors", 1)
 	}
 	return err
 }
 
 func (rdb *rocksDB) Delete(key []byte) error {
 	defer rdb.opts.statsCli.Timing("rocksdb.delete.latency.ms", time.Now())
-	wb := gorocksdb.NewWriteBatch()
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Delete), time.Now())
+
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
 	wb.DeleteCF(rdb.ttlCF, key)
 	wb.Delete(key)
 	err := rdb.db.Write(rdb.opts.writeOpts, wb)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.delete.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.Delete).Inc()
 	}
 	return err
 }
@@ -306,33 +378,68 @@ func (rdb *rocksDB) Get(keys ...[]byte) ([]*serverpb.KVPair, error) {
 	}
 }
 
-func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
+func (rdb *rocksDB) CompareAndSet(request *serverpb.CompareAndSetRequest) (bool, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.cas.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.CompareAndSet), time.Now())
+
 	ro := rdb.opts.readOpts
 	wo := rdb.opts.writeOpts
-	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
+	to := grocksdb.NewDefaultOptimisticTransactionOptions()
 	txn := rdb.optimTrxnDB.TransactionBegin(wo, to, nil)
 	defer txn.Destroy()
 
-	exist, err := txn.GetForUpdate(ro, key)
+	var existVal, existTTLVal []byte
+
+	cf := rdb.ttlCF
+	exist, err := txn.GetForUpdateWithCF(ro, cf, request.Key)
 	if err != nil {
 		return false, err
 	}
-	defer exist.Free()
+	existTTLVal = toByteArray(exist)
+	exist.Free()
 
-	existVal := exist.Data()
-	if expect == nil || len(expect) == 0 {
-		if len(existVal) > 0 {
+	if len(existTTLVal) == 0 {
+		//attempt on normalCF
+		cf = rdb.normalCF
+		exist, err = txn.GetForUpdateWithCF(ro, cf, request.Key)
+		if err != nil {
+			return false, err
+		}
+		existVal = toByteArray(exist)
+		exist.Free()
+	}
+
+	if request.OldValue == nil || len(request.OldValue) == 0 {
+		if len(existTTLVal) > 0 || len(existVal) > 0 {
 			return false, nil
 		}
 	} else {
-		if !bytes.Equal(existVal, expect) {
+		kv := rdb.extractResult(existVal, existTTLVal, request.Key)
+		if kv == nil {
+			return false, fmt.Errorf("cas failed to extract result")
+		}
+		if !bytes.Equal(kv.Value, request.OldValue) {
 			return false, nil
 		}
 	}
-	err = txn.Put(key, update)
+
+	update := request.NewValue
+	if cf == rdb.ttlCF {
+		dF := ttlDataFormat{
+			ExpiryTS: request.ExpireTS,
+			Data:     request.NewValue,
+		}
+		update, err = msgpack.Marshal(dF)
+		if err != nil {
+			rdb.opts.statsCli.Incr("rocksdb.cas.msgpack.errors", 1)
+			return false, err
+		}
+	}
+
+	err = txn.PutCF(cf, request.Key, update)
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.cas.set.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.CompareAndSet).Inc()
 		return false, err
 	}
 	err = txn.Commit()
@@ -342,34 +449,35 @@ func (rdb *rocksDB) CompareAndSet(key, expect, update []byte) (bool, error) {
 	return err == nil, err
 }
 
-const tempFilePrefix = "rocksdb-sstfile-"
+const (
+	sstPrefix               = "rocksdb-sstfile-"
+	sstDefaultCF            = "/default.cf"
+	sstTtlCF                = "/ttl.cf"
+	snapshotLogSizeForFlush = 0
+)
 
-func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
-	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
-	snap := rdb.db.NewSnapshot()
-	defer rdb.db.ReleaseSnapshot(snap)
-
-	envOpts := gorocksdb.NewDefaultEnvOptions()
-	opts := gorocksdb.NewDefaultOptions()
-	sstWrtr := gorocksdb.NewSSTFileWriter(envOpts, opts)
+func (rdb *rocksDB) generateSST(snap *grocksdb.Snapshot, cf *grocksdb.ColumnFamilyHandle, sstDir string) (*os.File, error) {
+	var fileName string
+	envOpts := grocksdb.NewDefaultEnvOptions()
+	opts := grocksdb.NewDefaultOptions()
+	sstWrtr := grocksdb.NewSSTFileWriter(envOpts, opts)
 	defer sstWrtr.Destroy()
 
-	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
-	if err != nil {
-		return nil, err
+	if fileName = sstDir + sstDefaultCF; cf == rdb.ttlCF {
+		fileName = sstDir + sstTtlCF
 	}
 
-	defer os.Remove(sstFile)
-	if err = sstWrtr.Open(sstFile); err != nil {
+	if err := sstWrtr.Open(fileName); err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to open sst writer", zap.Error(err))
 		return nil, err
 	}
 
 	// TODO: Any options need to be set
-	readOpts := gorocksdb.NewDefaultReadOptions()
+	readOpts := grocksdb.NewDefaultReadOptions()
 	defer readOpts.Destroy()
 	readOpts.SetSnapshot(snap)
 
-	it := rdb.db.NewIterator(readOpts)
+	it := rdb.db.NewIteratorCF(readOpts, cf)
 	defer it.Close()
 	it.SeekToFirst()
 
@@ -378,40 +486,126 @@ func (rdb *rocksDB) GetSnapshot() ([]byte, error) {
 			sstWrtr.Add(it.Key().Data(), it.Value().Data())
 			it.Next()
 		}
-	} else {
-		return nil, nil
+
+		if err := sstWrtr.Finish(); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = sstWrtr.Finish(); err != nil {
+	return os.Open(fileName)
+}
+
+type checkPointSnapshot struct {
+	tar *utils.StreamingTar
+	dir string
+	lgr *zap.Logger
+}
+
+func (r *checkPointSnapshot) Read(p []byte) (n int, err error) {
+	return r.tar.Read(p)
+}
+
+func (r *checkPointSnapshot) Close() error {
+	r.lgr.Info(fmt.Sprintf("GetSnapshot: Closing snapshot, will delete folder %s", r.dir))
+	r.tar.Close()
+	return os.RemoveAll(r.dir)
+}
+
+func (rdb *rocksDB) GetSnapshot() (io.ReadCloser, error) {
+	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.GetSnapShot), time.Now())
+
+	//Prevent any other backups or restores
+	err := rdb.beginGlobalMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer rdb.endGlobalMutation()
+
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return nil, err
 	}
 
-	return ioutil.ReadFile(sstFile)
+	checkpoint, err := rdb.db.NewCheckpoint()
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create new checkpoint", zap.Error(err))
+		return nil, err
+	}
+
+	checkpointDir := fmt.Sprintf("%s/checkpoint", sstDir)
+	err = checkpoint.CreateCheckpoint(checkpointDir, snapshotLogSizeForFlush)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to make checkpoint", zap.Error(err))
+		return nil, err
+	}
+
+	//check that checkpoint was successfully created
+	if created, _ := exists(checkpointDir); !created {
+		err = fmt.Errorf("checkpoint.CreateCheckpoint failed")
+		rdb.opts.lgr.Error("GetSnapshot: Checkpoint dir was not created", zap.Error(err))
+		return nil, err
+	}
+
+	var files []*os.File
+	err = filepath.WalkDir(checkpointDir, func(path string, fi fs.DirEntry, err error) error {
+		if !fi.IsDir() {
+			f, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			files = append(files, f)
+		}
+		return nil
+	})
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to iterate the checkpoint directory", zap.Error(err))
+		return nil, err
+	}
+
+	tarF, err := utils.CreateStreamingTar(files...)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to archive checkpoint files", zap.Error(err))
+		return nil, err
+	}
+	return &checkPointSnapshot{tar: tarF, dir: sstDir, lgr: rdb.opts.lgr}, nil
 }
 
-func (rdb *rocksDB) PutSnapshot(snap []byte) error {
-	if snap == nil || len(snap) == 0 {
+func (rdb *rocksDB) PutSnapshot(snap io.ReadCloser) error {
+	if snap == nil {
 		return nil
 	}
 	defer rdb.opts.statsCli.Timing("rocksdb.snapshot.put.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.PutSnapShot), time.Now())
+	defer snap.Close()
 
-	sstFile, err := storage.CreateTempFile(rdb.opts.sstDirectory, tempFilePrefix)
+	//Prevent any other backups or restores
+	err := rdb.beginGlobalMutation()
 	if err != nil {
 		return err
 	}
+	defer rdb.endGlobalMutation()
 
-	defer os.Remove(sstFile)
-	err = ioutil.WriteFile(sstFile, snap, 0644)
+	sstDir, err := storage.CreateTempFolder(rdb.opts.sstDirectory, sstPrefix)
 	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to create temporary dir", zap.Error(err))
 		return err
 	}
 
-	// TODO: Check any option needs to be set
-	ingestOpts := gorocksdb.NewDefaultIngestExternalFileOptions()
-	defer ingestOpts.Destroy()
+	_, err = utils.ExtractTar(snap, fmt.Sprintf("%s/", sstDir))
+	if err != nil {
+		rdb.opts.lgr.Error("PutSnapshot: Failed to extract files from snap", zap.Error(err))
+		return err
+	}
 
-	err = rdb.db.IngestExternalFile([]string{sstFile}, ingestOpts)
-	return err
+	err = rdb.replaceDB(sstDir)
+	if err != nil {
+		rdb.opts.lgr.Error("GetSnapshot: Failed to restore from checkpoint", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (rdb *rocksDB) BackupTo(folder string) error {
@@ -432,7 +626,7 @@ func (rdb *rocksDB) BackupTo(folder string) error {
 
 	// Retain only the latest backup in the given folder
 	defer be.PurgeOldBackups(1)
-	return be.CreateNewBackupFlush(rdb.db, true)
+	return be.CreateNewBackupFlush(true)
 }
 
 const tempDirPrefix = "rocksdb-restore-"
@@ -493,6 +687,8 @@ func (rdb *rocksDB) GetLatestCommittedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) LoadChanges(fromChangeNumber uint64, maxChanges int) ([]*serverpb.ChangeRecord, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.load.changes.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.LoadChange), time.Now())
+
 	chngIter, err := rdb.db.GetUpdatesSince(fromChangeNumber)
 	if err != nil {
 		return nil, err
@@ -515,27 +711,29 @@ func (rdb *rocksDB) GetLatestAppliedChangeNumber() (uint64, error) {
 
 func (rdb *rocksDB) SaveChanges(changes []*serverpb.ChangeRecord) (uint64, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.save.changes.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.SaveChange), time.Now())
+
 	appldChngNum := uint64(0)
 	for _, chng := range changes {
-		wb := gorocksdb.WriteBatchFrom(chng.SerialisedForm)
+		wb := grocksdb.WriteBatchFrom(chng.SerialisedForm)
 		defer wb.Destroy()
 		err := rdb.db.Write(rdb.opts.writeOpts, wb)
 		if err != nil {
 			return appldChngNum, err
 		}
-		appldChngNum = chng.ChangeNumber
+		// at changeNum 3 with NumTxn = 2. Applied should be 4. Ie. 3 + 2 -1
+		appldChngNum = chng.ChangeNumber + uint64(chng.NumberOfTrxns) - 1
 	}
 	return appldChngNum, nil
 }
 
 type iter struct {
 	iterOpts storage.IterationOptions
-	rdbIter  *gorocksdb.Iterator
+	rdbIter  *grocksdb.Iterator
 	ttlCF    bool
 }
 
-func (rdb *rocksDB) newIterCF(iterOpts storage.IterationOptions, cf *gorocksdb.ColumnFamilyHandle) *iter {
-	readOpts := rdb.opts.readOpts
+func (rdb *rocksDB) newIterCF(readOpts *grocksdb.ReadOptions, iterOpts storage.IterationOptions, cf *grocksdb.ColumnFamilyHandle) *iter {
 	it := rdb.db.NewIteratorCF(readOpts, cf)
 	if sk, present := iterOpts.StartKey(); present {
 		it.Seek(sk)
@@ -569,10 +767,19 @@ func (rdbIter *iter) HasNext() bool {
 		}
 		return false
 	}
-	return rdbIter.rdbIter.Valid()
+
+	//do ttl validity for without prefix scan also.
+	if rdbIter.rdbIter.Valid() {
+		if rdbIter.verifyTTLValidity() {
+			return true
+		}
+		rdbIter.rdbIter.Next()
+		return rdbIter.HasNext()
+	}
+	return false
 }
 
-func (rdbIter *iter) Next() ([]byte, []byte) {
+func (rdbIter *iter) Next() *serverpb.KVPair {
 	defer rdbIter.rdbIter.Next()
 	key := toByteArray(rdbIter.rdbIter.Key())
 	val := toByteArray(rdbIter.rdbIter.Value())
@@ -581,9 +788,9 @@ func (rdbIter *iter) Next() ([]byte, []byte) {
 		ttlRow, _ = parseTTLMsgPackData(val)
 	}
 	if ttlRow != nil && ttlRow.ExpiryTS > 0 {
-		val = ttlRow.Data
+		return &serverpb.KVPair{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}
-	return key, val
+	return &serverpb.KVPair{Key: key, Value: val}
 }
 
 func (rdbIter *iter) Err() error {
@@ -596,12 +803,13 @@ func (rdbIter *iter) Close() error {
 }
 
 func (rdb *rocksDB) Iterate(iterOpts storage.IterationOptions) storage.Iterator {
-	baseIter := rdb.newIterCF(iterOpts, rdb.normalCF)
-	ttlIter := rdb.newIterCF(iterOpts, rdb.ttlCF)
+	readOpts := rdb.opts.readOpts
+	baseIter := rdb.newIterCF(readOpts, iterOpts, rdb.normalCF)
+	ttlIter := rdb.newIterCF(readOpts, iterOpts, rdb.ttlCF)
 	return iterators.Concat(baseIter, ttlIter)
 }
 
-func (rdb *rocksDB) toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
+func (rdb *rocksDB) toChangeRecord(writeBatch *grocksdb.WriteBatch, changeNum uint64) *serverpb.ChangeRecord {
 	chngRec := &serverpb.ChangeRecord{}
 	chngRec.ChangeNumber = changeNum
 	dataBts := writeBatch.Data()
@@ -618,21 +826,20 @@ func (rdb *rocksDB) toChangeRecord(writeBatch *gorocksdb.WriteBatch, changeNum u
 	return chngRec
 }
 
-func (rdb *rocksDB) openBackupEngine(folder string) (*gorocksdb.BackupEngine, error) {
-	opts := rdb.opts.rocksDBOpts
-	return gorocksdb.OpenBackupEngine(opts, folder)
+func (rdb *rocksDB) openBackupEngine(folder string) (*grocksdb.BackupEngine, error) {
+	return grocksdb.CreateBackupEngineWithPath(rdb.db, folder)
 }
 
-func (rdb *rocksDB) toTrxnRecord(wbr *gorocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
+func (rdb *rocksDB) toTrxnRecord(wbr *grocksdb.WriteBatchRecord) *serverpb.TrxnRecord {
 	trxnRec := &serverpb.TrxnRecord{}
 	switch wbr.Type {
-	case gorocksdb.WriteBatchCFDeletionRecord:
+	case grocksdb.WriteBatchCFDeletionRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Delete
-	case gorocksdb.WriteBatchDeletionRecord:
+	case grocksdb.WriteBatchDeletionRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Delete
-	case gorocksdb.WriteBatchValueRecord:
+	case grocksdb.WriteBatchValueRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Put
-	case gorocksdb.WriteBatchCFValueRecord:
+	case grocksdb.WriteBatchCFValueRecord:
 		trxnRec.Type = serverpb.TrxnRecord_Put
 	default:
 		trxnRec.Type = serverpb.TrxnRecord_Unknown
@@ -656,7 +863,7 @@ func byteArrayCopy(src []byte, dstLen int) []byte {
 	return dst
 }
 
-func toByteArray(value *gorocksdb.Slice) []byte {
+func toByteArray(value *grocksdb.Slice) []byte {
 	src := value.Data()
 	res := byteArrayCopy(src, value.Size())
 	return res
@@ -667,19 +874,25 @@ func parseTTLMsgPackData(valueWithTTL []byte) (*ttlDataFormat, error) {
 	var err error
 	if len(valueWithTTL) > 0 {
 		err = msgpack.Unmarshal(valueWithTTL, &row)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &row, err
 }
 
-func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
+func (rdb *rocksDB) getSingleKey(ro *grocksdb.ReadOptions, key []byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.single.get.latency.ms", time.Now())
-	values, err := rdb.db.MultiGetCFMultiCF(ro, []*gorocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.Get), time.Now())
+
+	values, err := rdb.db.MultiGetCFMultiCF(ro, []*grocksdb.ColumnFamilyHandle{rdb.normalCF, rdb.ttlCF}, [][]byte{key, key})
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.single.get.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.Get).Inc()
 		return nil, err
 	}
 	value1, value2 := values[0], values[1]
-	kv := rdb.extractResult(value1, value2, key)
+	kv := rdb.extractResult(toByteArray(value1), toByteArray(value2), key)
 	value1.Free()
 	value2.Free()
 	if kv != nil {
@@ -688,17 +901,15 @@ func (rdb *rocksDB) getSingleKey(ro *gorocksdb.ReadOptions, key []byte) ([]*serv
 	return nil, nil
 }
 
-func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Slice, key []byte) *serverpb.KVPair {
-	if value1.Size() > 0 {
+func (rdb *rocksDB) extractResult(defaultCFValue []byte, ttlCFValue []byte, key []byte) *serverpb.KVPair {
+	if len(defaultCFValue) > 0 {
 		//non ttl use-case
-		val := toByteArray(value1)
-		return &serverpb.KVPair{Key: key, Value: val}
+		return &serverpb.KVPair{Key: key, Value: defaultCFValue}
 	}
 
-	if value2.Size() > 0 {
+	if len(ttlCFValue) > 0 {
 		//ttl use-case, check ttl
-		val := toByteArray(value2)
-		ttlRow, err := parseTTLMsgPackData(val)
+		ttlRow, err := parseTTLMsgPackData(ttlCFValue)
 		if err != nil {
 			rdb.opts.lgr.Warn("RocksDB::extractResult Failed to parse msgpack data",
 				zap.String("Key", string(key)), zap.Error(err))
@@ -706,21 +917,21 @@ func (rdb *rocksDB) extractResult(value1 *gorocksdb.Slice, value2 *gorocksdb.Sli
 			return nil
 		}
 		if hlc.InThePast(ttlRow.ExpiryTS) {
+			fmt.Println(ttlRow)
 			return nil
-		} else if ttlRow.ExpiryTS > 0 {
-			val = ttlRow.Data
 		}
-		return &serverpb.KVPair{Key: key, Value: val}
+		return &serverpb.KVPair{Key: key, Value: ttlRow.Data, ExpireTS: ttlRow.ExpiryTS}
 	}
-
 	return nil
+
 }
 
-func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
+func (rdb *rocksDB) getMultipleKeys(ro *grocksdb.ReadOptions, keys [][]byte) ([]*serverpb.KVPair, error) {
 	defer rdb.opts.statsCli.Timing("rocksdb.multi.get.latency.ms", time.Now())
+	defer stats.MeasureLatency(rdb.stat.RequestLatency.WithLabelValues(stats.MultiGet), time.Now())
 
 	kl := len(keys)
-	reqCFs := make([]*gorocksdb.ColumnFamilyHandle, kl<<1)
+	reqCFs := make([]*grocksdb.ColumnFamilyHandle, kl<<1)
 	for i := 0; i < kl; i++ {
 		reqCFs[i] = rdb.normalCF
 		reqCFs[i+kl] = rdb.ttlCF
@@ -729,13 +940,14 @@ func (rdb *rocksDB) getMultipleKeys(ro *gorocksdb.ReadOptions, keys [][]byte) ([
 	values, err := rdb.db.MultiGetCFMultiCF(ro, reqCFs, append(keys, keys...))
 	if err != nil {
 		rdb.opts.statsCli.Incr("rocksdb.multi.get.errors", 1)
+		rdb.stat.ResponseError.WithLabelValues(stats.MultiGet).Inc()
 		return nil, err
 	}
 
 	var results []*serverpb.KVPair
 	for i := 0; i < kl; i++ {
 		value1, value2 := values[i], values[i+kl]
-		kv := rdb.extractResult(value1, value2, keys[i])
+		kv := rdb.extractResult(toByteArray(value1), toByteArray(value2), keys[i])
 		value1.Free()
 		value2.Free()
 		if kv != nil {
@@ -790,4 +1002,16 @@ func checksForRestore(rstrPath string) error {
 	default:
 		return nil
 	}
+}
+
+// exists returns whether the given file or directory exists
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }

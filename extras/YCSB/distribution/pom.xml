@@ -38,7 +38,7 @@ LICENSE file.
     <dependency>
       <groupId>site.ycsb</groupId>
       <artifactId>core</artifactId>
-      <version>${project.version}</version>
+      <version>${site.ycsb.version}</version>
     </dependency>
     <dependency>
       <groupId>site.ycsb</groupId>

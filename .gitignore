@@ -48,6 +48,7 @@ crashlytics-build.properties
 
 # Reports
 *reports
+coverage.out
 
 .DS_Store
 bin/

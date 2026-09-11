@@ -53,6 +53,21 @@ public interface DKVClient extends Closeable {
      */
     boolean compareAndSet(byte[] key, byte[] expect, byte[] update);
 
+
+    /**
+     * Performs the compare and set operation on the specified key. The
+     * given expected value is compared with the existing value and if
+     * there is a match, that value is overwritten with the given value.
+     *
+     * @param key key used for this compare and set operation
+     * @param expect value to be expected as the existing value
+     * @param update new value to be set if the comparison succeeds
+     * @param expiryTS the expiryTS in epoch seconds at which this key should be expired
+     * @return true only if the given value is set against the key
+     */
+    boolean compareAndSet(byte[] key, byte[] expect, byte[] update, long expiryTS);
+
+
     /**
      * Atomically increments the current value associated with the given
      * key and returns that value.
@@ -82,6 +97,17 @@ public interface DKVClient extends Closeable {
     long addAndGet(byte[] key, long delta);
 
     /**
+     * Atomically adds the given delta to the current value associated
+     * with the given key and returns that value.
+     *
+     * @param key key used for this operation
+     * @param delta the value used for addition
+     * @param expiryTS the expiryTS in epoch seconds at which this key should be expired
+     * @return the value after the addition operation
+     */
+    long addAndGet(byte[] key, long delta, long expiryTS);
+
+    /**
      * Associates the specified value with the specified key
      * inside DKV database. Also sets the expiryTS of the key to the provided value.
      * If this association already exists in the database, the old value is
@@ -108,6 +134,30 @@ public interface DKVClient extends Closeable {
      * the database is an error status
      */
     void put(byte[] key, byte[] value, long expiryTS);
+
+    /**
+     * Associates the list of specified value with the specified key
+     * inside DKV database. Also sets the corresponding expiryTS of the key
+     * to the provided value. If this association already exists in the database,
+     * the old value is replaced with the given value.
+     *
+     * @param items List of KV.Strings to be persisted
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void put(KV.Strings ... items);
+
+    /**
+     * Associates the list of specified value with the specified key
+     * inside DKV database. Also sets the corresponding expiryTS of the key
+     * to the provided value. If this association already exists in the database,
+     * the old value is replaced with the given value.
+     *
+     * @param items List of KV.Bytes to be persisted
+     * @throws DKVException if the underlying status in the response from
+     * the database is an error status
+     */
+    void put(KV.Bytes ... items);
 
     /**
      * Retrieves the value associated with the given key from the DKV

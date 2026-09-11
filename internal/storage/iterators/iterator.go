@@ -2,6 +2,7 @@ package iterators
 
 import (
 	"github.com/flipkart-incubator/dkv/internal/storage"
+	"github.com/flipkart-incubator/dkv/pkg/serverpb"
 )
 
 type concatenatedIterator struct {
@@ -18,7 +19,7 @@ func (ci *concatenatedIterator) HasNext() bool {
 	return valid
 }
 
-func (ci *concatenatedIterator) Next() ([]byte, []byte) {
+func (ci *concatenatedIterator) Next() *serverpb.KVPair {
 	return ci.iterators[ci.currentIter].Next()
 }
 

@@ -5,6 +5,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,12 +20,14 @@ import static org.junit.Assert.assertTrue;
 
 public class SimpleDKVClientTest {
 
-    private static final String DKV_TARGET = "127.0.0.1:8080";
+    private static final String DKV_TARGET = "127.0.0.1:6080";
     private DKVClient dkvCli;
+    private ConnectionOptions connectionOptions;
 
     @Before
     public void setUp() {
-        dkvCli = new SimpleDKVClient(DKV_TARGET, null);
+        connectionOptions = ConnectionOptions.builder().requestTimeout(5000L).build();
+        dkvCli = new SimpleDKVClient(DKV_TARGET, connectionOptions);
     }
 
     @Test
@@ -32,6 +35,16 @@ public class SimpleDKVClientTest {
         String key = "hello", expVal = "world";
         dkvCli.put(key, expVal);
         String actVal = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
+    }
+
+    @Test(expected = io.grpc.StatusRuntimeException.class)
+    public void shouldTimeoutWhilePerformPutAndGet() {
+        connectionOptions.setRequestTimeout(1L);
+        DKVClient dkvClient = new SimpleDKVClient(DKV_TARGET, connectionOptions);
+        String key = "hello", expVal = "world";
+        dkvClient.put(key, expVal);
+        String actVal = dkvClient.get(Api.ReadConsistency.LINEARIZABLE, key);
         assertEquals(format("Invalid value for key: %s", key), expVal, actVal);
     }
 
@@ -78,6 +91,25 @@ public class SimpleDKVClientTest {
     }
 
     @Test
+    public void shouldPerformAtomicAdditionWithTTL() throws InterruptedException {
+        byte[] key = ("atomicAdditionTTS" + System.currentTimeMillis()).getBytes();
+        long expiryTS = (System.currentTimeMillis() / 1000) + 120;
+        int numThrs = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(numThrs);
+        for (int i = 1; i <= numThrs; i++) {
+            final int id = i;
+            pool.execute(() -> {
+                int delta = (id & 1) == 1 ? 1 : -1;
+                dkvCli.addAndGet(key, delta, expiryTS);
+            });
+        }
+        pool.shutdown();
+        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        byte[] actualBts = dkvCli.get(Api.ReadConsistency.LINEARIZABLE, key);
+        assertEquals(0L, convertToLong(actualBts));
+    }
+
+    @Test
     public void shouldPerformAtomicIncrDecr() throws InterruptedException {
         byte[] key = ("myCtr" + System.currentTimeMillis()).getBytes();
         int numThrs = 10;
@@ -112,6 +144,31 @@ public class SimpleDKVClientTest {
     }
 
     @Test
+    public void shouldPerformBulkPutAndGet() {
+        int iter = 10;
+        String keyF = "helloBulk_", valPref = "world_";
+        String[] keys = new String[iter];
+        KV.Strings[] items = new KV.Strings[iter];
+        for (int i = 0 ; i <iter; i++){
+            keys[i] = format("%s%d", keyF, i+1);
+            items[i] = new KV.Strings(keys[i], format("%s%d", valPref, i+1));
+        }
+        dkvCli.put(items);
+
+        KV.Strings[] vals = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
+        assertValues(keyF, keys, vals);
+
+        KV.Bytes[] itemsBytes = new KV.Bytes[iter];
+        for (int i = 0 ; i <iter; i++){
+            keys[i] = format("%s%d", keyF, i+1);
+            itemsBytes[i] = new KV.Bytes(keys[i].getBytes(StandardCharsets.UTF_8), format("%s%d", valPref, i+1).getBytes(StandardCharsets.UTF_8));
+        }
+        dkvCli.put(itemsBytes);
+        KV.Strings[] val2 = dkvCli.multiGet(Api.ReadConsistency.LINEARIZABLE, keys);
+        assertValues(keyF, keys, val2);
+    }
+
+    @Test
     public void shouldPerformPutAndGetAndDelete() {
         String key = "hello", expVal = "world";
         dkvCli.put(key, expVal);
@@ -140,7 +197,7 @@ public class SimpleDKVClientTest {
         put(numKeys, keyPref2, valPref2);
         put(numKeys, keyPref3, valPref3);
         String startKey = format("%s%d", keyPref2, startIdx);
-        Iterator<DKVEntry> iterRes = new SimpleDKVClient(DKV_TARGET, null).iterate(startKey, keyPref2);
+        Iterator<DKVEntry> iterRes = new SimpleDKVClient(DKV_TARGET, connectionOptions).iterate(startKey, keyPref2);
         while (iterRes.hasNext()) {
             DKVEntry entry = iterRes.next();
             entry.checkStatus();
@@ -152,7 +209,7 @@ public class SimpleDKVClientTest {
 
         startIdx = 1;
         startKey = format("%s%d", keyPref1, startIdx);
-        iterRes = new SimpleDKVClient(DKV_TARGET, null).iterate(startKey);
+        iterRes = new SimpleDKVClient(DKV_TARGET, connectionOptions).iterate(startKey);
         while (iterRes.hasNext()) {
             DKVEntry entry = iterRes.next();
             entry.checkStatus();

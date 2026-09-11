@@ -1,0 +1,34 @@
+access-logs : ""
+database : "default"
+db-engine : "rocksdb"
+db-engine-ini : ""
+block-cache-size : 3221225472
+root-folder : "/tmp/dkvsrv"
+dc-id : "default"
+diskless : false
+pprof : false
+repl-master-addr : ""
+repl-poll-interval : "2s"
+role : ""
+statsd-addr : ""
+vbucket : "default"
+log-level : "warn"
+verbose : false
+nexus-cluster-name : "default"
+nexus-cluster-url : ""
+nexus-entry-store : "disk"
+nexus-max-snapshots : 5
+nexus-max-wals : 5
+nexus-repl-timeout : 5
+nexus-lease-based-reads : true
+nexus-snapshot-count : 100
+nexus-snapshot-catchup-entries : 5
+discovery-service:
+  server:
+    status-ttl: 300
+    heartbeat-timeout: 60
+  client:
+    discovery-service-addr: "multi:///127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003"
+    push-status-interval: 1
+    poll-cluster-info-interval: 1
+

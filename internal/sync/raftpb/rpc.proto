@@ -10,4 +10,5 @@ message InternalRaftRequest {
   serverpb.MultiGetRequest multi_get = 12;
   serverpb.DeleteRequest delete = 13;
   serverpb.CompareAndSetRequest cas = 14;
+  serverpb.MultiPutRequest multi_put = 15;
 }
