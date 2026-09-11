@@ -40,6 +40,8 @@ type Config struct {
 
 	//Service discovery related params
 	DiscoveryConfig DiscoveryServiceConfiguration `mapstructure:"discovery-service" desc:"config for discovery server"`
+	//Disable discovery client
+	DisableDiscoveryClient bool `mapstructure:"disable-discovery-client" desc:"Disable registration to discovery-server"`
 
 	// Temporary variables to be removed once https://github.com/flipkart-incubator/dkv/issues/82 is fixed
 	// The above issue causes replication issues during master switch due to inconsistent change numbers
@@ -60,6 +62,8 @@ type Config struct {
 	NexusReplTimeout            int    `mapstructure:"nexus-repl-timeout" desc:"Replication timeout in seconds"`
 	NexusLogDir                 string `mapstructure:"nexus-log-dir" desc:"Dir for storing RAFT logs"`
 	NexusSnapDir                string `mapstructure:"nexus-snap-dir" desc:"Dir for storing RAFT snapshots"`
+	NexusEntryDir               string `mapstructure:"nexus-entry-dir" desc:"Dir for storing RAFT entries"`
+	NexusEntryStoreEngine       string `mapstructure:"nexus-entry-store" desc:"Nexus Entry store engine memory|disk"`
 	NexusMaxSnapshots           int    `mapstructure:"nexus-max-snapshots" desc:"Maximum number of snapshot files to retain (0 is unlimited)"`
 	NexusMaxWals                int    `mapstructure:"nexus-max-wals" desc:"Maximum number of WAL files to retain (0 is unlimited)"`
 	NexusSnapshotCatchupEntries int    `mapstructure:"nexus-snapshot-catchup-entries" desc:"Number of entries for a slow follower to catch-up after compacting the raft storage entries"`
@@ -117,6 +121,10 @@ func (c *Config) parseConfig() {
 		c.NexusSnapDir = path.Join(c.RootFolder, c.NodeName, "snap")
 	}
 
+	if c.NexusEntryDir == "" {
+		c.NexusEntryDir = path.Join(c.RootFolder, c.NodeName, "entry")
+	}
+
 	c.validateFlags()
 }
 
@@ -152,7 +160,7 @@ func (c *Config) validateFlags() {
 		}
 	}
 
-	if c.DbRole != "none" && c.DbRole != "discovery" {
+	if c.DbRole != "none" && c.DbRole != "discovery" && !c.DisableDiscoveryClient {
 		if c.DiscoveryConfig.ClientConfig.DiscoveryServiceAddr == "" ||
 			c.DiscoveryConfig.ClientConfig.PushStatusInterval <= 0 ||
 			c.DiscoveryConfig.ClientConfig.PollClusterInfoInterval <= 0 {

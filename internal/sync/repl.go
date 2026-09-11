@@ -32,6 +32,7 @@ func (dr *dkvReplStore) Save(ent db.RaftEntry, req []byte) (res []byte, err erro
 	if err = proto.Unmarshal(req, intReq); err != nil {
 		return nil, err
 	}
+
 	switch {
 	case intReq.Put != nil:
 		res, err = dr.put(intReq.Put)
@@ -111,7 +112,7 @@ func (dr *dkvReplStore) multiPut(multiPutReq *serverpb.MultiPutRequest) ([]byte,
 }
 
 func (dr *dkvReplStore) cas(casReq *serverpb.CompareAndSetRequest) ([]byte, error) {
-	res, err := dr.kvs.CompareAndSet(casReq.Key, casReq.OldValue, casReq.NewValue)
+	res, err := dr.kvs.CompareAndSet(casReq)
 	succ, fail := []byte{0}, []byte{1}
 	if res && err == nil {
 		return succ, nil

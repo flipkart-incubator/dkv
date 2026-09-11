@@ -25,6 +25,8 @@ public class ShardedDKVClientTest {
     private ShardedDKVClient dkvClient;
     private ShardProvider shardProvider;
 
+    private ConnectionOptions connectionOptions;
+
     @Before
     public void setup() {
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config.json");
@@ -32,7 +34,8 @@ public class ShardedDKVClientTest {
 //        ShardConfiguration shardConf = loadShardConfig("/local_dkv_config_via_envoy.json");
 //        ShardConfiguration shardConf = loadShardConfig("/single_local_dkv_config.json");
         shardProvider = new KeyHashBasedShardProvider(shardConf);
-        dkvClient = new ShardedDKVClient(shardProvider);
+        connectionOptions = ConnectionOptions.builder().build();
+        dkvClient = new ShardedDKVClient(shardProvider,connectionOptions);
     }
 
     @Test
@@ -46,6 +49,12 @@ public class ShardedDKVClientTest {
             expKVs.put(keys[i], expVals[i]);
             dkvClient.put(keys[i], expVals[i]);
         }
+
+        // SEQUENTIAL reads below hit slaves, which pull only one batch of
+        // changes per repl-poll-interval tick; with NUM_KEYS this large,
+        // catching up can take several ticks, so poll for replication to
+        // actually complete instead of assuming a fixed sleep suffices.
+        waitForReplication(keys, expVals);
 
         for (int i = 0; i < NUM_KEYS; i++) {
             String actVal = dkvClient.get(READ_CONSISTENCY, keys[i]);
@@ -65,6 +74,33 @@ public class ShardedDKVClientTest {
 //            fail("expecting an exception");
         } catch (Exception e) {
             assertTrue(e instanceof UnsupportedOperationException);
+        }
+    }
+
+    // Polls SEQUENTIAL reads for every key until all values have replicated to
+    // the slaves, or fails the test if replication doesn't finish in time.
+    private void waitForReplication(String[] keys, String[] expVals) {
+        long deadlineMs = System.currentTimeMillis() + 120_000;
+        while (true) {
+            boolean allReplicated = true;
+            for (int i = 0; i < keys.length; i++) {
+                if (!expVals[i].equals(dkvClient.get(READ_CONSISTENCY, keys[i]))) {
+                    allReplicated = false;
+                    break;
+                }
+            }
+            if (allReplicated) {
+                return;
+            }
+            if (System.currentTimeMillis() >= deadlineMs) {
+                fail("Replication did not complete within the allotted time");
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail("Interrupted while waiting for replication");
+            }
         }
     }
 

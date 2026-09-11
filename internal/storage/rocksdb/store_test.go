@@ -20,7 +20,7 @@ import (
 
 	"github.com/flipkart-incubator/dkv/internal/storage"
 	"github.com/flipkart-incubator/dkv/pkg/serverpb"
-	"github.com/flipkart-incubator/gorocksdb"
+	"github.com/linxGnu/grocksdb"
 )
 
 const (
@@ -172,7 +172,7 @@ func TestCompactionFilterOnExpiredKeys(t *testing.T) {
 		}
 	}
 
-	store.db.CompactRangeCF(store.ttlCF, gorocksdb.Range{nil, nil})
+	store.db.CompactRangeCF(store.ttlCF, grocksdb.Range{nil, nil})
 	for i := 1; i <= numKeys; i++ {
 		key := fmt.Sprintf("%s_%d", keyPref, i)
 		if value, err := store.db.GetCF(store.opts.readOpts, store.ttlCF, []byte(key)); err != nil {
@@ -344,7 +344,7 @@ func TestSaveChanges(t *testing.T) {
 	wbPutKeyPrefix, wbPutValPrefix := "ddKey", "ddVal"
 	chngs := make([]*serverpb.ChangeRecord, numTrxns)
 	for i := 0; i < numTrxns; i++ {
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
 		ks, vs := fmt.Sprintf("%s_%d", wbPutKeyPrefix, i+1), fmt.Sprintf("%s_%d", wbPutValPrefix, i+1)
 		wb.Put([]byte(ks), []byte(vs))
@@ -511,10 +511,10 @@ func TestGetUpdatesFromSeqNumForBatches(t *testing.T) {
 	expNumTrxns := expNumBatchTrxns * numTrxnsPerBatch
 	for i := 1; i <= expNumBatchTrxns; i++ {
 		k, v := fmt.Sprintf("bKey_%d", i), fmt.Sprintf("bVal_%d", i)
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		wb.Put([]byte(k), []byte(v))
 		wb.Delete([]byte(k))
-		wo := gorocksdb.NewDefaultWriteOptions()
+		wo := grocksdb.NewDefaultWriteOptions()
 		wo.SetSync(true)
 		if err := store.db.Write(wo, wb); err != nil {
 			t.Fatal(err)
@@ -705,7 +705,7 @@ func TestIterationOnExplicitSnapshot(t *testing.T) {
 	keyPrefix2, valPrefix2 := "secKey", "secVal"
 	putKeys(t, numTrxns, keyPrefix2, valPrefix2, 0)
 
-	readOpts := gorocksdb.NewDefaultReadOptions()
+	readOpts := grocksdb.NewDefaultReadOptions()
 	defer readOpts.Destroy()
 
 	readOpts.SetSnapshot(snap)
@@ -802,10 +802,14 @@ func TestPreventParallelRestores(t *testing.T) {
 
 func TestAtomicKeyCreation(t *testing.T) {
 	var (
-		wg             sync.WaitGroup
-		freqs          sync.Map
-		numThrs        = 10
-		casKey, casVal = []byte("casKey"), []byte{0}
+		wg      sync.WaitGroup
+		freqs   sync.Map
+		numThrs = 10
+		casReq  = &serverpb.CompareAndSetRequest{
+			Key:      []byte("casKey"),
+			OldValue: nil,
+			NewValue: []byte{0},
+		}
 	)
 
 	// verify key creation under contention
@@ -813,7 +817,7 @@ func TestAtomicKeyCreation(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			res, err := store.CompareAndSet(casKey, nil, casVal)
+			res, err := store.CompareAndSet(casReq)
 			freqs.Store(id, res && err == nil)
 		}(i)
 	}
@@ -864,7 +868,12 @@ func TestAtomicIncrDecr(t *testing.T) {
 				exist, _ := store.Get(casKey)
 				expect := exist[0].Value
 				update := []byte{expect[0] + delta}
-				res, err := store.CompareAndSet(casKey, expect, update)
+				casReq := &serverpb.CompareAndSetRequest{
+					Key:      casKey,
+					OldValue: expect,
+					NewValue: update,
+				}
+				res, err := store.CompareAndSet(casReq)
 				if res && err == nil {
 					break
 				}
@@ -885,18 +894,18 @@ func TestAtomicIncrDecr(t *testing.T) {
 func TestLoadChangesForOptimisticTransactions(t *testing.T) {
 	name := fmt.Sprintf("%s-TestChngsOptimTrans", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
-	ro := gorocksdb.NewDefaultReadOptions()
-	wo := gorocksdb.NewDefaultWriteOptions()
-	to := gorocksdb.NewDefaultOptimisticTransactionOptions()
+	ro := grocksdb.NewDefaultReadOptions()
+	wo := grocksdb.NewDefaultWriteOptions()
+	to := grocksdb.NewDefaultOptimisticTransactionOptions()
 
-	tdb, err := gorocksdb.OpenOptimisticTransactionDb(opts, name)
+	tdb, err := grocksdb.OpenOptimisticTransactionDb(opts, name)
 	if err != nil {
 		t.Errorf("Unable to open optimistic transaction DB. Error: %v", err)
 	}
 	defer tdb.Close()
 
 	ctrKey := []byte("num")
-	bdb := tdb.GetBaseDb()
+	bdb := tdb.GetBaseDB()
 	err = bdb.Put(wo, ctrKey, []byte{0})
 	if err != nil {
 		t.Errorf("Unable to PUT using base DB of optimistic transaction. Error: %v", err)
@@ -977,12 +986,12 @@ func TestLoadChangesForOptimisticTransactions(t *testing.T) {
 func TestPessimisticTransactions(t *testing.T) {
 	name := fmt.Sprintf("%s-TestPessTrans", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
-	ro := gorocksdb.NewDefaultReadOptions()
-	wo := gorocksdb.NewDefaultWriteOptions()
-	tdbo := gorocksdb.NewDefaultTransactionDBOptions()
-	to := gorocksdb.NewDefaultTransactionOptions()
+	ro := grocksdb.NewDefaultReadOptions()
+	wo := grocksdb.NewDefaultWriteOptions()
+	tdbo := grocksdb.NewDefaultTransactionDBOptions()
+	to := grocksdb.NewDefaultTransactionOptions()
 
-	tdb, err := gorocksdb.OpenTransactionDb(opts, tdbo, name)
+	tdb, err := grocksdb.OpenTransactionDb(opts, tdbo, name)
 	if err != nil {
 		t.Errorf("Unable to open transaction DB. Error: %v", err)
 	}
@@ -1059,10 +1068,10 @@ func BenchmarkMergeOperators(b *testing.B) {
 	name := fmt.Sprintf("%s-BenchMergeOpers", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
 	opts.SetMergeOperator(&IncOp{})
-	ro := gorocksdb.NewDefaultReadOptions()
-	wo := gorocksdb.NewDefaultWriteOptions()
+	ro := grocksdb.NewDefaultReadOptions()
+	wo := grocksdb.NewDefaultWriteOptions()
 
-	db, err := gorocksdb.OpenDb(opts, name)
+	db, err := grocksdb.OpenDb(opts, name)
 	if err != nil {
 		b.Errorf("Unable to open DB. Error: %v", err)
 	}
@@ -1079,7 +1088,7 @@ func BenchmarkMergeOperators(b *testing.B) {
 		if err != nil {
 			b.Errorf("Unable to merge. Error: %v", err)
 		}
-		db.CompactRange(gorocksdb.Range{nil, nil})
+		db.CompactRange(grocksdb.Range{nil, nil})
 	}
 	cnt, err := db.Get(ro, ctrKey)
 	defer cnt.Free()
@@ -1106,7 +1115,12 @@ func BenchmarkCompareAndSet(b *testing.B) {
 		}
 		val := cnt[0].Value[0]
 		newVal := val + 1
-		_, err = store.CompareAndSet(ctrKey, cnt[0].Value, []byte{newVal})
+		casReq := &serverpb.CompareAndSetRequest{
+			Key:      ctrKey,
+			OldValue: cnt[0].Value,
+			NewValue: []byte{newVal},
+		}
+		_, err = store.CompareAndSet(casReq)
 		if err != nil {
 			b.Errorf("Unable to CAS. Error: %v", err)
 		}
@@ -1124,12 +1138,12 @@ func BenchmarkCompareAndSet(b *testing.B) {
 func BenchmarkPessimisticTransactions(b *testing.B) {
 	name := fmt.Sprintf("%s-BenchPessTrans", store.opts.folderName)
 	opts := store.opts.rocksDBOpts
-	ro := gorocksdb.NewDefaultReadOptions()
-	wo := gorocksdb.NewDefaultWriteOptions()
-	tdbo := gorocksdb.NewDefaultTransactionDBOptions()
-	to := gorocksdb.NewDefaultTransactionOptions()
+	ro := grocksdb.NewDefaultReadOptions()
+	wo := grocksdb.NewDefaultWriteOptions()
+	tdbo := grocksdb.NewDefaultTransactionDBOptions()
+	to := grocksdb.NewDefaultTransactionOptions()
 
-	tdb, err := gorocksdb.OpenTransactionDb(opts, tdbo, name)
+	tdb, err := grocksdb.OpenTransactionDb(opts, tdbo, name)
 	if err != nil {
 		b.Errorf("Unable to open transaction DB. Error: %v", err)
 	}
@@ -1218,7 +1232,7 @@ func BenchmarkIteration(b *testing.B) {
 	snap := store.db.NewSnapshot()
 	defer store.db.ReleaseSnapshot(snap)
 
-	readOpts := gorocksdb.NewDefaultReadOptions()
+	readOpts := grocksdb.NewDefaultReadOptions()
 	defer readOpts.Destroy()
 
 	readOpts.SetSnapshot(snap)

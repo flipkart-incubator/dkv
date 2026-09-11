@@ -1,0 +1,79 @@
+name: DKV Docker
+
+on:
+  push:
+    branches:
+      - master
+    tags:        
+      - v**
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  oreka_docker_job:
+    runs-on: ubuntu-22.04
+    name: Build Image
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: network=host
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.CONTAINER_REGISTRY_USERNAME }}
+          password: ${{ secrets.GH_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/dkv
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Cache Docker layers
+        uses: actions/cache@v5
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-docker-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-docker-
+      - name: Extract Commit SHA
+        id: sha_extract
+        run: |
+          if [ $IS_PR == 'pull_request' ]
+          then
+              echo "sha=$PR_REF" >> $GITHUB_OUTPUT
+          else
+              echo "sha=$BRANCH_REF" >> $GITHUB_OUTPUT
+          fi
+        env:
+          IS_PR: ${{ github.event_name }}
+          BRANCH_REF: ${{ github.ref }}
+          PR_REF: ${{ github.event.pull_request.head.sha }}
+      - name: Build Docker Image
+        uses: docker/build-push-action@v7
+        with:
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./Dockerfile
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            BASE=ubuntu:22.04
+            GIT_SHA=${{ steps.sha_extract.outputs.sha }}
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache

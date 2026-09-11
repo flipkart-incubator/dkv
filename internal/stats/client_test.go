@@ -96,7 +96,7 @@ func sendCommand(cmd string, w *bufio.Writer) {
 func logOutput(t *testing.T, scanner *bufio.Scanner) {
 	for scanner.Scan() {
 		msg := scanner.Text()
-		t.Logf(msg)
+		t.Log(msg)
 		if msg == "END" {
 			break
 		}

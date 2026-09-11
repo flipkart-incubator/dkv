@@ -17,5 +17,7 @@ type ServerOpts struct {
 }
 
 const (
-	DefaultHealthCheckTickterInterval = uint(10)
+	DefaultHealthCheckTickerInterval = uint(10)
+	DefaultSOSNDBuffer               = 1024 * 1024
+	DefaultSORCVBuffer               = 1024 * 32
 )

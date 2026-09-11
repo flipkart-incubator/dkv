@@ -26,6 +26,7 @@ const (
 	clusterSize           = 3
 	logDir                = "/tmp/dkv_test/logs"
 	snapDir               = "/tmp/dkv_test/snap"
+	entDir                = "/tmp/dkv_test/ent"
 	clusterURL            = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
 	clusterStreamingURL   = "http://127.0.0.1:9321,http://127.0.0.1:9322,http://127.0.0.1:9323"
 	replTimeout           = 3 * time.Second
@@ -145,7 +146,7 @@ func testDistAtomicKeyCreation(t *testing.T) {
 		cliID = 1 + (cliID+1)%clusterSize
 		go func(id, clId int) {
 			defer wg.Done()
-			res, err := dkvClis[clId].CompareAndSet(casKey, nil, casVal)
+			res, err := dkvClis[clId].CompareAndSet(casKey, nil, casVal, 0)
 			freqs.Store(id, res && err == nil)
 		}(i, cliID)
 	}
@@ -204,7 +205,7 @@ func testDistAtomicIncrDecr(t *testing.T) {
 				expect := exist.Value
 				if len(expect) > 0 {
 					update := []byte{expect[0] + delta}
-					res, err := dkvCli.CompareAndSet(casKey, expect, update)
+					res, err := dkvCli.CompareAndSet(casKey, expect, update, 0)
 					if res && err == nil {
 						break
 					}
@@ -473,17 +474,14 @@ func initStreamingDKVClients(ids ...int) {
 }
 
 func resetRaftStateDirs(t *testing.T) {
-	if err := exec.Command("rm", "-rf", logDir).Run(); err != nil {
-		t.Fatal(err)
-	}
-	if err := exec.Command("mkdir", "-p", logDir).Run(); err != nil {
-		t.Fatal(err)
-	}
-	if err := exec.Command("rm", "-rf", snapDir).Run(); err != nil {
-		t.Fatal(err)
-	}
-	if err := exec.Command("mkdir", "-p", snapDir).Run(); err != nil {
-		t.Fatal(err)
+	dirs := []string{logDir, snapDir, entDir}
+	for _, dir := range dirs {
+		if err := exec.Command("rm", "-rf", dir).Run(); err != nil {
+			t.Fatal(err)
+		}
+		if err := exec.Command("mkdir", "-p", dir).Run(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -505,6 +503,7 @@ func newReplicator(kvs storage.KVStore, nodeURL, clusterURL string) nexus_api.Ra
 	replStore := dkv_sync.NewDKVReplStore(kvs)
 	opts := []nexus.Option{
 		nexus.NodeUrl(nodeURL),
+		nexus.EntryDir(entDir),
 		nexus.LogDir(logDir),
 		nexus.SnapDir(snapDir),
 		nexus.ClusterUrl(clusterURL),

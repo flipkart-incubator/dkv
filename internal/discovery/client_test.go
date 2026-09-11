@@ -22,7 +22,7 @@ var (
 	lgr, _     = zap.NewDevelopment()
 	serveropts = &opts.ServerOpts{
 		Logger:                    lgr,
-		HealthCheckTickerInterval: opts.DefaultHealthCheckTickterInterval,
+		HealthCheckTickerInterval: opts.DefaultHealthCheckTickerInterval,
 		StatsCli:                  stats.NewNoOpClient(),
 		PrometheusRegistry:        stats.NewPromethousNoopRegistry(),
 	}
@@ -94,7 +94,7 @@ func TestDiscoveryClient(t *testing.T) {
 
 	regionInfos, err := dClient.GetClusterStatus("db1", "vbucket1")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Error(err)
 	}
 	if len(regionInfos) != 2 {
 		t.Errorf("GET Cluster Status Mismatch. Criteria: %s, Expected Value: %d, Actual Value: %d", "DB1 vBucket1", 2, len(regionInfos))
